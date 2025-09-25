@@ -4,6 +4,10 @@ package com.example.caisse.data
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
 import com.example.caisse.R
 import java.util.UUID
 
@@ -26,30 +30,109 @@ data class HomeTileData(
     val action: HomeActionButton
 )
 
-data class Produit (
-    val id: String = UUID.randomUUID().toString(),
-    val nom : String,
-    val prix : Double,
-    val image : Int,
-    val categorie : String,
+
+@Entity(tableName = "Category")
+data class Category(
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val name: String,
+    val description: String? = null,
+    val icon: Int? = null
 )
-data class Category(val id: String = UUID.randomUUID().toString(), val name: String)
+
+@Entity(
+    tableName = "Produit",
+    foreignKeys = [
+        ForeignKey(
+            entity = Category::class,
+            parentColumns = ["id"],
+            childColumns = ["categoryId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("categoryId")]
+)
+data class Produit(
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val nom: String,
+    val prix: Double,
+    val image: Int? = null,
+    val categoryId: UUID,   // 🔗 clé étrangère
+    val stock: Int = 0,
+    val description: String? = null,
+    val isActive: Boolean = true
+)
+
+@Entity(tableName = "vendeur")
+data class Vendeur(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val nom: String,
+    val prenom: String,
+)
+
 
 val sampleCategories = listOf(
-    Category(name = "Food"),
-    Category(name = "Drinks"),
-    Category(name = "Desserts")
+    Category(id = UUID.randomUUID(), name = "Food", description = "Repas et plats principaux"),
+    Category(id = UUID.randomUUID(), name = "Drinks", description = "Boissons"),
+    Category(id = UUID.randomUUID(), name = "Desserts", description = "Pâtisseries et douceurs")
 )
 
 val sampleProducts = listOf(
-    Produit(nom = "Burgeri", prix = 8.00, image = R.drawable.burger, categorie = "Food"),
-    Produit(nom = "Pizza", prix = 12.50, image = 0, categorie = "Food"),
-    Produit(nom = "Salad", prix = 7.00, image = 0, categorie = "Food"),
-    Produit(nom = "Sandwich", prix = 6.50, image = 0, categorie = "Food"),
-    Produit(nom = "Pasta", prix = 10.00, image = 0, categorie = "Food"),
-    Produit(nom = "Soup", prix = 5.50, image = 0, categorie = "Food"),
-    Produit(nom = "Coca-Cola", prix = 2.50, image = 0, categorie = "Drinks"),
-    Produit(nom = "Water", prix = 1.50, image = 0, categorie = "Drinks"),
-    Produit(nom = "Ice Cream", prix = 4.00, image = 0, categorie = "Desserts"),
-    Produit(nom = "Cake", prix = 5.00, image = 0, categorie = "Desserts")
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Burger",
+        prix = 8.00,
+        image = R.drawable.burger,
+        categoryId = sampleCategories[0].id,
+        stock = 20,
+        description = "Un délicieux burger maison"
+    ),
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Pizza",
+        prix = 12.50,
+        image = 0,
+        categoryId = sampleCategories[0].id,
+        stock = 15,
+        description = "Pizza Margherita traditionnelle"
+    ),
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Salad",
+        prix = 7.00,
+        image = 0,
+        categoryId = sampleCategories[0].id,
+        stock = 10
+    ),
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Coca-Cola",
+        prix = 2.50,
+        image = 0,
+        categoryId = sampleCategories[1].id,
+        stock = 50
+    ),
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Water",
+        prix = 1.50,
+        image = 0,
+        categoryId = sampleCategories[1].id,
+        stock = 100
+    ),
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Ice Cream",
+        prix = 4.00,
+        image = 0,
+        categoryId = sampleCategories[2].id,
+        stock = 30
+    ),
+    Produit(
+        id = UUID.randomUUID(),
+        nom = "Cake",
+        prix = 5.00,
+        image = 0,
+        categoryId = sampleCategories[2].id,
+        stock = 25
+    )
 )

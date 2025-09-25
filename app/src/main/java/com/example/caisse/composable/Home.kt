@@ -67,7 +67,6 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
     val config = LocalConfiguration.current
     val orientation = config.orientation
     val screenWidthDp = config.screenWidthDp
-    val context = LocalContext.current
     val items = rememberHomeTiles()
     var selectedTab by remember { mutableIntStateOf(0) }
     val columns = when {
@@ -139,7 +138,7 @@ fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Mo
 
 
 private fun defaultHomeButton() : List<HomeTileData> = listOf(
-    HomeTileData("Prendre Commande ", Icons.Default.PointOfSale, color = Gray, HomeActionButton.GERER_INVENTAIRE),
+    HomeTileData("Prendre Commande ", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
     HomeTileData("Historique des commandes", Icons.Default.History, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
     HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
     HomeTileData("Inventaire", Icons.Default.Liquor, color = Gray, HomeActionButton.PRENDRE_COMMANDE),

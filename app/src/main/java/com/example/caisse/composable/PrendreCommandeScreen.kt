@@ -30,7 +30,7 @@ fun PrendreCommandeScreen(
 ) {
     val categories by menuViewModel.categories.collectAsState()
     val products by menuViewModel.products.collectAsState()
-    var selectedCategory by remember { mutableStateOf(categories.firstOrNull()?.name ?: "") }
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull()?.id?: "") }
     val cart = remember { mutableStateListOf<Produit>() }
 
     Scaffold(
@@ -64,11 +64,12 @@ fun PrendreCommandeScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            TabRow(selectedTabIndex = categories.indexOfFirst { it.name == selectedCategory }) {
+            val selectedIndex = categories.indexOfFirst { it.id == selectedCategory }
+            TabRow(selectedTabIndex = selectedIndex.coerceAtLeast(0)) {
                 categories.forEach { category ->
                     Tab(
-                        selected = category.name == selectedCategory,
-                        onClick = { selectedCategory = category.name },
+                        selected = category.id == selectedCategory,
+                        onClick = { selectedCategory = category.id },
                         text = { Text(category.name) }
                     )
                 }
@@ -79,7 +80,7 @@ fun PrendreCommandeScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(products.filter { it.categorie == selectedCategory }) { product ->
+                items(products.filter { it.categoryId  == selectedCategory }) { product ->
                     ProductItem(product = product) {
                         if (cart.contains(product)) {
                             cart.remove(product)

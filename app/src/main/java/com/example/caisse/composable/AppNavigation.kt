@@ -2,6 +2,7 @@ package com.example.caisse.composable
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -12,8 +13,11 @@ import com.example.caisse.data.MenuViewModel
 @Composable
 fun AppNavigation() {
 
+    val menuViewModel: MenuViewModel = viewModel(
+        factory = MenuViewModel.provideFactory(context = LocalContext.current)
+    )
     val navController = rememberNavController()
-    val menuViewModel: MenuViewModel = viewModel()
+
 
     NavHost(navController, startDestination = "home") {
 
@@ -21,12 +25,12 @@ fun AppNavigation() {
             onAction = { action ->
                 when(action){
                     HomeActionButton.PRENDRE_COMMANDE -> navController.navigate("prendre_commande")
-                    HomeActionButton.HISTORIQUE_COMMANDES -> TODO()
-                    HomeActionButton.PARTAGER_BOUTONS -> TODO()
+                    HomeActionButton.HISTORIQUE_COMMANDES ->  println("Historique des commandes pas encore implémenté")
+                    HomeActionButton.PARTAGER_BOUTONS ->  println("Partage pas encore implémenté")
                     HomeActionButton.GERE_CATEGORIE -> navController.navigate("categorie")
                     HomeActionButton.GERER_INVENTAIRE -> navController.navigate("home")
-                    HomeActionButton.EXPORTER -> TODO()
-                    HomeActionButton.GERER_PRODUITS -> TODO()
+                    HomeActionButton.EXPORTER ->  println("Inventaire pas encore implémenté")
+                    HomeActionButton.GERER_PRODUITS ->  println("Inventaire pas encore implémenté")
                 }
             },
             navController = navController,

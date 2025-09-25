@@ -35,7 +35,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,7 +108,7 @@ fun CategoriesScreen(
                 Button(onClick = {
                     val trimmed = newName.text.trim()
                     if (trimmed.isNotEmpty() && categories.none { it.name.equals(trimmed, ignoreCase = true) }) {
-                        viewModelcategories.addCategory(Category(name = trimmed))
+                        viewModelcategories.addCategory(trimmed)
                         newName = TextFieldValue("")
                     }
                 }) {
@@ -132,7 +131,7 @@ fun CategoriesScreen(
                             renameText = TextFieldValue(cat.name)
                         },
                         onDelete = {
-                            viewModelcategories.deleteCategory(cat.id)
+                            viewModelcategories.deleteCategory(cat)
                         }
                     )
                 }

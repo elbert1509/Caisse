@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +60,7 @@ fun CategoriesScreen(
     viewModelcategories: MenuViewModel
 
 ) {
-    var categories by rememberSaveable(stateSaver = viewModelcategories.CategoriesSaver) { mutableStateOf(viewModelcategories.categories.value) }
+    val categories by viewModelcategories.categories.collectAsState()
     var newName by remember { mutableStateOf(TextFieldValue("")) }
     var selectedTab by remember { mutableIntStateOf(0) }
     // État du dialogue de renommage
@@ -108,7 +109,7 @@ fun CategoriesScreen(
                 Button(onClick = {
                     val trimmed = newName.text.trim()
                     if (trimmed.isNotEmpty() && categories.none { it.name.equals(trimmed, ignoreCase = true) }) {
-                        categories = categories + Category(name = trimmed)
+                        viewModelcategories.addCategory(Category(name = trimmed))
                         newName = TextFieldValue("")
                     }
                 }) {
@@ -131,7 +132,7 @@ fun CategoriesScreen(
                             renameText = TextFieldValue(cat.name)
                         },
                         onDelete = {
-                            categories = categories.filterNot { it.id == cat.id }
+                            viewModelcategories.deleteCategory(cat.id)
                         }
                     )
                 }
@@ -158,9 +159,7 @@ fun CategoriesScreen(
                         if (target != null && trimmed.isNotEmpty() &&
                             categories.none { it.name.equals(trimmed, ignoreCase = true) && it.id != target.id }
                         ) {
-                            categories = categories.map {
-                                if (it.id == target.id) it.copy(name = trimmed) else it
-                            }
+                            viewModelcategories.renameCategory(target.id, trimmed)
                             renameTarget = null
                         }
                     }) { Text("Enregistrer") }

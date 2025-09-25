@@ -1,8 +1,10 @@
 package com.example.caisse.data
 
+
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.caisse.R
 import java.util.UUID
 
 
@@ -40,7 +42,7 @@ val sampleCategories = listOf(
 )
 
 val sampleProducts = listOf(
-    Produit(nom = "Burger", prix = 8.00, image = 0, categorie = "Food"),
+    Produit(nom = "Burgeri", prix = 8.00, image = R.drawable.burger, categorie = "Food"),
     Produit(nom = "Pizza", prix = 12.50, image = 0, categorie = "Food"),
     Produit(nom = "Salad", prix = 7.00, image = 0, categorie = "Food"),
     Produit(nom = "Sandwich", prix = 6.50, image = 0, categorie = "Food"),

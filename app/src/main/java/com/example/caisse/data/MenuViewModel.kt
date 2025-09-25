@@ -12,4 +12,17 @@ class MenuViewModel : ViewModel() {
 
     private val _products = MutableStateFlow(sampleProducts)
     val products: StateFlow<List<Produit>> = _products.asStateFlow()
+    fun addCategory(category: Category) {
+        _categories.value = _categories.value + category
+    }
+
+    fun deleteCategory(id: String) {
+        _categories.value = _categories.value.filterNot { it.id == id }
+    }
+
+    fun renameCategory(id: String, newName: String) {
+        _categories.value = _categories.value.map {
+            if (it.id == id) it.copy(name = newName) else it
+        }
+    }
 }

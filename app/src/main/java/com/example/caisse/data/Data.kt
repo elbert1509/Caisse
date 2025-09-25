@@ -69,6 +69,11 @@ data class Vendeur(
     val prenom: String,
 )
 
+data class Ticket(
+    val produit: Produit,
+    var quantity: Int
+)
+
 
 val sampleCategories = listOf(
     Category(id = UUID.randomUUID(), name = "Food", description = "Repas et plats principaux"),

@@ -30,7 +30,7 @@ fun AppNavigation() {
                     HomeActionButton.GERE_CATEGORIE -> navController.navigate("categorie")
                     HomeActionButton.GERER_INVENTAIRE -> navController.navigate("home")
                     HomeActionButton.EXPORTER ->  println("Inventaire pas encore implémenté")
-                    HomeActionButton.GERER_PRODUITS ->  println("Inventaire pas encore implémenté")
+                    HomeActionButton.GERER_PRODUITS -> navController.navigate("produit")
                 }
             },
             navController = navController,
@@ -38,7 +38,11 @@ fun AppNavigation() {
         composable("categorie") { CategoriesScreen( navController = navController, modifier = Modifier,
             viewModelcategories = menuViewModel
         ) }
+        composable("produit") { ProductScreen( navController = navController, modifier = Modifier,
+            viewModel = menuViewModel
+        ) }
         composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel) }
+        composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel) }
     }
 
 }

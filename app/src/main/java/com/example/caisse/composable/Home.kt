@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Liquor
+import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -138,12 +139,12 @@ fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Mo
 
 
 private fun defaultHomeButton() : List<HomeTileData> = listOf(
-    HomeTileData("Prendre Commande ", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Historique des commandes", Icons.Default.History, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Inventaire", Icons.Default.Liquor, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Dashboard", Icons.Default.BarChart, color = Blue, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Catégorie", Icons.Default.Fastfood, color = Blue, HomeActionButton.GERE_CATEGORIE),
+    HomeTileData("Prendre Commande", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
+    HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
+    HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
+    HomeTileData("Inventaire", Icons.Default.Liquor, color = Gray, HomeActionButton.GERER_INVENTAIRE),
+    HomeTileData("Produits", Icons.Default.Inventory, color = Blue, HomeActionButton.GERER_PRODUITS),
+    HomeTileData("Catégories", Icons.Default.Fastfood, color = Blue, HomeActionButton.GERE_CATEGORIE),
 )
 
 

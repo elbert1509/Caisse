@@ -6,9 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -22,7 +26,7 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
-    val products: StateFlow<List<Produit>> =
+    val produits: StateFlow<List<Produit>> =
         repository.getAllProduits().stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -59,9 +63,16 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
     }
 
     // ---- PRODUITS ----
-    fun addProduit(produit: Produit) {
+    fun addProduit(name: String, price: Double, categoryId: UUID) {
         viewModelScope.launch {
-            repository.addProduit(produit)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId)
+            repository.addProduit(newProduit)
+        }
+    }
+
+    fun updateProduit(produit: Produit) {
+        viewModelScope.launch {
+            repository.addProduit(produit) // OnConflictStrategy.REPLACE will handle the update
         }
     }
 
@@ -81,6 +92,60 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
     fun deleteVendeur(vendeur: Vendeur) {
         viewModelScope.launch {
             repository.deleteVendeur(vendeur)
+        }
+    }
+
+    // ---- PANIER ----
+    private val _cart = MutableStateFlow<List<Ticket>>(emptyList())
+    val cart: StateFlow<List<Ticket>> = _cart.asStateFlow()
+
+    val totalPrice: StateFlow<Double> = _cart.map { tickets ->
+        tickets.sumOf { it.produit.prix * it.quantity }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    fun addToCart(produit: Produit) {
+        _cart.update { currentCart ->
+            val existingTicket = currentCart.find { it.produit.id == produit.id }
+            if (existingTicket != null) {
+                currentCart.map {
+                    if (it.produit.id == produit.id) {
+                        it.copy(quantity = it.quantity + 1)
+                    } else {
+                        it
+                    }
+                }
+            } else {
+                currentCart + Ticket(produit, 1)
+            }
+        }
+    }
+
+    fun increaseQuantity(produitId: UUID) {
+        _cart.update { currentCart ->
+            currentCart.map {
+                if (it.produit.id == produitId) {
+                    it.copy(quantity = it.quantity + 1)
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    fun decreaseQuantity(produitId: UUID) {
+        _cart.update { currentCart ->
+            val ticket = currentCart.find { it.produit.id == produitId }
+            if (ticket != null && ticket.quantity > 1) {
+                currentCart.map {
+                    if (it.produit.id == produitId) {
+                        it.copy(quantity = it.quantity - 1)
+                    } else {
+                        it
+                    }
+                }
+            } else {
+                currentCart.filterNot { it.produit.id == produitId }
+            }
         }
     }
 

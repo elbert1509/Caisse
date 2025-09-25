@@ -1,53 +1,116 @@
 package com.example.caisse.composable
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.caisse.data.CategorieViewmodel
+import com.example.caisse.R
+import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.Produit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrendreCommandeScreen(navController: NavController, category: CategorieViewmodel )
-{
-    var selectedTab by remember { mutableIntStateOf(1) }
-
-
-    val listCategory = category.defaultCategories()
+fun PrendreCommandeScreen(
+    navController: NavController,
+    menuViewModel: MenuViewModel = viewModel()
+) {
+    val categories by menuViewModel.categories.collectAsState()
+    val products by menuViewModel.products.collectAsState()
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull()?.name ?: "") }
+    val cart = remember { mutableStateListOf<Produit>() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Caisse PoS") },
-                actions = {
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(Icons.Filled.Settings, contentDescription = null)
+                title = { Text("Take Order") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
-
             )
         },
         bottomBar = {
-            BottomHome(
-                selectedIndex = selectedTab,
-                onTabSelected = { selectedTab = it },
-                navController = navController
-            )
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("$${cart.sumOf { it.prix }}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { /* TODO: Handle order validation */ },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Validate Order")
+                }
+            }
         }
-
     ) { padding ->
-        Text(text = "Hello", modifier = Modifier.padding(padding))
+        Column(modifier = Modifier.padding(padding)) {
+            TabRow(selectedTabIndex = categories.indexOfFirst { it.name == selectedCategory }) {
+                categories.forEach { category ->
+                    Tab(
+                        selected = category.name == selectedCategory,
+                        onClick = { selectedCategory = category.name },
+                        text = { Text(category.name) }
+                    )
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(products.filter { it.categorie == selectedCategory }) { product ->
+                    ProductItem(product = product) {
+                        if (cart.contains(product)) {
+                            cart.remove(product)
+                        } else {
+                            cart.add(product)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProductItem(product: Produit, onProductClick: () -> Unit) {
+    Card(
+        modifier = Modifier.clickable(onClick = onProductClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.placeholder_image),
+                contentDescription = product.nom,
+                modifier = Modifier.size(100.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(product.nom, fontWeight = FontWeight.Bold)
+            Text("$${product.prix}")
+        }
     }
 }

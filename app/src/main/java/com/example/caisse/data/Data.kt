@@ -25,9 +25,29 @@ data class HomeTileData(
 )
 
 data class Produit (
+    val id: String = UUID.randomUUID().toString(),
     val nom : String,
-    val prix : Int,
+    val prix : Double,
     val image : Int,
-    val categorie : Category,
+    val categorie : String,
 )
 data class Category(val id: String = UUID.randomUUID().toString(), val name: String)
+
+val sampleCategories = listOf(
+    Category(name = "Food"),
+    Category(name = "Drinks"),
+    Category(name = "Desserts")
+)
+
+val sampleProducts = listOf(
+    Produit(nom = "Burger", prix = 8.00, image = 0, categorie = "Food"),
+    Produit(nom = "Pizza", prix = 12.50, image = 0, categorie = "Food"),
+    Produit(nom = "Salad", prix = 7.00, image = 0, categorie = "Food"),
+    Produit(nom = "Sandwich", prix = 6.50, image = 0, categorie = "Food"),
+    Produit(nom = "Pasta", prix = 10.00, image = 0, categorie = "Food"),
+    Produit(nom = "Soup", prix = 5.50, image = 0, categorie = "Food"),
+    Produit(nom = "Coca-Cola", prix = 2.50, image = 0, categorie = "Drinks"),
+    Produit(nom = "Water", prix = 1.50, image = 0, categorie = "Drinks"),
+    Produit(nom = "Ice Cream", prix = 4.00, image = 0, categorie = "Desserts"),
+    Produit(nom = "Cake", prix = 5.00, image = 0, categorie = "Desserts")
+)

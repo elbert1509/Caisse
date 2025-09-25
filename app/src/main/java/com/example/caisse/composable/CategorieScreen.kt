@@ -42,8 +42,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.CategorieViewmodel
 import com.example.caisse.data.Category
+import com.example.caisse.data.MenuViewModel
 
 /**
  * Écran simple pour gérer une liste de catégories : ajouter, renommer, supprimer.
@@ -56,10 +56,10 @@ import com.example.caisse.data.Category
 fun CategoriesScreen(
     modifier: Modifier = Modifier,
     navController: NavController,
-    viewModelcategories: CategorieViewmodel
+    viewModelcategories: MenuViewModel
 
 ) {
-    var categories by rememberSaveable(stateSaver = viewModelcategories.CategoriesSaver) { mutableStateOf(viewModelcategories.defaultCategories()) }
+    var categories by rememberSaveable(stateSaver = viewModelcategories.CategoriesSaver) { mutableStateOf(viewModelcategories.categories.value) }
     var newName by remember { mutableStateOf(TextFieldValue("")) }
     var selectedTab by remember { mutableIntStateOf(0) }
     // État du dialogue de renommage

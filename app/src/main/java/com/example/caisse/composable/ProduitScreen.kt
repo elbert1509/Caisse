@@ -106,7 +106,7 @@ fun ProductScreen(
                             renamePrice = TextFieldValue(product.prix.toString())
                             renameCategory = categories.find { it.id == product.categoryId }
                         },
-                        onDelete = { viewModel.deleteProduit(it) }
+                        onDelete = { viewModel.deleteProduit(product) }
                     )
                 }
             }
@@ -191,12 +191,13 @@ fun CategoryDropdown(
             modifier = Modifier.fillMaxWidth()
         ) {
             categories.forEach { category ->
-                DropdownMenuItem(onClick = {
-                    onCategorySelected(category)
-                    expanded = false
-                }) {
-                    Text(text = category.name)
-                }
+                DropdownMenuItem(
+                    text = { Text(category.name) },
+                    onClick = {
+                        onCategorySelected(category)
+                        expanded = false
+                    }
+                )
             }
         }
     }

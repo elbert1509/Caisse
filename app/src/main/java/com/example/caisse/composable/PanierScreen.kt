@@ -82,7 +82,10 @@ fun PanierScreen(
             }
             Spacer(Modifier.height(24.dp))
             Button(
-                onClick = { /* TODO: Finalize order logic */ },
+                onClick = {
+                    menuViewModel.confirmerVente()
+                    navController.navigate("home")
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Confirmer la commande")

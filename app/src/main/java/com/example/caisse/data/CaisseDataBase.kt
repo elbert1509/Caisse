@@ -8,10 +8,11 @@ import androidx.room.TypeConverters
 import com.example.caisse.model.CategorieDao
 import com.example.caisse.model.ProduitDao
 import com.example.caisse.model.VendeurDao
+import com.example.caisse.model.VenteDao
 
 @Database(
-    entities = [Category::class, Produit::class, Vendeur::class],
-    version = 1,
+    entities = [Category::class, Produit::class, Vendeur::class,Vente::class, VenteLigne::class],
+    version = 2,
     exportSchema = false
 )
 
@@ -22,6 +23,7 @@ abstract class CaisseDataBase : RoomDatabase() {
     abstract fun categorieDao(): CategorieDao
     abstract fun produitDao(): ProduitDao
     abstract fun vendeurDao(): VendeurDao
+    abstract fun venteDao(): VenteDao
 
 
     companion object {

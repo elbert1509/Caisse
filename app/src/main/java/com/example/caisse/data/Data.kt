@@ -69,6 +69,54 @@ data class Vendeur(
     val prenom: String,
 )
 
+
+@Entity(
+    tableName = "Vente",
+    foreignKeys = [
+        ForeignKey(
+            entity = Vendeur::class,
+            parentColumns = ["id"],
+            childColumns = ["vendeurId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
+    indices = [Index("vendeurId")]
+)
+data class Vente(
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val date: Long = System.currentTimeMillis(),
+    val vendeurId: Int? = null,
+    val total: Double
+)
+
+@Entity(
+    tableName = "VenteLigne",
+    foreignKeys = [
+        ForeignKey(
+            entity = Vente::class,
+            parentColumns = ["id"],
+            childColumns = ["venteId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = Produit::class,
+            parentColumns = ["id"],
+            childColumns = ["produitId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("venteId"), Index("produitId")]
+)
+data class VenteLigne(
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val venteId: UUID,
+    val produitId: UUID,
+    val quantity: Int,
+    val prixUnitaire: Double,
+    val sousTotal: Double
+)
+
+
 data class Ticket(
     val produit: Produit,
     var quantity: Int

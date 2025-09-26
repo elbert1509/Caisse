@@ -95,6 +95,60 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+
+    val ventes: StateFlow<List<Vente>> =
+        repository.getAllVentes().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    fun addVente(vente: Vente, lignes: List<VenteLigne>) {
+        viewModelScope.launch {
+            repository.insertVente(vente)
+            lignes.forEach { repository.insertLigne(it) }
+        }
+    }
+
+    fun deleteVente(vente: Vente) {
+        viewModelScope.launch {
+            repository.deleteVente(vente)
+        }
+    }
+
+    fun confirmerVente(vendeurId: Int? = null) {
+        viewModelScope.launch {
+            val cartItems = cart.value
+            if (cartItems.isEmpty()) return@launch
+
+            // 1. Créer la vente
+            val venteId = UUID.randomUUID()
+            val vente = Vente(
+                id = venteId,
+                vendeurId = vendeurId,
+                total = totalPrice.value
+            )
+            repository.insertVente(vente)
+
+            // 2. Créer les lignes
+            cartItems.forEach { ticket ->
+                val ligne = VenteLigne(
+                    venteId = venteId,
+                    produitId = ticket.produit.id,
+                    quantity = ticket.quantity,
+                    prixUnitaire = ticket.produit.prix,
+                    sousTotal = ticket.produit.prix * ticket.quantity
+                )
+                repository.insertLigne(ligne)
+            }
+
+            // 3. Vider le panier
+            clearCart()
+        }
+    }
+
+
+
     // ---- PANIER ----
     private val _cart = MutableStateFlow<List<Ticket>>(emptyList())
     val cart: StateFlow<List<Ticket>> = _cart.asStateFlow()
@@ -119,7 +173,9 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
-
+    fun clearCart() {
+        _cart.value = emptyList()
+    }
     fun increaseQuantity(produitId: UUID) {
         _cart.update { currentCart ->
             currentCart.map {
@@ -159,7 +215,8 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
                     val repository = CaisseRepository(
                         database.categorieDao(),
                         database.produitDao(),
-                        database.vendeurDao()
+                        database.vendeurDao(),
+                        database.venteDao()
                     )
                     MenuViewModel(repository)
                 }

@@ -31,6 +31,8 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,6 +62,18 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
         mutableStateOf(categories.firstOrNull()?.id)
     }
     val tableItems by menuViewModel.tableItems.collectAsState()
+
+    // Load items when the screen is displayed for the first time
+    LaunchedEffect(tableUuid) {
+        menuViewModel.loadTableItems(tableUuid)
+    }
+
+    // Clear items when the user leaves the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            menuViewModel.clearTableItems()
+        }
+    }
 
 
     Scaffold(

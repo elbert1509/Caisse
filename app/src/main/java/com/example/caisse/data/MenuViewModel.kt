@@ -242,6 +242,7 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
     fun addTable(name: String) {
         viewModelScope.launch {
             repository.addTable(AppTable(name = name))
+            _tableItems.value = emptyList() // Clear items from previous table
             loadTables()
         }
     }
@@ -256,6 +257,9 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             }
             _tableItems.value = tickets
         }
+    }
+    fun clearTableItems() {
+        _tableItems.value = emptyList()
     }
     fun deleteTable(tableId: UUID) {
         viewModelScope.launch {

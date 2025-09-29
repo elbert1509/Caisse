@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -59,6 +61,11 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             category?.let {
                 repository.addCategory(it.copy(name = newName)) // REPLACE grâce à onConflictStrategy
             }
+        }
+    }
+    fun addCategorySample(category: Category) {
+        viewModelScope.launch {
+            repository.addCategory(category)
         }
     }
 
@@ -115,6 +122,7 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             repository.deleteVente(vente)
         }
     }
+
 
     fun confirmerVente(vendeurId: Int? = null) {
         viewModelScope.launch {
@@ -207,6 +215,188 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
 
 
 
+    // ---- TABLES ----
+
+    private val _tables = MutableStateFlow<List<AppTable>>(emptyList())
+    val tables: StateFlow<List<AppTable>> = _tables.asStateFlow()
+
+    private val _tableItems = MutableStateFlow<List<Ticket>>(emptyList())
+    val tableItems: StateFlow<List<Ticket>> = _tableItems.asStateFlow()
+
+    private val _invoices = MutableStateFlow<List<Invoice>>(emptyList())
+    val invoices: StateFlow<List<Invoice>> = _invoices.asStateFlow()
+    val totalAmount: StateFlow<Double> = _tableItems.map { tickets ->
+        tickets.sumOf { it.produit.prix * it.quantity }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    init {
+        // ⚡ Charger les tables dès que le ViewModel est instancié
+        loadTables()
+    }
+    fun loadTables() {
+        viewModelScope.launch {
+            _tables.value = repository.getActiveTables()
+        }
+    }
+
+    fun addTable(name: String) {
+        viewModelScope.launch {
+            repository.addTable(AppTable(name = name))
+            loadTables()
+        }
+    }
+
+    fun loadTableItems(tableId: UUID) {
+        viewModelScope.launch {
+            val items = repository.getTableItems(tableId)
+            val tickets = items.mapNotNull { item ->
+                repository.getProduitById(item.productId)?.let { product ->
+                    Ticket(product, item.quantity)
+                }
+            }
+            _tableItems.value = tickets
+        }
+    }
+    fun deleteTable(tableId: UUID) {
+        viewModelScope.launch {
+            val table = _tables.value.find { it.id == tableId }
+            if (table != null) {
+                repository.updateTable(table.copy(active = false))
+                loadTables()
+            }
+        }
+    }
+    fun addProductToTable(productId: UUID, tableId: UUID) {
+        viewModelScope.launch {
+            val existingItem = repository.getTableItems(tableId).find { it.productId == productId }
+            if (existingItem != null) {
+                repository.updateProductInTable(existingItem.copy(quantity = existingItem.quantity + 1))
+            } else {
+                repository.addProductToTable(TableItem(tableId = tableId, productId = productId, quantity = 1))
+            }
+            loadTableItems(tableId)
+        }
+    }
+
+    fun updateTableItemQuantity(productId: UUID, tableId: UUID, newQuantity: Int) {
+        viewModelScope.launch {
+            if (newQuantity > 0) {
+                val item = repository.getTableItems(tableId).find { it.productId == productId }
+                item?.let {
+                    repository.updateProductInTable(it.copy(quantity = newQuantity))
+                }
+            } else {
+                // If quantity is 0 or less, delete the item
+                repository.deleteProductFromTable(tableId, productId)
+            }
+            loadTableItems(tableId)
+        }
+    }
+
+    fun getTableById(id: UUID): AppTable? {
+        return _tables.value.find { it.id == id }
+    }
+    fun payTable(tableId: UUID) {
+        viewModelScope.launch {
+            val itemsToPay = _tableItems.value
+            if (itemsToPay.isNotEmpty()) {
+                val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
+                val invoice = Invoice(tableId = tableId, totalAmount = total)
+                repository.addInvoice(invoice)
+                itemsToPay.forEach { ticket ->
+                    repository.addInvoiceItem(
+                        InvoiceItem(
+                            invoiceId = invoice.id,
+                            productId = ticket.produit.id,
+                            quantity = ticket.quantity
+                        )
+                    )
+                }
+                deleteTable(tableId)
+                _tableItems.value = emptyList()
+            }
+        }
+    }
+
+    fun confirmerVenteTable(tableId: UUID, vendeurId: Int? = null) {
+        viewModelScope.launch {
+            val itemsToPay = _tableItems.value
+            if (itemsToPay.isEmpty()) return@launch
+
+            // 1. Créer la vente
+            val venteId = UUID.randomUUID()
+            val vente = Vente(
+                id = venteId,
+                vendeurId = vendeurId,
+                total = itemsToPay.sumOf { it.produit.prix * it.quantity }
+            )
+            repository.insertVente(vente)
+
+            // 2. Créer les lignes de vente
+            itemsToPay.forEach { ticket ->
+                val ligne = VenteLigne(
+                    venteId = venteId,
+                    produitId = ticket.produit.id,
+                    quantity = ticket.quantity,
+                    prixUnitaire = ticket.produit.prix,
+                    sousTotal = ticket.produit.prix * ticket.quantity
+                )
+                repository.insertLigne(ligne)
+            }
+
+            // 3. Créer aussi la facture (Invoice)
+            payTable(tableId)
+        }
+    }
+
+
+    private val _invoicesWithDetails = MutableStateFlow<List<InvoiceWithDetails>>(emptyList())
+    val invoicesWithDetails: StateFlow<List<InvoiceWithDetails>> = _invoicesWithDetails.asStateFlow()
+    data class InvoiceWithDetails(
+        val invoice: Invoice,
+        val items: List<Ticket>
+    )
+
+
+    // Historique
+    fun loadHistory() {
+        viewModelScope.launch {
+            val allInvoices = repository.getAllInvoices()
+            val details = allInvoices.map { invoice ->
+                val items = repository.getInvoiceItems(invoice.id)
+                val tickets = items.mapNotNull { item ->
+                    repository.getProduitById(item.productId)?.let { product ->
+                        Ticket(product, item.quantity)
+                    }
+                }
+                InvoiceWithDetails(invoice, tickets)
+            }
+            _invoicesWithDetails.value = details
+        }
+    }
+
+
+    private val _ventesWithDetails = MutableStateFlow<List<VenteWithDetails>>(emptyList())
+    val ventesWithDetails: StateFlow<List<VenteWithDetails>> = _ventesWithDetails.asStateFlow()
+
+
+    fun loadVentesHistory() {
+        viewModelScope.launch {
+            repository.getAllVentes().collect { allVentes ->
+                val details = allVentes.map { vente ->
+                    // Collecter les lignes de cette vente
+                    val lignes = repository.getLignesForVente(vente.id).first()
+                    val tickets = lignes.mapNotNull { ligne ->
+                        repository.getProduitById(ligne.produitId)?.let { produit ->
+                            Ticket(produit, ligne.quantity)
+                        }
+                    }
+                    VenteWithDetails(vente, tickets)
+                }
+                _ventesWithDetails.value = details
+            }
+        }
+    }
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory {
             return viewModelFactory {
@@ -216,7 +406,9 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
                         database.categorieDao(),
                         database.produitDao(),
                         database.vendeurDao(),
-                        database.venteDao()
+                        database.venteDao(),
+                        database.tableDao(),
+                        database.invoiceDao()
                     )
                     MenuViewModel(repository)
                 }

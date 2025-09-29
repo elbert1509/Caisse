@@ -1,7 +1,9 @@
 package com.example.caisse.data
 
 import com.example.caisse.model.CategorieDao
+import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.ProduitDao
+import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
 import kotlinx.coroutines.flow.Flow
@@ -11,7 +13,9 @@ class CaisseRepository(
     private val categorieDao: CategorieDao,
     private val produitDao: ProduitDao,
     private val vendeurDao: VendeurDao,
-    private val venteDao: VenteDao
+    private val venteDao: VenteDao,
+    private val tableDao: TableDao,
+    private val invoiceDao: InvoiceDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -22,6 +26,7 @@ class CaisseRepository(
     fun getAllProduits(): Flow<List<Produit>> = produitDao.getAllProduits()
     suspend fun addProduit(produit: Produit) = produitDao.insertProduit(produit)
     suspend fun deleteProduit(produit: Produit) = produitDao.deleteProduit(produit)
+    suspend fun getProduitById(id: UUID): Produit? = produitDao.getProduitById(id)
 
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()
@@ -35,4 +40,23 @@ class CaisseRepository(
     suspend fun insertLigne(ligne: VenteLigne) = venteDao.insertLigne(ligne)
     suspend fun deleteVente(vente: Vente) = venteDao.deleteVente(vente)
     suspend fun deleteLigne(ligne: VenteLigne) = venteDao.deleteLigne(ligne)
+
+
+
+    // Table methods
+    suspend fun addTable(appTable: AppTable) = tableDao.addTable(appTable)
+    suspend fun updateTable(appTable: AppTable) = tableDao.updateTable(appTable)
+    suspend fun getActiveTables(): List<AppTable> = tableDao.getActiveTables()
+    suspend fun addProductToTable(tableItem: TableItem) = tableDao.addProductToTable(tableItem)
+    suspend fun updateProductInTable(tableItem: TableItem) = tableDao.updateProductInTable(tableItem)
+    suspend fun deleteProductFromTable(tableId: UUID, productId: UUID) = tableDao.deleteProductFromTable(tableId, productId)
+    suspend fun getTableItems(tableId: UUID): List<TableItem> = tableDao.getTableItems(tableId)
+
+
+    // Invoice methods
+    suspend fun addInvoice(invoice: Invoice) = invoiceDao.addInvoice(invoice)
+    suspend fun addInvoiceItem(invoiceItem: InvoiceItem) = invoiceDao.addInvoiceItem(invoiceItem)
+    suspend fun getAllInvoices(): List<Invoice> = invoiceDao.getAllInvoices()
+    suspend fun getInvoiceItems(invoiceId: UUID): List<InvoiceItem> = invoiceDao.getInvoiceItems(invoiceId)
+
 }

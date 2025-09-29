@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.caisse.data.Produit
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 @Dao
 interface ProduitDao {
@@ -19,5 +20,8 @@ interface ProduitDao {
 
     @Query("SELECT * FROM produit")
     fun getAllProduits(): Flow<List<Produit>>
+    @Query("SELECT * FROM produit WHERE id = :id")
+    suspend fun getProduitById(id: UUID): Produit?
+
 
 }

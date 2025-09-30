@@ -144,11 +144,11 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 Text(
                     text = "Facture",
                     style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 16.dp).weight(0.1f)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                LazyColumn {
+                LazyColumn( modifier = Modifier.weight(0.7f)) {
                     items(tableItems, key = { it.produit.id }) { ticket ->
                         TableItemRow(
                             ticket = ticket,
@@ -172,7 +172,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 Spacer(Modifier.height(16.dp))
 
                 Row (
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().weight(0.1f),
                     horizontalArrangement = Arrangement.SpaceBetween
 
                 ){
@@ -184,10 +184,10 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 Button(
                     onClick = {
                         menuViewModel.payTable(tableUuid)
-                        menuViewModel.confirmerVenteTable(tableUuid)
+                       // menuViewModel.confirmerVenteTable(tableUuid)
                         navController.popBackStack() // revenir en arrière après validation
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().weight(0.1f),
                     enabled = totaltable > 0
                 ) {
                     Text("Valider la table")

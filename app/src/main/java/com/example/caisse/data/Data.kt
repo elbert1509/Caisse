@@ -190,30 +190,3 @@ data class TableItem(
     val productId: UUID,
     val quantity: Int
 )
-
-val CATEGORY_FOOD_ID = UUID.fromString("11111111-1111-1111-1111-111111111111")
-val CATEGORY_DRINKS_ID = UUID.fromString("22222222-2222-2222-2222-222222222222")
-val CATEGORY_DESSERTS_ID = UUID.fromString("33333333-3333-3333-3333-333333333333")
-val CATEGORY_APPETIZERS_ID  = UUID.fromString("44444444-4444-4444-4444-444444444444")
-
-val sampleCategories = listOf(
-    Category(id = CATEGORY_FOOD_ID, name = "Food", description = "Repas et plats principaux"),
-    Category(id = CATEGORY_DRINKS_ID, name = "Drinks", description = "Boissons"),
-    Category(id = CATEGORY_DESSERTS_ID, name = "Desserts", description = "Pâtisseries et douceurs"),
-    Category(id = CATEGORY_APPETIZERS_ID , name = "Appetizers", description = "Entrées")
-)
-val sampleProducts = listOf(
-    Produit(nom = "Burger", prix = 8.00, image = R.drawable.burger, categoryId = CATEGORY_FOOD_ID, stock = 20),
-    Produit(nom = "Pizza", prix = 12.50, image = 0, categoryId = CATEGORY_FOOD_ID, stock = 15),
-    Produit(nom = "Salad", prix = 7.00, image = 0, categoryId = CATEGORY_FOOD_ID, stock = 10),
-
-    Produit(nom = "Coca-Cola", prix = 2.50, image = 0, categoryId = CATEGORY_DRINKS_ID, stock = 50),
-    Produit(nom = "Water", prix = 1.50, image = 0, categoryId = CATEGORY_DRINKS_ID, stock = 100),
-    Produit(nom = "Hot Dog", prix = 4.50, image = 0, categoryId = CATEGORY_DRINKS_ID, stock = 20),
-
-    Produit(nom = "Ice Cream", prix = 4.00, image = 0, categoryId = CATEGORY_DESSERTS_ID, stock = 30),
-    Produit(nom = "Cake", prix = 5.00, image = 0, categoryId = CATEGORY_DESSERTS_ID, stock = 25),
-    Produit(nom = "Donut", prix = 3.50, image = 0, categoryId = CATEGORY_DESSERTS_ID, stock = 40),
-
-    Produit(nom = "French Fries", prix = 6.00, image = 0, categoryId = CATEGORY_APPETIZERS_ID, stock = 35)
-)

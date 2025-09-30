@@ -94,13 +94,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 onTabSelected = { selectedTab = it },
                 navController = navController
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { /**/}) {
-                Icon(Icons.Default.Add, contentDescription = "Add Table")
-            }
         }
-
     ) { padding ->
 
         Row(
@@ -181,17 +175,32 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 }
                 Spacer(Modifier.height(16.dp))
 
-                Button(
-                    onClick = {
-                        menuViewModel.payTable(tableUuid)
-                       // menuViewModel.confirmerVenteTable(tableUuid)
-                        navController.popBackStack() // revenir en arrière après validation
-                    },
-                    modifier = Modifier.fillMaxWidth().weight(0.1f),
-                    enabled = totaltable > 0
-                ) {
-                    Text("Valider la table")
+                Row (modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .weight(0.1f),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ){
+                    Button(
+                        onClick = {
+                            menuViewModel.payTable(tableUuid)
+                            navController.popBackStack() // revenir en arrière après validation
+                        },
+                        enabled = totaltable > 0
+                    ) {
+                        Text("Valider la table")
+                    }
+                    Button(
+                        onClick = {
+
+                            navController.popBackStack() // revenir en arrière après validation
+                        },
+                        enabled = totaltable > 0
+                    ) {
+                        Text("Imprimer la facture")
+                    }
                 }
+
             }
 
 

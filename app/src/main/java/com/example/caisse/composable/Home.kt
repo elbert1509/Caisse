@@ -85,7 +85,7 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
             TopAppBar(
                 title = { Text(text = "Caisse PoS") },
                 actions = {
-                    IconButton(onClick = { /*TODO*/ }) {
+                    IconButton(onClick = { navController.navigate("bluetooth") }) {
                         Icon(Icons.Filled.Settings, contentDescription = null)
                     }
                 }

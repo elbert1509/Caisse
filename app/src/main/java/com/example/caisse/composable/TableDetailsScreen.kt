@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
 
@@ -51,7 +52,7 @@ import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String){
+fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String, bluetoothViewModel: BluetoothViewModel){
     var selectedTab by remember { mutableIntStateOf(0) }
     val tables by menuViewModel.tables.collectAsState()
     val tableUuid = remember(tableId) { UUID.fromString(tableId) }
@@ -193,6 +194,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     Button(
                         onClick = {
 
+                            bluetoothViewModel.printInvoice(tableItems, totaltable)
                             navController.popBackStack() // revenir en arrière après validation
                         },
                         enabled = totaltable > 0

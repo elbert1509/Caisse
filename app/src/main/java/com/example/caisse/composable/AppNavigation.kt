@@ -9,6 +9,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.caisse.bluetooth.BluetoothViewModel
+import com.example.caisse.bluetooth.ParametreBluetooothScreen
 import com.example.caisse.data.HomeActionButton
 import com.example.caisse.data.MenuViewModel
 
@@ -18,6 +20,7 @@ fun AppNavigation() {
     val menuViewModel: MenuViewModel = viewModel(
         factory = MenuViewModel.provideFactory(context = LocalContext.current)
     )
+    val bluetoothViewModel: BluetoothViewModel = viewModel()
     val navController = rememberNavController()
 
 
@@ -55,11 +58,13 @@ fun AppNavigation() {
             TableDetailsScreen(
                 navController = navController,
                 menuViewModel = menuViewModel,
-                tableId = backStackEntry.arguments?.getString("tableId") ?: ""
+                tableId = backStackEntry.arguments?.getString("tableId") ?: "",
+                bluetoothViewModel = bluetoothViewModel
             )
         }
         composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel) }
         composable("donnee") { Donnee(navController = navController, menuViewModel = menuViewModel) }
+        composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel) }
     }
 
 }

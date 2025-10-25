@@ -13,7 +13,7 @@ class CaisseRepository(
     private val categorieDao: CategorieDao,
     private val produitDao: ProduitDao,
     private val vendeurDao: VendeurDao,
-    private val venteDao: VenteDao,
+     val venteDao: VenteDao,
     private val tableDao: TableDao,
     private val invoiceDao: InvoiceDao
 ) {
@@ -27,6 +27,8 @@ class CaisseRepository(
     suspend fun addProduit(produit: Produit) = produitDao.insertProduit(produit)
     suspend fun deleteProduit(produit: Produit) = produitDao.deleteProduit(produit)
     suspend fun getProduitById(id: UUID): Produit? = produitDao.getProduitById(id)
+    suspend fun updateProduit(produit: Produit) = produitDao.insertProduit(produit)
+
 
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()
@@ -40,6 +42,8 @@ class CaisseRepository(
     suspend fun insertLigne(ligne: VenteLigne) = venteDao.insertLigne(ligne)
     suspend fun deleteVente(vente: Vente) = venteDao.deleteVente(vente)
     suspend fun deleteLigne(ligne: VenteLigne) = venteDao.deleteLigne(ligne)
+    suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) =
+        venteDao.insertVenteWithLignes(vente, lignes)
 
 
 

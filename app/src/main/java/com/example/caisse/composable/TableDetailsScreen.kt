@@ -1,5 +1,6 @@
 package com.example.caisse.composable
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -141,7 +142,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.padding(bottom = 16.dp).weight(0.1f)
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                //Spacer(modifier = Modifier.height(16.dp))
 
                 LazyColumn( modifier = Modifier.weight(0.7f)) {
                     items(tableItems, key = { it.produit.id }) { ticket ->
@@ -178,8 +179,9 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                 Row (modifier = Modifier
                     .padding(bottom = 8.dp)
+                    .fillMaxWidth()
                     .weight(0.1f),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ){
                     Button(
@@ -194,8 +196,24 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     Button(
                         onClick = {
 
-                            bluetoothViewModel.printInvoice(tableItems, totaltable)
-                            navController.popBackStack() // revenir en arrière après validation
+                            if (!bluetoothViewModel.isConnected.value) {
+                                Toast.makeText(
+                                    navController.context,
+                                    "Pas de device connecté",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@Button
+                            }else{
+                                bluetoothViewModel.printInvoice(tableItems, totaltable)
+                                Toast.makeText(
+                                    navController.context,
+                                    "Ticket imprimé",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                navController.popBackStack() // revenir en arrière après validation
+                            }
+
+
                         },
                         enabled = totaltable > 0
                     ) {

@@ -20,11 +20,16 @@ import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TableRestaurant
+import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -123,7 +128,10 @@ fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Mo
 {
 
     Card(modifier = modifier
-                .clickable { onClick() },colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = data.color))
+                .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = data.color),
+        elevation = cardElevation(6.dp),
+        shape = MaterialTheme.shapes.large)
     {
         Column(modifier = Modifier.padding(16.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -149,6 +157,8 @@ private fun defaultHomeButton() : List<HomeTileData> = listOf(
     HomeTileData("Produits", Icons.Default.Inventory, color = Blue, HomeActionButton.GERER_PRODUITS),
     HomeTileData("Catégories", Icons.Default.Fastfood, color = Blue, HomeActionButton.GERE_CATEGORIE),
     HomeTileData("Donnee", Icons.Default.DataExploration, color = Blue, HomeActionButton.DONNES),
+    HomeTileData("Dashboard", Icons.Default.BarChart, color = Blue, HomeActionButton.DASHBOARD),
+    HomeTileData("Stock", Icons.Default.Warehouse, color = Blue, HomeActionButton.STOCK)
 )
 
 

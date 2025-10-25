@@ -29,6 +29,6 @@ fun addSampleData(menuViewModel: MenuViewModel) {
 
     // 2. Ajouter les produits
    for (produit in sampleProducts) {
-        menuViewModel.addProduit(produit.nom, produit.prix, produit.categoryId)
+        menuViewModel.addProduit(produit.nom, produit.prix, produit.categoryId,produit.stock)
     }
 }

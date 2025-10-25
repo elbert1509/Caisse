@@ -13,11 +13,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
+import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -133,7 +136,10 @@ fun PrendreCommandeScreen(
 fun ProductItem(product: Produit, onProductClick: () -> Unit) {
     Card(
         modifier = Modifier.clickable(onClick = onProductClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = MaterialTheme.shapes.large,
+
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -143,10 +149,10 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
             Image(
                 painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
                 contentDescription = product.nom,
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier.size(80.dp).align(Alignment.CenterHorizontally)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(product.nom, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(product.nom, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)
             Text(String.format("%.2f €", product.prix), fontSize = 12.sp)
         }
     }

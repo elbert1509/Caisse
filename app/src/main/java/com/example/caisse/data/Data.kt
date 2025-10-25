@@ -8,7 +8,6 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.example.caisse.R
 import java.util.UUID
 
 
@@ -21,7 +20,9 @@ enum class HomeActionButton{
     GERER_PRODUITS,
     GERE_CATEGORIE,
     TABLE,
-    DONNES
+    DONNES,
+    DASHBOARD,
+    STOCK
     }
 
 @Immutable
@@ -33,7 +34,7 @@ data class HomeTileData(
 )
 
 
-@Entity(tableName = "Category")
+@Entity(tableName = "category")
 data class Category(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val name: String,
@@ -190,3 +191,8 @@ data class TableItem(
     val productId: UUID,
     val quantity: Int
 )
+
+
+data class SalesData(val label: String, val amount: Double)
+data class ProductSale(val productName: String, val totalQuantity: Int)
+

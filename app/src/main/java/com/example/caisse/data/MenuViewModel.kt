@@ -12,13 +12,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
+class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // ---- Flows exposés ----
     val categories: StateFlow<List<Category>> =
@@ -70,9 +69,9 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
     }
 
     // ---- PRODUITS ----
-    fun addProduit(name: String, price: Double, categoryId: UUID) {
+    fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12) {
         viewModelScope.launch {
-            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock)
             repository.addProduit(newProduit)
         }
     }
@@ -114,6 +113,12 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             repository.insertVente(vente)
             lignes.forEach { repository.insertLigne(it) }
+
+            /// NOUVEAU : adapter au même comportement (sécurité si utilisée ailleurs)
+            val tickets = lignes.mapNotNull { l ->
+                repository.getProduitById(l.produitId)?.let { p -> Ticket(p, l.quantity) }
+            }
+            decrementStocks(tickets)
         }
     }
 
@@ -134,23 +139,27 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             val vente = Vente(
                 id = venteId,
                 vendeurId = vendeurId,
-                total = totalPrice.value
+                total = totalPrice.value,
+                date = System.currentTimeMillis()
             )
             repository.insertVente(vente)
 
             // 2. Créer les lignes
-            cartItems.forEach { ticket ->
-                val ligne = VenteLigne(
+            val lignes = cartItems.map { ticket ->
+                VenteLigne(
+                    id = UUID.randomUUID(),
                     venteId = venteId,
                     produitId = ticket.produit.id,
                     quantity = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
                     sousTotal = ticket.produit.prix * ticket.quantity
                 )
-                repository.insertLigne(ligne)
             }
+            repository.insertVenteWithLignes(vente, lignes) // ✅ transaction
+            // 3)  mise à jour des stocks ↓↓↓
+            decrementStocks(cartItems)
 
-            // 3. Vider le panier
+            // 4. Vider le panier
             clearCart()
         }
     }
@@ -316,6 +325,11 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
                         )
                     )
                 }
+
+                // décrémenter les stocks des items de la table ↓↓↓
+                decrementStocks(itemsToPay)
+
+                // Fermer la table et nettoyer
                 deleteTable(tableId)
                 _tableItems.value = emptyList()
             }
@@ -332,23 +346,27 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
             val vente = Vente(
                 id = venteId,
                 vendeurId = vendeurId,
-                total = itemsToPay.sumOf { it.produit.prix * it.quantity }
-            )
-            repository.insertVente(vente)
+                total = itemsToPay.sumOf { it.produit.prix * it.quantity },
+                date = System.currentTimeMillis()
 
+
+            )
             // 2. Créer les lignes de vente
-            itemsToPay.forEach { ticket ->
-                val ligne = VenteLigne(
+            val lignes = itemsToPay.map { ticket ->
+                VenteLigne(
+                    id = UUID.randomUUID(),
                     venteId = venteId,
                     produitId = ticket.produit.id,
                     quantity = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
                     sousTotal = ticket.produit.prix * ticket.quantity
                 )
-                repository.insertLigne(ligne)
             }
+            repository.insertVenteWithLignes(vente, lignes) // ✅ transaction
+            // 3. décrémenter les stocks pour cette table ↓↓↓
+            updateStocksForTickets(itemsToPay)
 
-            // 3. Créer aussi la facture (Invoice)
+            // 4. Créer aussi la facture (Invoice)
             payTable(tableId)
         }
     }
@@ -398,6 +416,30 @@ class MenuViewModel(private val repository: CaisseRepository) : ViewModel() {
                     VenteWithDetails(vente, tickets)
                 }
                 _ventesWithDetails.value = details
+            }
+        }
+    }
+
+    private suspend fun updateStocksForTickets(tickets: List<Ticket>) {
+        tickets.forEach { ticket ->
+            val produitActuel = repository.getProduitById(ticket.produit.id)
+            if (produitActuel != null) {
+                val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
+                if (newStock != produitActuel.stock) {
+                    repository.addProduit(produitActuel.copy(stock = newStock)) // upsert
+                }
+            }
+        }
+    }
+
+    private suspend fun decrementStocks(tickets: List<Ticket>) {
+        tickets.forEach { ticket ->
+            val produitActuel = repository.getProduitById(ticket.produit.id)
+            if (produitActuel != null) {
+                val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
+                if (newStock != produitActuel.stock) {
+                    repository.addProduit(produitActuel.copy(stock = newStock)) // upsert
+                }
             }
         }
     }

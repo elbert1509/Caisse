@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +59,7 @@ class BluetoothViewModel : ViewModel() {
                     Log.d("BluetoothViewModel", " Logfg Connected to device: ${device.name} with ${device.address}")
                     device.uuids?.firstOrNull()?.uuid
                 } ?: UUID.fromString("00001101-0000-1000-8000-00805f9b34fb") // UUID SPP
-                    Log.d("BluetoothViewModel", " device uuid : $uuid has Permission : ${device.uuids}")
+
                 socket = device.createRfcommSocketToServiceRecord( UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"))
                 bluetoothAdapter?.cancelDiscovery()
                 socket?.connect()   // ✅ safe car exécuté en I/O thread
@@ -103,7 +104,8 @@ class BluetoothViewModel : ViewModel() {
                 val sb = StringBuilder()
 
                 // --- En-tête ---
-                sb.appendln("************ COMME DES GARÇONS ************")
+                sb.appendln("\n")
+                sb.appendln("*** COMME DES GARÇONS ***")
                 sb.appendln("Adresse: 123 Rue Exemple, Paris")
                 sb.appendln("Tel: 01 23 45 67 89")
                 sb.appendln("-------------------------------------------")
@@ -121,11 +123,11 @@ class BluetoothViewModel : ViewModel() {
                     sb.appendln("$name $qty  $price  $lineTotal")
                 }
 
-                sb.appendln("-------------------------------------------")
-                sb.appendln(String.format("TOTAL:%36.2f €", total))
-                sb.appendln("-------------------------------------------")
-                sb.appendln("      Merci pour votre confiance 🙏")
-                sb.appendln("*******************************************")
+                sb.appendln("--------------------------------")
+                sb.appendln(String.format("TOTAL:%36.2f ", total))
+                sb.appendln("--------------------------------")
+                sb.appendln("      Merci pour votre confiance ")
+                sb.appendln("********************************")
                 sb.appendln("\n\n\n") // Avance papier
 
                 val text = sb.toString()
@@ -137,6 +139,18 @@ class BluetoothViewModel : ViewModel() {
             }
         }
     }
+    companion object {
+        fun provideFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                if (modelClass.isAssignableFrom(BluetoothViewModel::class.java)) {
+                    return BluetoothViewModel() as T
+                }
+                throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+            }
+        }
+    }
+
 
 
 }

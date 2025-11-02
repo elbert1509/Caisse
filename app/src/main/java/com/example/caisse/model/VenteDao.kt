@@ -1,6 +1,7 @@
 package com.example.caisse.model
 
 import androidx.room.*
+import com.example.caisse.data.ProductReport
 import com.example.caisse.data.ProductSale
 import com.example.caisse.data.SalesData
 import com.example.caisse.data.Vente
@@ -106,6 +107,28 @@ interface VenteDao {
         insertVente(vente)
         for (l in lignes) insertLigne(l)
     }
+    @Query("""
+    SELECT p.nom AS productName,
+           SUM(vl.quantity) AS totalQuantity,
+           p.stock AS productStock,
+           SUM(vl.quantity * vl.prixUnitaire) AS revenue
+    FROM VenteLigne vl
+    JOIN Produit p ON vl.produitId = p.id
+    JOIN Vente v   ON vl.venteId = v.id
+    WHERE v.date >= :start AND v.date < :end
+    GROUP BY p.nom,p.stock
+    ORDER BY revenue DESC
+""")
+    fun getProductReportBetween(start: Long, end: Long): Flow<List<ProductReport>>
+
+    @Query("""
+    SELECT COALESCE(SUM(vl.quantity * vl.prixUnitaire), 0)
+    FROM VenteLigne vl
+    INNER JOIN Vente v ON vl.venteId = v.id
+    WHERE v.date >= :start AND v.date < :end
+""")
+    fun getTotalRevenueBetween(start: Long, end: Long): Flow<Double>
+
 
 
 }

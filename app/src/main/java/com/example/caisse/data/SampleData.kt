@@ -74,3 +74,9 @@ val sampleProducts = listOf(
     Produit(nom = "Nachos", prix = 8.00, categoryId = CATEGORY_APPETIZERS_ID, stock = 20, description = "Nachos au fromage et guacamole"),
     Produit(nom = "Shrimp Cocktail", prix = 9.00, categoryId = CATEGORY_APPETIZERS_ID, stock = 12, description = "Cocktail de crevettes")
 )
+
+val sampleVendeurs = listOf(
+    Vendeur(id = 1, nom = "John", prenom = "Doe"),
+    Vendeur(id = 2, nom = "Jane", prenom = "Smith"),
+    Vendeur(id = 3, nom = "Bob", prenom = "Johnson")
+)

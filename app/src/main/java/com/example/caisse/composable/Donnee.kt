@@ -7,6 +7,9 @@ import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.sampleCategories
 import com.example.caisse.data.sampleProducts
+import com.example.caisse.data.sampleVendeurs
+import kotlinx.coroutines.flow.first
+import java.util.UUID
 
 @Composable
 fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
@@ -27,8 +30,15 @@ fun addSampleData(menuViewModel: MenuViewModel) {
         menuViewModel.addCategorySample(category)
     }
 
+
     // 2. Ajouter les produits
    for (produit in sampleProducts) {
         menuViewModel.addProduit(produit.nom, produit.prix, produit.categoryId,produit.stock)
+    }
+
+    // 3. Ajouter vendeur
+    for (vendeur in sampleVendeurs) {
+        menuViewModel.addVendeur(vendeur)
+
     }
 }

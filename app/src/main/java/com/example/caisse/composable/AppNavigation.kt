@@ -39,7 +39,7 @@ fun AppNavigation() {
                     HomeActionButton.PARTAGER_BOUTONS ->  println("Partage pas encore implémenté")
                     HomeActionButton.GERE_CATEGORIE -> navController.navigate("categorie")
                     HomeActionButton.GERER_INVENTAIRE -> navController.navigate("inventaire")
-                    HomeActionButton.EXPORTER ->  navController.navigate("inventaire")
+                    HomeActionButton.EXPORTER ->  navController.navigate("rapport")
                     HomeActionButton.GERER_PRODUITS -> navController.navigate("produit")
                     HomeActionButton.TABLE -> navController.navigate("table")
                     HomeActionButton.DONNES ->   navController.navigate("donnee")
@@ -75,6 +75,19 @@ fun AppNavigation() {
         composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel) }
         composable("stock") { StockScreen(navController = navController, viewModel = menuViewModel) }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
+        composable("rapport") { RapportData(navController = navController, viewModel = menuViewModel, dashboardViewModel = dashboardViewModel)}
+        composable(
+            route = "rapport/{tabIndex}",
+            arguments = listOf(navArgument("tabIndex") { type = NavType.IntType; defaultValue = 0 })
+        ) { backStackEntry ->
+            val tab = backStackEntry.arguments?.getInt("tabIndex") ?: 0
+            RapportData(
+                navController = navController,
+                viewModel = menuViewModel,
+                dashboardViewModel = dashboardViewModel,
+                initialTab = tab
+            )
+        }
     }
 
 }

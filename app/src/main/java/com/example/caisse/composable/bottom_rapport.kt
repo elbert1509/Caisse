@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PointOfSale
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -23,29 +24,28 @@ import androidx.navigation.NavController
  */
 
 @Composable
-fun BottomHome(
-    onTabSelected: (Int) -> Unit,
+fun Bottom_rapport(
     selectedIndex: Int = 0,
-    navController: NavController? = null
+    onExportClick: (tabIndex: Int) -> Unit
 ) {
     NavigationBar {
         NavigationBarItem(
             selected = selectedIndex == 0,
-            onClick = { navController?.navigate("home") },
-            icon = { Icon(Icons.Filled.Home, contentDescription = "Accueil") },
-            label = { Text("Home") }
+            onClick = { onExportClick(0)  },
+            icon = { Icon(Icons.Filled.Share, contentDescription = "Rapport Journalier") },
+            label = { Text("Rapport Journalier ") }
         )
         NavigationBarItem(
             selected = selectedIndex == 1,
-            onClick = { onTabSelected(1) },
-            icon = { Icon(Icons.Filled.PointOfSale, contentDescription = "Commande") },
-            label = { Text("Commande") }
+            onClick = { onExportClick(1) },
+            icon = { Icon(Icons.Filled.Share, contentDescription = "Rapport Hebdo") },
+            label = { Text("Rapport Hebdo") }
         )
         NavigationBarItem(
             selected = selectedIndex == 2,
-            onClick = { navController?.navigate("historique") },
-            icon = { Icon(Icons.Filled.History, contentDescription = "Historique") },
-            label = { Text("Historique") }
+            onClick = { onExportClick(2) },
+            icon = { Icon(Icons.Filled.Share, contentDescription = "Rapport Mensuel") },
+            label = { Text("Rapport Mensuel") }
         )
     }
 }
@@ -53,7 +53,7 @@ fun BottomHome(
 
 @Composable
 @Preview
-fun BottomHomePreview() {
+fun BottomRapportPreview() {
     var selectedIndex by remember { mutableStateOf(0) }
     BottomHome(
         onTabSelected = { index -> selectedIndex = index },

@@ -312,27 +312,48 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun payTable(tableId: UUID) {
         viewModelScope.launch {
             val itemsToPay = _tableItems.value
-            if (itemsToPay.isNotEmpty()) {
-                val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
-                val invoice = Invoice(tableId = tableId, totalAmount = total)
-                repository.addInvoice(invoice)
-                itemsToPay.forEach { ticket ->
-                    repository.addInvoiceItem(
-                        InvoiceItem(
-                            invoiceId = invoice.id,
-                            productId = ticket.produit.id,
-                            quantity = ticket.quantity
-                        )
-                    )
-                }
+            if (itemsToPay.isEmpty()) return@launch
 
-                // décrémenter les stocks des items de la table ↓↓↓
-                decrementStocks(itemsToPay)
-
-                // Fermer la table et nettoyer
-                deleteTable(tableId)
-                _tableItems.value = emptyList()
+            // 1) Créer la Vente + Lignes (vendeurId inconnu ici → null)
+            val venteId = UUID.randomUUID()
+            val vente = Vente(
+                id = venteId,
+                vendeurId = 1,
+                total = itemsToPay.sumOf { it.produit.prix * it.quantity },
+                date = System.currentTimeMillis()
+            )
+            val lignes = itemsToPay.map { ticket ->
+                VenteLigne(
+                    id = UUID.randomUUID(),
+                    venteId = venteId,
+                    produitId = ticket.produit.id,
+                    quantity = ticket.quantity,
+                    prixUnitaire = ticket.produit.prix,
+                    sousTotal = ticket.produit.prix * ticket.quantity
+                )
             }
+            repository.insertVenteWithLignes(vente, lignes)
+
+            // 2) Créer la facture (inchangé)
+            val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
+            val invoice = Invoice(tableId = tableId, totalAmount = total)
+            repository.addInvoice(invoice)
+            itemsToPay.forEach { ticket ->
+                repository.addInvoiceItem(
+                    InvoiceItem(
+                        invoiceId = invoice.id,
+                        productId = ticket.produit.id,
+                        quantity = ticket.quantity
+                    )
+                )
+            }
+
+            // 3) Décrémenter les stocks
+            decrementStocks(itemsToPay)
+
+            // 4) Fermer la table et nettoyer
+            deleteTable(tableId)
+            _tableItems.value = emptyList()
         }
     }
 
@@ -438,7 +459,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             if (produitActuel != null) {
                 val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
                 if (newStock != produitActuel.stock) {
-                    repository.addProduit(produitActuel.copy(stock = newStock)) // upsert
+                    repository.updateProduit(produitActuel.copy(stock = newStock)) // upsert
                 }
             }
         }

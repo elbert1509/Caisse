@@ -160,6 +160,13 @@ data class InvoiceItem(
     val quantity: Int
 )
 
+// Rapport produit pour une période donnée (Jour / Semaine / Mois)
+data class ProductReport(
+    val productName: String,
+    val totalQuantity: Int,
+    val productStock: Int,
+    val revenue: Double
+)
 
 @Entity(tableName = "app_table")
 data class AppTable(

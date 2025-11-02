@@ -1,7 +1,9 @@
 package com.example.caisse.composable
 
+import android.R.attr.onClick
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -73,7 +75,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
         ) {
             /* --- KPI Row (Today / Week / Month) --- */
             item {
-                KpiRow(today = salesToday, week = salesThisWeek, month = salesThisMonth)
+                KpiRow(today = salesToday, week = salesThisWeek, month = salesThisMonth, navController = navController)
             }
 
             /* --- Weekly line (cubic + dégradé + labels jours) --- */
@@ -336,7 +338,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
 /* ------------------------------ Components ------------------------------ */
 
 @Composable
-private fun KpiRow(today: Double, week: Double, month: Double) {
+private fun KpiRow(today: Double, week: Double, month: Double,navController: NavController) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -345,19 +347,23 @@ private fun KpiRow(today: Double, week: Double, month: Double) {
             title = "Aujourd'hui",
             amount = today,
             gradient = Brush.linearGradient(listOf(MintStart, MintEnd)),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { navController.navigate("rapport/0") }
+
         )
         KpiCard(
             title = "Cette semaine",
             amount = week,
             gradient = Brush.linearGradient(listOf(Indigo, Color(0xFF2563EB))),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { navController.navigate("rapport/1") }
         )
         KpiCard(
             title = "Ce mois",
             amount = month,
             gradient = Brush.linearGradient(listOf(Slate700, Slate900)),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onClick = { navController.navigate("rapport/2") }
         )
     }
 }
@@ -367,13 +373,15 @@ private fun KpiCard(
     title: String,
     amount: Double,
     gradient: Brush,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
     Card(
         modifier = modifier.height(110.dp),
         elevation = cardElevation(6.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = MaterialTheme.shapes.large
+        shape = MaterialTheme.shapes.large,
+        onClick = onClick
     ) {
         Box(
             modifier = Modifier

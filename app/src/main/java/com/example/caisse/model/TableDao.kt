@@ -11,11 +11,17 @@ import java.util.UUID
 
 @Dao
 interface TableDao {
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addTable(appTable: AppTable)
 
     @Update
     suspend fun updateTable(appTable: AppTable)
+
+    @Query("SELECT * FROM app_table WHERE id = :id")
+    suspend fun getTableById(id: UUID): AppTable?
+
+    @Query("SELECT * FROM app_table")
+    suspend fun getAllTablesOnce(): List<AppTable>
 
     @Query("SELECT * FROM app_table WHERE active = 1")
     suspend fun getActiveTables(): List<AppTable>
@@ -31,6 +37,15 @@ interface TableDao {
 
     @Query("SELECT * FROM table_item WHERE tableId = :tableId")
     suspend fun getTableItems(tableId: UUID): List<TableItem>
+
+    @Query("SELECT * FROM table_item WHERE id = :id")
+    suspend fun getTableItemById(id: UUID): TableItem?
+
+    @Query("SELECT * FROM table_item")
+    suspend fun getAllTableItemsOnce(): List<TableItem>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateTableItem(tableItem: TableItem)
 
 
 }

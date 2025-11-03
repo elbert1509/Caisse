@@ -75,9 +75,13 @@ data class Produit(
 
 @Entity(tableName = "vendeur")
 data class Vendeur(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
     val nom: String,
     val prenom: String,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 
@@ -96,7 +100,7 @@ data class Vendeur(
 data class Vente(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val date: Long = System.currentTimeMillis(),
-    val vendeurId: Int? = null,
+    val vendeurId: UUID? = null,
     val total: Double,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
@@ -158,7 +162,11 @@ data class Invoice(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val tableId: UUID,
     val totalAmount: Double,
-    val date: Long = System.currentTimeMillis()
+    val date: Long = System.currentTimeMillis(),
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 @Entity(
     tableName = "invoice_item",
@@ -181,7 +189,11 @@ data class InvoiceItem(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val invoiceId: UUID,
     val productId: UUID,
-    val quantity: Int
+    val quantity: Int,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 // Rapport produit pour une période donnée (Jour / Semaine / Mois)
@@ -196,7 +208,11 @@ data class ProductReport(
 data class AppTable(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val name: String,
-    var active: Boolean = true
+    var active: Boolean = true,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 
@@ -222,7 +238,11 @@ data class TableItem(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val tableId: UUID,
     val productId: UUID,
-    val quantity: Int
+    val quantity: Int,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 

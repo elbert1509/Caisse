@@ -27,6 +27,9 @@ class SyncWorker(
         val venteDao = dbLocal.venteDao()
         val venteLigneDao = dbLocal.venteDao()
         val categorieDao = dbLocal.categorieDao()
+        val vendeurDao = dbLocal.vendeurDao()
+        val tableDao = dbLocal.tableDao()
+        val invoiceDao = dbLocal.invoiceDao()
 
 
         val cloud = FirebaseFirestore.getInstance()
@@ -36,6 +39,11 @@ class SyncWorker(
         pushDirtyVentes(cloud, uid, venteDao)
         pushDirtyVenteLignes(cloud, uid, venteDao)
         pushDirtyCategories(cloud, uid, categorieDao)
+        pushDirtyVendeurs(cloud, uid, vendeurDao)
+        pushDirtyAppTables(cloud, uid, tableDao)
+        pushDirtyTableItems(cloud, uid, tableDao)
+        pushDirtyInvoices(cloud, uid, invoiceDao)
+        pushDirtyInvoiceItems(cloud, uid, invoiceDao)
 
 
         // 2) PULL : récupérer ce qui a changé depuis lastSyncAt
@@ -45,6 +53,11 @@ class SyncWorker(
         pullProduitsSince(cloud, uid, since, produitDao)
         pullVentesSince(cloud, uid, since, venteDao)
         pullVenteLignesSince(cloud, uid, since, venteDao)
+        pullVendeursSince(cloud, uid, since, vendeurDao)
+        pullAppTablesSince(cloud, uid, since, tableDao)
+        pullTableItemsSince(cloud, uid, since, tableDao)
+        pullInvoicesSince(cloud, uid, since, invoiceDao)
+        pullInvoiceItemsSince(cloud, uid, since, invoiceDao)
 
         // 3) MAJ horodatage de sync
         prefs.edit().putLong("lastSyncAt", System.currentTimeMillis()).apply()
@@ -66,6 +79,186 @@ class SyncWorker(
                 .set(produitToMap(p.copy(isDirty = false)))
                 .await()
             produitDao.updateProduit(p.copy(isDirty = false))
+        }
+    }
+
+    private suspend fun pullInvoiceItemsSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        invoiceDao: com.example.caisse.model.InvoiceDao
+    ) {
+        val snap = cloud.collection("users").document(uid)
+            .collection("invoiceItems")
+            .whereGreaterThanOrEqualTo("updatedAt", since)
+            .get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            val remote = mapToInvoiceItem(data)
+            val local = invoiceDao.getInvoiceItemById(remote.id)
+            if (local == null || remote.updatedAt >= local.updatedAt) {
+                invoiceDao.updateInvoiceItem(remote.copy(isDirty = false))
+            }
+        }
+    }
+
+    private suspend fun pushDirtyInvoiceItems(
+        cloud: FirebaseFirestore,
+        uid: String,
+        invoiceDao: com.example.caisse.model.InvoiceDao
+    ) {
+        val list = invoiceDao.getAllInvoiceItemsOnce().filter { it.isDirty && !it.isDeleted }
+        for (ii in list) {
+            cloud.collection("users").document(uid)
+                .collection("invoiceItems").document(ii.id.toString())
+                .set(invoiceItemToMap(ii.copy(isDirty = false)))
+                .await()
+            invoiceDao.updateInvoiceItem(ii.copy(isDirty = false))
+        }
+    }
+
+    private suspend fun pullInvoicesSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        invoiceDao: com.example.caisse.model.InvoiceDao
+    ) {
+        val snap = cloud.collection("users").document(uid)
+            .collection("invoices")
+            .whereGreaterThanOrEqualTo("updatedAt", since)
+            .get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            val remote = mapToInvoice(data)
+            val local = invoiceDao.getInvoiceById(remote.id)
+            if (local == null || remote.updatedAt >= local.updatedAt) {
+                invoiceDao.updateInvoice(remote.copy(isDirty = false))
+            }
+        }
+    }
+
+    private suspend fun pushDirtyInvoices(
+        cloud: FirebaseFirestore,
+        uid: String,
+        invoiceDao: com.example.caisse.model.InvoiceDao
+    ) {
+        val list = invoiceDao.getAllInvoicesOnce().filter { it.isDirty && !it.isDeleted }
+        for (i in list) {
+            cloud.collection("users").document(uid)
+                .collection("invoices").document(i.id.toString())
+                .set(invoiceToMap(i.copy(isDirty = false)))
+                .await()
+            invoiceDao.updateInvoice(i.copy(isDirty = false))
+        }
+    }
+
+    private suspend fun pullTableItemsSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        tableDao: com.example.caisse.model.TableDao
+    ) {
+        val snap = cloud.collection("users").document(uid)
+            .collection("tableItems")
+            .whereGreaterThanOrEqualTo("updatedAt", since)
+            .get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            val remote = mapToTableItem(data)
+            val local = tableDao.getTableItemById(remote.id)
+            if (local == null || remote.updatedAt >= local.updatedAt) {
+                tableDao.updateTableItem(remote.copy(isDirty = false))
+            }
+        }
+    }
+
+    private suspend fun pushDirtyTableItems(
+        cloud: FirebaseFirestore,
+        uid: String,
+        tableDao: com.example.caisse.model.TableDao
+    ) {
+        val list = tableDao.getAllTableItemsOnce().filter { it.isDirty && !it.isDeleted }
+        for (ti in list) {
+            cloud.collection("users").document(uid)
+                .collection("tableItems").document(ti.id.toString())
+                .set(tableItemToMap(ti.copy(isDirty = false)))
+                .await()
+            tableDao.updateTableItem(ti.copy(isDirty = false))
+        }
+    }
+
+    private suspend fun pullAppTablesSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        tableDao: com.example.caisse.model.TableDao
+    ) {
+        val snap = cloud.collection("users").document(uid)
+            .collection("appTables")
+            .whereGreaterThanOrEqualTo("updatedAt", since)
+            .get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            val remote = mapToAppTable(data)
+            val local = tableDao.getTableById(remote.id)
+            if (local == null || remote.updatedAt >= local.updatedAt) {
+                tableDao.updateTable(remote.copy(isDirty = false))
+            }
+        }
+    }
+
+    private suspend fun pushDirtyAppTables(
+        cloud: FirebaseFirestore,
+        uid: String,
+        tableDao: com.example.caisse.model.TableDao
+    ) {
+        val list = tableDao.getAllTablesOnce().filter { it.isDirty && !it.isDeleted }
+        for (t in list) {
+            cloud.collection("users").document(uid)
+                .collection("appTables").document(t.id.toString())
+                .set(appTableToMap(t.copy(isDirty = false)))
+                .await()
+            tableDao.updateTable(t.copy(isDirty = false))
+        }
+    }
+
+    private suspend fun pullVendeursSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        vendeurDao: com.example.caisse.model.VendeurDao
+    ) {
+        val snap = cloud.collection("users").document(uid)
+            .collection("vendeurs")
+            .whereGreaterThanOrEqualTo("updatedAt", since)
+            .get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            val remote = mapToVendeur(data)
+            val local = vendeurDao.getVendeurById(remote.id)
+            if (local == null || remote.updatedAt >= local.updatedAt) {
+                vendeurDao.updateVendeur(remote.copy(isDirty = false))
+            }
+        }
+    }
+
+    private suspend fun pushDirtyVendeurs(
+        cloud: FirebaseFirestore,
+        uid: String,
+        vendeurDao: com.example.caisse.model.VendeurDao
+    ) {
+        val list = vendeurDao.getAllVendeursOnce().filter { it.isDirty && !it.isDeleted }
+        for (v in list) {
+            cloud.collection("users").document(uid)
+                .collection("vendeurs").document(v.id.toString())
+                .set(vendeurToMap(v.copy(isDirty = false)))
+                .await()
+            vendeurDao.updateVendeur(v.copy(isDirty = false))
         }
     }
 
@@ -257,10 +450,101 @@ class SyncWorker(
         isDeleted = m["isDeleted"] as? Boolean ?: false
     )
 
+    private fun vendeurToMap(v: com.example.caisse.data.Vendeur) = mapOf(
+        "id" to v.id.toString(),
+        "nom" to v.nom,
+        "prenom" to v.prenom,
+        "updatedAt" to v.updatedAt,
+        "isDeleted" to v.isDeleted
+    )
+
+    private fun mapToVendeur(m: Map<String, Any?>) = com.example.caisse.data.Vendeur(
+        id = UUID.fromString(m["id"] as String),
+        nom = m["nom"] as String,
+        prenom = m["prenom"] as String,
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
+    private fun appTableToMap(t: com.example.caisse.data.AppTable) = mapOf(
+        "id" to t.id.toString(),
+        "name" to t.name,
+        "active" to t.active,
+        "updatedAt" to t.updatedAt,
+        "isDeleted" to t.isDeleted
+    )
+
+    private fun mapToAppTable(m: Map<String, Any?>) = com.example.caisse.data.AppTable(
+        id = UUID.fromString(m["id"] as String),
+        name = m["name"] as String,
+        active = m["active"] as Boolean,
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
+    private fun tableItemToMap(ti: com.example.caisse.data.TableItem) = mapOf(
+        "id" to ti.id.toString(),
+        "tableId" to ti.tableId.toString(),
+        "productId" to ti.productId.toString(),
+        "quantity" to ti.quantity,
+        "updatedAt" to ti.updatedAt,
+        "isDeleted" to ti.isDeleted
+    )
+
+    private fun mapToTableItem(m: Map<String, Any?>) = com.example.caisse.data.TableItem(
+        id = UUID.fromString(m["id"] as String),
+        tableId = UUID.fromString(m["tableId"] as String),
+        productId = UUID.fromString(m["productId"] as String),
+        quantity = (m["quantity"] as Number).toInt(),
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
+    private fun invoiceToMap(i: com.example.caisse.data.Invoice) = mapOf(
+        "id" to i.id.toString(),
+        "tableId" to i.tableId.toString(),
+        "totalAmount" to i.totalAmount,
+        "date" to i.date,
+        "updatedAt" to i.updatedAt,
+        "isDeleted" to i.isDeleted
+    )
+
+    private fun mapToInvoice(m: Map<String, Any?>) = com.example.caisse.data.Invoice(
+        id = UUID.fromString(m["id"] as String),
+        tableId = UUID.fromString(m["tableId"] as String),
+        totalAmount = (m["totalAmount"] as Number).toDouble(),
+        date = (m["date"] as Number).toLong(),
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
+    private fun invoiceItemToMap(ii: com.example.caisse.data.InvoiceItem) = mapOf(
+        "id" to ii.id.toString(),
+        "invoiceId" to ii.invoiceId.toString(),
+        "productId" to ii.productId.toString(),
+        "quantity" to ii.quantity,
+        "updatedAt" to ii.updatedAt,
+        "isDeleted" to ii.isDeleted
+    )
+
+    private fun mapToInvoiceItem(m: Map<String, Any?>) = com.example.caisse.data.InvoiceItem(
+        id = UUID.fromString(m["id"] as String),
+        invoiceId = UUID.fromString(m["invoiceId"] as String),
+        productId = UUID.fromString(m["productId"] as String),
+        quantity = (m["quantity"] as Number).toInt(),
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
     private fun venteToMap(v: Vente) = mapOf(
         "id" to v.id.toString(),
         "date" to v.date,
-        "vendeurId" to v.vendeurId,
+        "vendeurId" to v.vendeurId.toString(),
         "total" to v.total,
         "updatedAt" to v.updatedAt,
         "isDirty" to v.isDirty,

@@ -9,7 +9,7 @@ import java.util.UUID
 
 @Dao
 interface InvoiceDao {
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addInvoice(invoice: Invoice)
 
     @Insert
@@ -20,4 +20,22 @@ interface InvoiceDao {
 
     @Query("SELECT * FROM invoice_item WHERE invoiceId = :invoiceId")
     suspend fun getInvoiceItems(invoiceId: UUID): List<InvoiceItem>
+
+    @Query("SELECT * FROM invoice WHERE id = :id")
+    suspend fun getInvoiceById(id: UUID): Invoice?
+
+    @Query("SELECT * FROM invoice")
+    suspend fun getAllInvoicesOnce(): List<Invoice>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateInvoice(invoice: Invoice)
+
+    @Query("SELECT * FROM invoice_item WHERE id = :id")
+    suspend fun getInvoiceItemById(id: UUID): InvoiceItem?
+
+    @Query("SELECT * FROM invoice_item")
+    suspend fun getAllInvoiceItemsOnce(): List<InvoiceItem>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateInvoiceItem(invoiceItem: InvoiceItem)
 }

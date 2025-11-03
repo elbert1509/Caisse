@@ -26,6 +26,9 @@ interface ProduitDao {
     @Query("SELECT * FROM produit WHERE id = :id")
     suspend fun getProduitById(id: UUID): Produit?
 
+    @Query("SELECT * FROM produit")
+    suspend fun getAllProduitsOnce(): List<Produit> // one-shot pour le Worker
+
 
 
 

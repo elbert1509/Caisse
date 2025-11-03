@@ -129,6 +129,17 @@ interface VenteDao {
 """)
     fun getTotalRevenueBetween(start: Long, end: Long): Flow<Double>
 
+    @Query("SELECT * FROM Vente")
+    suspend fun getAllVentesOnce(): List<Vente>
+
+    @Query("SELECT * FROM Vente WHERE id = :id")
+    suspend fun getVenteById(id: UUID): Vente?
+
+    @Query("SELECT * FROM VenteLigne")
+    suspend fun getAllVenteLignesOnce(): List<VenteLigne>
+
+    @Query("SELECT * FROM VenteLigne WHERE id = :id")
+    suspend fun getVenteLigneById(id: UUID): VenteLigne?
 
 
 }

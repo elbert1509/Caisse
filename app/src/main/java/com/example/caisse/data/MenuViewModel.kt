@@ -19,6 +19,7 @@ import java.util.UUID
 
 class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
+    private fun now() = System.currentTimeMillis()
     // ---- Flows exposés ----
     val categories: StateFlow<List<Category>> =
         repository.getAllCategories().stateIn(
@@ -71,14 +72,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // ---- PRODUITS ----
     fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12) {
         viewModelScope.launch {
-            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock).copy(updatedAt = now(), isDirty = true)
             repository.addProduit(newProduit)
         }
     }
 
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
-            repository.addProduit(produit) // OnConflictStrategy.REPLACE will handle the update
+            repository.addProduit(produit.copy(updatedAt = now(), isDirty = true)) // OnConflictStrategy.REPLACE will handle the update
         }
     }
 
@@ -111,11 +112,11 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun addVente(vente: Vente, lignes: List<VenteLigne>) {
         viewModelScope.launch {
-            repository.insertVente(vente)
-            lignes.forEach { repository.insertLigne(it) }
+            val v = vente.copy(updatedAt = now(), isDirty = true)
+            val ls = lignes.map { it.copy(updatedAt = now(), isDirty = true) }
+            repository.insertVenteWithLignes(v, ls)
 
-            /// NOUVEAU : adapter au même comportement (sécurité si utilisée ailleurs)
-            val tickets = lignes.mapNotNull { l ->
+            val tickets = ls.mapNotNull { l ->
                 repository.getProduitById(l.produitId)?.let { p -> Ticket(p, l.quantity) }
             }
             decrementStocks(tickets)
@@ -134,17 +135,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             val cartItems = cart.value
             if (cartItems.isEmpty()) return@launch
 
-            // 1. Créer la vente
             val venteId = UUID.randomUUID()
             val vente = Vente(
                 id = venteId,
                 vendeurId = vendeurId,
                 total = totalPrice.value,
-                date = System.currentTimeMillis()
-            )
-            repository.insertVente(vente)
+                date = now()
+            ).copy(updatedAt = now(), isDirty = true)
 
-            // 2. Créer les lignes
             val lignes = cartItems.map { ticket ->
                 VenteLigne(
                     id = UUID.randomUUID(),
@@ -153,13 +151,13 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                     quantity = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
                     sousTotal = ticket.produit.prix * ticket.quantity
-                )
+                ).copy(updatedAt = now(), isDirty = true)
             }
-            repository.insertVenteWithLignes(vente, lignes) // ✅ transaction
-            // 3)  mise à jour des stocks ↓↓↓
-            decrementStocks(cartItems)
 
-            // 4. Vider le panier
+            // ❌ plus de repository.insertVente(vente) ici
+            repository.insertVenteWithLignes(vente, lignes) // ✅ une seule transaction
+
+            decrementStocks(cartItems)
             clearCart()
         }
     }
@@ -314,14 +312,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             val itemsToPay = _tableItems.value
             if (itemsToPay.isEmpty()) return@launch
 
-            // 1) Créer la Vente + Lignes (vendeurId inconnu ici → null)
             val venteId = UUID.randomUUID()
             val vente = Vente(
                 id = venteId,
                 vendeurId = 1,
                 total = itemsToPay.sumOf { it.produit.prix * it.quantity },
-                date = System.currentTimeMillis()
-            )
+                date = now()
+            ).copy(updatedAt = now(), isDirty = true)
+
             val lignes = itemsToPay.map { ticket ->
                 VenteLigne(
                     id = UUID.randomUUID(),
@@ -330,11 +328,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                     quantity = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
                     sousTotal = ticket.produit.prix * ticket.quantity
-                )
+                ).copy(updatedAt = now(), isDirty = true)
             }
             repository.insertVenteWithLignes(vente, lignes)
 
-            // 2) Créer la facture (inchangé)
             val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
             val invoice = Invoice(tableId = tableId, totalAmount = total)
             repository.addInvoice(invoice)
@@ -348,10 +345,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 )
             }
 
-            // 3) Décrémenter les stocks
             decrementStocks(itemsToPay)
 
-            // 4) Fermer la table et nettoyer
             deleteTable(tableId)
             _tableItems.value = emptyList()
         }
@@ -447,7 +442,13 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             if (produitActuel != null) {
                 val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
                 if (newStock != produitActuel.stock) {
-                    repository.addProduit(produitActuel.copy(stock = newStock)) // upsert
+                    repository.updateProduit(
+                        produitActuel.copy(
+                            stock = newStock,
+                            updatedAt = now(),
+                            isDirty = true
+                        )
+                    )
                 }
             }
         }
@@ -459,11 +460,18 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             if (produitActuel != null) {
                 val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
                 if (newStock != produitActuel.stock) {
-                    repository.updateProduit(produitActuel.copy(stock = newStock)) // upsert
+                    repository.updateProduit(
+                        produitActuel.copy(
+                            stock = newStock,
+                            updatedAt = now(),
+                            isDirty = true
+                        )
+                    )
                 }
             }
         }
     }
+
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory {
             return viewModelFactory {

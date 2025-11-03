@@ -21,6 +21,11 @@ class CaisseRepository(
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
     suspend fun addCategory(category: Category) = categorieDao.addCategory(category)
     suspend fun deleteCategory(category: Category) = categorieDao.deleteCategory(category)
+    suspend fun getAllCategoriesOnce(): List<Category> = categorieDao.getAllCategoryOnce()
+    suspend fun getCategoryById(id: UUID): Category? = categorieDao.get(id)
+
+
+
 
     // ----- PRODUITS -----
     fun getAllProduits(): Flow<List<Produit>> = produitDao.getAllProduits()
@@ -28,6 +33,10 @@ class CaisseRepository(
     suspend fun deleteProduit(produit: Produit) = produitDao.deleteProduit(produit)
     suspend fun getProduitById(id: UUID): Produit? = produitDao.getProduitById(id)
     suspend fun updateProduit(produit: Produit) = produitDao.updateProduit(produit)
+    suspend fun getAllProduitsOnce(): List<Produit> = produitDao.getAllProduitsOnce()
+
+
+
 
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()

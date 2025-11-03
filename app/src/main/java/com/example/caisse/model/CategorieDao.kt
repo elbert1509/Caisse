@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.caisse.data.Category
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 @Dao
 interface CategorieDao {
@@ -19,5 +20,12 @@ interface CategorieDao {
 
     @Query("SELECT * FROM category")
     fun getAllCategory(): Flow<List<Category>>
+
+    @Query("SELECT * FROM category")
+    suspend fun getAllCategoryOnce(): List<Category> // one-shot pour le Worker
+
+    @Query("SELECT * FROM category WHERE id = :id")
+    suspend fun get(id: UUID): Category?
+
 
 }

@@ -39,7 +39,11 @@ data class Category(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val name: String,
     val description: String? = null,
-    val icon: Int? = null
+    val icon: Int? = null,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 @Entity(
@@ -62,7 +66,11 @@ data class Produit(
     val categoryId: UUID,   // 🔗 clé étrangère
     val stock: Int = 0,
     val description: String? = null,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 @Entity(tableName = "vendeur")
@@ -89,7 +97,11 @@ data class Vente(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val date: Long = System.currentTimeMillis(),
     val vendeurId: Int? = null,
-    val total: Double
+    val total: Double,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 @Entity(
@@ -116,7 +128,11 @@ data class VenteLigne(
     val produitId: UUID,
     val quantity: Int,
     val prixUnitaire: Double,
-    val sousTotal: Double
+    val sousTotal: Double,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 
@@ -127,6 +143,14 @@ data class Ticket(
 data class VenteWithDetails(
     val vente: Vente,
     val lignes: List<Ticket>
+)
+
+data class AuthUiState(
+    val email: String = "",
+    val password: String = "",
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val isSignedIn: Boolean = false
 )
 
 @Entity(tableName = "invoice")
@@ -174,6 +198,8 @@ data class AppTable(
     val name: String,
     var active: Boolean = true
 )
+
+
 
 @Entity(
     tableName = "table_item",

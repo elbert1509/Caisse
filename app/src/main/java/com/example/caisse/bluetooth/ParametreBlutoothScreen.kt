@@ -10,20 +10,23 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.example.caisse.MainActivity
+import androidx.work.WorkManager
+import com.example.caisse.data.MenuViewModel
+import com.example.caisse.model.AuthViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavController) {
+fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavController,authVm: AuthViewModel, menuViewModel: MenuViewModel) {
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
-
+    var showLogoutDialog by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -81,8 +84,47 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
 
         if (isConnected) {
             Button(onClick = { viewModel.disconnect() }) {
-                Text("Déconnecter")
+                Text("Déconnecter l'appareil")
             }
+        }
+
+        Button(
+            onClick = {
+                showLogoutDialog = true
+            }
+        )
+        {
+            Text("Déconnexion de l'utilisateur")
+        }
+        if (showLogoutDialog) {
+            AlertDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogoutDialog = false
+                            authVm.signOut();
+                            try {
+                                menuViewModel.clearCart()
+                                menuViewModel.clearTableItems()
+                            } catch (_: Exception) { /* no-op si pas dispo ici */ }
+
+                            if (isConnected) viewModel.disconnect()
+                            try { WorkManager.getInstance(context).cancelAllWorkByTag("sync") } catch (_: Exception) {}
+                            navController.navigate("login"){
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    ) {
+                        Text("Déconnexion")
+                    }
+                },
+                dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Annuler") } },
+                title = { Text("Confirmer") },
+                text  = { Text("Voulez-vous vous déconnecter ?") }
+
+            )
         }
     }
 }

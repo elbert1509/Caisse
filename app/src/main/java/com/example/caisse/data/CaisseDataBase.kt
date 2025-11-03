@@ -24,7 +24,7 @@ import com.example.caisse.model.VenteDao
         Invoice::class,
         InvoiceItem::class
                ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 

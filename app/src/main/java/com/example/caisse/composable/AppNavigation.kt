@@ -1,6 +1,7 @@
 package com.example.caisse.composable
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -14,6 +15,8 @@ import com.example.caisse.bluetooth.ParametreBluetooothScreen
 import com.example.caisse.data.DashboardViewModel
 import com.example.caisse.data.HomeActionButton
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.model.AuthViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun AppNavigation() {
@@ -28,9 +31,13 @@ fun AppNavigation() {
     val dashboardViewModel: DashboardViewModel = viewModel(
         factory = DashboardViewModel.provideFactory(venteDao = menuViewModel.repository.venteDao)
     )
+    val authViewModel = remember { AuthViewModel() }
+    val isSignedIn = remember { FirebaseAuth.getInstance().currentUser != null }
 
-    NavHost(navController, startDestination = "home") {
 
+    NavHost(navController,
+        startDestination = if (isSignedIn) "home" else "login"
+    ) {
         composable("home") { HomeScreen(
             onAction = { action ->
                 when(action){
@@ -71,7 +78,7 @@ fun AppNavigation() {
         }
         composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel) }
         composable("donnee") { Donnee(navController = navController, menuViewModel = menuViewModel) }
-        composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel) }
+        composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel) }
         composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel) }
         composable("stock") { StockScreen(navController = navController, viewModel = menuViewModel) }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
@@ -88,6 +95,11 @@ fun AppNavigation() {
                 initialTab = tab
             )
         }
+        composable("login") {
+            val authVm = remember { AuthViewModel() } // ou via hiltViewModel() si tu utilises Hilt
+            LoginScreen(navController = navController, vm = authVm, onSignedInNavigateRoute = "home")
+        }
+
     }
 
 }

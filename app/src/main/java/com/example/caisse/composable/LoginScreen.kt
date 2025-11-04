@@ -1,5 +1,6 @@
 package com.example.caisse.composable
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.model.AuthViewModel
 import com.example.caisse.ui.theme.MintEnd
 import com.example.caisse.ui.theme.MintStart
@@ -45,6 +47,10 @@ import com.example.caisse.ui.theme.Slate100
 import com.example.caisse.ui.theme.Slate500
 import com.example.caisse.ui.theme.Slate700
 import com.example.caisse.ui.theme.Slate900
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,16 +65,35 @@ fun LoginScreen(
 
     // Redirige si connecté
     if (ui.isSignedIn) {
-        LaunchedEffect("signed-in") {
-            vm.enqueueSync(
-                context = navController.context,
-                tag = "sync"
-            )
-            navController.navigate(onSignedInNavigateRoute) {
-                popUpTo("login") { inclusive = true }
-                launchSingleTop = true
+        LaunchedEffect(ui.isSignedIn) {
+            if (ui.isSignedIn) {
+                val ctx = navController.context
+                val prefs = ctx.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                val uid = Firebase.auth.currentUser?.uid
+                val storedUid = prefs.getString("uid", null)
+
+                if (uid != null && uid != storedUid) {
+                    // ⚠️ TOUT ce bloc en IO (sinon crash)
+                    withContext(Dispatchers.IO) {
+                        CaisseDataBase.getDatabase(ctx).clearAllTables()
+                        prefs.edit()
+                            .putString("uid", uid)
+                            .putLong("lastSyncAt", 0L) // force initial sync
+                            .apply()
+                    }
+                }
+
+                // Lance la sync APRES le wipe
+                vm.enqueueSync(context = ctx, tag = "sync")
+
+                // Puis navigation
+                navController.navigate(onSignedInNavigateRoute) {
+                    popUpTo("login") { inclusive = true }
+                    launchSingleTop = true
+                }
             }
         }
+
     }
 
     Scaffold(

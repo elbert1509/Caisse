@@ -27,24 +27,35 @@ class SyncWorker(
         val venteDao = dbLocal.venteDao()
         val venteLigneDao = dbLocal.venteDao()
         val categorieDao = dbLocal.categorieDao()
+        val vendeurDao = dbLocal.vendeurDao()
+        val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+        val since = prefs.getLong("lastSyncAt", 0L)
+        val isInitialSync = since == 0L
 
 
         val cloud = FirebaseFirestore.getInstance()
 
         // 1) PUSH : envoyer ce qui est dirty (Produit, Vente, VenteLigne)
-        pushDirtyProduits(cloud, uid, produitDao)
+        pushDirtyProduits(cloud, uid, produitDao, isInitialSync)
         pushDirtyVentes(cloud, uid, venteDao)
         pushDirtyVenteLignes(cloud, uid, venteDao)
-        pushDirtyCategories(cloud, uid, categorieDao)
+        pushDirtyCategories(cloud, uid, categorieDao, isInitialSync)
+        pushDirtyVendeurs(cloud, uid, vendeurDao)
+
+
 
 
         // 2) PULL : récupérer ce qui a changé depuis lastSyncAt
-        val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
-        val since = prefs.getLong("lastSyncAt", 0L)
 
-        pullProduitsSince(cloud, uid, since, produitDao)
+
+        pullProduitsSince(cloud, uid, since, produitDao, isInitialSync)
         pullVentesSince(cloud, uid, since, venteDao)
         pullVenteLignesSince(cloud, uid, since, venteDao)
+        pullCategoriesSince(cloud, uid, since, categorieDao, isInitialSync)
+        pullVendeursSince(cloud, uid, since, vendeurDao)
+
+
+
 
         // 3) MAJ horodatage de sync
         prefs.edit().putLong("lastSyncAt", System.currentTimeMillis()).apply()
@@ -57,9 +68,11 @@ class SyncWorker(
     private suspend fun pushDirtyProduits(
         cloud: FirebaseFirestore,
         uid: String,
-        produitDao: com.example.caisse.model.ProduitDao
+        produitDao: com.example.caisse.model.ProduitDao,
+        isInitialSync: Boolean
     ) {
-        val list = produitDao.getAllProduitsOnce().filter { it.isDirty && !it.isDeleted }
+        val all = produitDao.getAllProduitsOnce() // existe déjà :contentReference[oaicite:2]{index=2}
+        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
         for (p in list) {
             cloud.collection("users").document(uid)
                 .collection("produits").document(p.id.toString())
@@ -103,9 +116,11 @@ class SyncWorker(
     private suspend fun pushDirtyCategories(
         cloud: FirebaseFirestore,
         uid: String,
-        categorieDao: com.example.caisse.model.CategorieDao
+        categorieDao: com.example.caisse.model.CategorieDao,
+        isInitialSync: Boolean
     ){
-        val list = categorieDao.getAllCategoryOnce().filter { it.isDirty && !it.isDeleted }
+        val all = categorieDao.getAllCategoryOnce().filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
         for (c in list){
             cloud.collection("users").document(uid)
                 .collection("categories").document(c.id.toString())
@@ -117,18 +132,40 @@ class SyncWorker(
     }
 
 
+    private suspend fun pushDirtyVendeurs(
+        cloud: FirebaseFirestore,
+        uid: String,
+        vendeurDao: com.example.caisse.model.VendeurDao
+    ) {
+        val list = vendeurDao.getAllVendeursOnce().filter { it.isDirty && !it.isDeleted }
+        for (v in list) {
+            cloud.collection("users").document(uid)
+                .collection("vendeurs").document(v.id.toString())
+                .set(vendeurToMap(v.copy(isDirty = false)))
+                .await()
+            vendeurDao.updateVendeur(v.copy(isDirty = false))
+        }
+    }
+
+
     // ---------------- PULL ----------------
 
     private suspend fun pullProduitsSince(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        produitDao: com.example.caisse.model.ProduitDao
+        produitDao: com.example.caisse.model.ProduitDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
+        val query = cloud.collection("users").document(uid)
             .collection("produits")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+
+
+        val snap = if (isInitialSync) {
+            query.get().await()               // TOUT
+        } else {
+            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue
@@ -145,12 +182,17 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        categorieDao: com.example.caisse.model.CategorieDao
+        categorieDao: com.example.caisse.model.CategorieDao,
+        isInitialSync: Boolean
     ){
-        val snap = cloud.collection("users").document(uid)
+        val query = cloud.collection("users").document(uid)
             .collection("categories")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+
+        val snap = if (isInitialSync) {
+            query.get().await()
+        }else{
+            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue
@@ -206,7 +248,26 @@ class SyncWorker(
             }
         }
     }
+    private suspend fun pullVendeursSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        vendeurDao: com.example.caisse.model.VendeurDao
+    ) {
+        val snap = cloud.collection("users").document(uid)
+            .collection("vendeurs")
+            .whereGreaterThanOrEqualTo("updatedAt", since)
+            .get().await()
 
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            val remote = mapToVendeur(data)
+            val local = vendeurDao.getVendeurById(remote.id)
+            if (local == null || remote.updatedAt >= local.updatedAt) {
+                vendeurDao.updateVendeur(remote.copy(isDirty = false))
+            }
+        }
+    }
     // --------------- MAPPERS (copiés depuis repo) ---------------
 
     private fun produitToMap(p: Produit) = mapOf(
@@ -262,6 +323,7 @@ class SyncWorker(
         "date" to v.date,
         "vendeurId" to v.vendeurId,
         "total" to v.total,
+        "tableId" to v.tableId.toString(),
         "updatedAt" to v.updatedAt,
         "isDirty" to v.isDirty,
         "isDeleted" to v.isDeleted
@@ -271,9 +333,10 @@ class SyncWorker(
         return Vente(
             id = UUID.fromString(m["id"] as String),
             date = (m["date"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-            vendeurId = (m["vendeurId"] as? Number)?.toInt(),
+            vendeurId = (m["vendeurId"] as? Number)?.toInt() ,
             total = (m["total"] as? Number)?.toDouble() ?: 0.0,
             updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            tableId = (m["tableId"] as? String)?.let(UUID::fromString),
             isDirty = m["isDirty"] as? Boolean ?: false,
             isDeleted = m["isDeleted"] as? Boolean ?: false
         )
@@ -304,4 +367,21 @@ class SyncWorker(
             isDeleted = m["isDeleted"] as? Boolean ?: false
         )
     }
+    private fun vendeurToMap(v: com.example.caisse.data.Vendeur) = mapOf(
+        "id" to v.id.toString(),
+        "nom" to v.nom,
+        "prenom" to v.prenom,
+        "updatedAt" to v.updatedAt,
+        "isDeleted" to v.isDeleted
+    )
+
+    private fun mapToVendeur(m: Map<String, Any?>) = com.example.caisse.data.Vendeur(
+        id = (m["id"] as? Number)?.toInt() ?: 0,
+        nom = m["nom"] as String,
+        prenom = m["prenom"] as String,
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
 }

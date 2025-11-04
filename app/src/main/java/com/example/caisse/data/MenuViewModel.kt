@@ -45,7 +45,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // ---- CATEGORIES ----
     fun addCategory(name: String, description: String? = null, icon: Int? = null) {
         viewModelScope.launch {
-            repository.addCategory(Category(name = name, description = description, icon = icon))
+            repository.addCategory(Category(name = name, description = description, icon = icon,isDirty = true))
         }
     }
 
@@ -65,7 +65,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
     fun addCategorySample(category: Category) {
         viewModelScope.launch {
-            repository.addCategory(category)
+
+            val newCategory = category.copy(updatedAt = now(), isDirty = true)
+            repository.addCategory(newCategory)
         }
     }
 
@@ -92,7 +94,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // ---- VENDEURS ----
     fun addVendeur(vendeur: Vendeur) {
         viewModelScope.launch {
-            repository.addVendeur(vendeur)
+            val newVendeur = vendeur.copy(updatedAt = now(), isDirty = true)
+            repository.addVendeur(newVendeur )
         }
     }
 
@@ -317,7 +320,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 id = venteId,
                 vendeurId = 1,
                 total = itemsToPay.sumOf { it.produit.prix * it.quantity },
-                date = now()
+                date = now(),
+                tableId = tableId
             ).copy(updatedAt = now(), isDirty = true)
 
             val lignes = itemsToPay.map { ticket ->
@@ -352,37 +356,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-    fun confirmerVenteTable(tableId: UUID, vendeurId: Int? = null) {
+    fun confirmerVenteTable(tableId: UUID) {
         viewModelScope.launch {
-            val itemsToPay = _tableItems.value
-            if (itemsToPay.isEmpty()) return@launch
-
-            // 1. Créer la vente
-            val venteId = UUID.randomUUID()
-            val vente = Vente(
-                id = venteId,
-                vendeurId = vendeurId,
-                total = itemsToPay.sumOf { it.produit.prix * it.quantity },
-                date = System.currentTimeMillis()
-
-
-            )
-            // 2. Créer les lignes de vente
-            val lignes = itemsToPay.map { ticket ->
-                VenteLigne(
-                    id = UUID.randomUUID(),
-                    venteId = venteId,
-                    produitId = ticket.produit.id,
-                    quantity = ticket.quantity,
-                    prixUnitaire = ticket.produit.prix,
-                    sousTotal = ticket.produit.prix * ticket.quantity
-                )
-            }
-            repository.insertVenteWithLignes(vente, lignes) // ✅ transaction
-            // 3. décrémenter les stocks pour cette table ↓↓↓
-            updateStocksForTickets(itemsToPay)
-
-            // 4. Créer aussi la facture (Invoice)
             payTable(tableId)
         }
     }
@@ -421,7 +396,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun loadVentesHistory() {
         viewModelScope.launch {
             repository.getAllVentes().collect { allVentes ->
-                val details = allVentes.map { vente ->
+                val onlyCart = allVentes.filter { it.tableId == null }
+                val details = onlyCart.map { vente ->
                     // Collecter les lignes de cette vente
                     val lignes = repository.getLignesForVente(vente.id).first()
                     val tickets = lignes.mapNotNull { ligne ->

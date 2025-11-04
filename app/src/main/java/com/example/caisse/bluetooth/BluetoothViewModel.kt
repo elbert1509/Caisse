@@ -87,6 +87,7 @@ class BluetoothViewModel : ViewModel() {
             _isConnected.value = false
         }
     }
+
     fun printText(text: String) {
         viewModelScope.launch(Dispatchers.IO) {   // 🔄 en background
             try {

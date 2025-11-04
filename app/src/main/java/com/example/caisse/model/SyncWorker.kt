@@ -49,10 +49,10 @@ class SyncWorker(
 
 
         pullProduitsSince(cloud, uid, since, produitDao, isInitialSync)
-        pullVentesSince(cloud, uid, since, venteDao)
-        pullVenteLignesSince(cloud, uid, since, venteDao)
+        pullVentesSince(cloud, uid, since, venteDao, isInitialSync)
+        pullVenteLignesSince(cloud, uid, since, venteDao, isInitialSync)
         pullCategoriesSince(cloud, uid, since, categorieDao, isInitialSync)
-        pullVendeursSince(cloud, uid, since, vendeurDao)
+        pullVendeursSince(cloud, uid, since, vendeurDao, isInitialSync)
 
 
 
@@ -210,12 +210,17 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: com.example.caisse.model.VenteDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
+        val query = cloud.collection("users").document(uid)
             .collection("ventes")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+
+        val snap = if (isInitialSync) {
+            query.get().await()
+        }else{
+            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue
@@ -232,13 +237,17 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: com.example.caisse.model.VenteDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
+        val query = cloud.collection("users").document(uid)
             .collection("venteLignes")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
 
+        val snap = if (isInitialSync) {
+            query.get().await()
+        }else{
+            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
         for (doc in snap.documents) {
             val data = doc.data ?: continue
             val remote = mapToVenteLigne(data)
@@ -252,12 +261,17 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        vendeurDao: com.example.caisse.model.VendeurDao
+        vendeurDao: com.example.caisse.model.VendeurDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
+        val query = cloud.collection("users").document(uid)
             .collection("vendeurs")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+
+        val snap = if (isInitialSync) {
+            query.get().await()
+        }else{
+            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue

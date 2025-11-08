@@ -1,6 +1,7 @@
 package com.example.caisse.model
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.caisse.data.CaisseDataBase
@@ -37,9 +38,9 @@ class SyncWorker(
 
         // 1) PUSH : envoyer ce qui est dirty (Produit, Vente, VenteLigne)
         pushDirtyProduits(cloud, uid, produitDao, isInitialSync)
-        pushDirtyVentes(cloud, uid, venteDao)
-        pushDirtyVenteLignes(cloud, uid, venteDao)
         pushDirtyCategories(cloud, uid, categorieDao, isInitialSync)
+        pushDirtyVentes(cloud, uid, venteDao)
+        pushDirtyVenteLignes(cloud, uid, venteDao,isInitialSync)
         pushDirtyVendeurs(cloud, uid, vendeurDao)
 
 
@@ -48,13 +49,15 @@ class SyncWorker(
         // 2) PULL : récupérer ce qui a changé depuis lastSyncAt
 
 
-        pullProduitsSince(cloud, uid, since, produitDao, isInitialSync)
-        pullVentesSince(cloud, uid, since, venteDao)
-        pullVenteLignesSince(cloud, uid, since, venteDao)
-        pullCategoriesSince(cloud, uid, since, categorieDao, isInitialSync)
-        pullVendeursSince(cloud, uid, since, vendeurDao)
+        pullCategoriesSince(cloud, uid, since, categorieDao, isInitialSync)                 // 1️⃣
+        pullProduitsSince(cloud, uid, since, produitDao, isInitialSync)                     // 2️⃣
+        pullVendeursSince(cloud, uid, since, vendeurDao)                                    // 3️⃣ (Vente.vendeurId nullable, mais mieux avant)
+        pullVentesSince(cloud, uid, since, venteDao, isInitialSync)                         // 4️⃣
+        pullVenteLignesSince(cloud, uid, since, venteDao,produitDao, isInitialSync)                    // 5️⃣
 
 
+        Log.d("SyncWorker", "Sync terminé")
+        Log.d("SyncWorker", "venteDao : ${venteDao.getAllVentesOnce()}")
 
 
         // 3) MAJ horodatage de sync
@@ -94,22 +97,24 @@ class SyncWorker(
                 .set(venteToMap(v.copy(isDirty = false)))
                 .await()
             // insert (REPLACE) sert d'upsert local
-            venteDao.insertVente(v.copy(isDirty = false))
+            venteDao.updateVente(v.copy(isDirty = false))
         }
     }
 
     private suspend fun pushDirtyVenteLignes(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: com.example.caisse.model.VenteDao,
+        isInitialSync: Boolean
     ) {
-        val list = venteDao.getAllVenteLignesOnce().filter { it.isDirty && !it.isDeleted }
+        val all = venteDao.getAllVenteLignesOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
         for (vl in list) {
             cloud.collection("users").document(uid)
                 .collection("venteLignes").document(vl.id.toString())
                 .set(venteLigneToMap(vl.copy(isDirty = false)))
                 .await()
-            venteDao.insertLigne(vl.copy(isDirty = false))
+            venteDao.updateLigne(vl.copy(isDirty = false))
         }
     }
 
@@ -119,7 +124,7 @@ class SyncWorker(
         categorieDao: com.example.caisse.model.CategorieDao,
         isInitialSync: Boolean
     ){
-        val all = categorieDao.getAllCategoryOnce().filter { it.isDirty && !it.isDeleted }
+        val all = categorieDao.getAllCategoryOnce()
         val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
         for (c in list){
             cloud.collection("users").document(uid)
@@ -171,9 +176,10 @@ class SyncWorker(
             val data = doc.data ?: continue
             val remote = mapToProduit(data)
             val local = produitDao.getProduitById(remote.id)
-            // "dernier gagnant"
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                produitDao.updateProduit(remote.copy(isDirty = false))
+            if (local == null) {
+                produitDao.insertProduit(remote.copy(isDirty = false))   // INSERT
+            } else if (remote.updatedAt >= local.updatedAt) {
+                produitDao.updateProduit(remote.copy(isDirty = false))   // UPDATE (surtout pas REPLACE)
             }
         }
     }
@@ -210,20 +216,35 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: com.example.caisse.model.VenteDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
-            .collection("ventes")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+        val base = cloud.collection("users").document(uid).collection("ventes")
+        val snap = if (isInitialSync) base.get().await()
+        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        Log.d("SyncWorker", "nombre de vente  : ${snap.size()}")
+
+
+
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue
-            val remote = mapToVente(data)
-            val local = venteDao.getVenteById(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                // insertVente est en REPLACE -> upsert
-                venteDao.insertVente(remote.copy(isDirty = false))
+
+            try {
+                val remote = mapToVente(data)
+                val local = venteDao.getVenteById(remote.id)
+                Log.d("SyncWorker", "remote : ${remote.total}, ${remote.id},${remote.tableId} ")
+                Log.d("SyncWorker", "local : ${local?.total}")
+
+                if (local == null) {
+                    venteDao.insertVente(remote.copy(isDirty = false))   // INSERT
+                } else if (remote.updatedAt >= local.updatedAt) {
+                    venteDao.updateVente(remote.copy(isDirty = false))   // UPDATE (ajoute @Update dans VenteDao si absent)
+                }
+
+            } catch (e: Exception) {
+                Log.d("SyncWorker", "Erreur catch  : ${e.message} Vente invalide doc=${doc.id} ")
+                continue
             }
         }
     }
@@ -232,22 +253,61 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: VenteDao,
+        produitDao: ProduitDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
-            .collection("venteLignes")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+        val base = cloud.collection("users").document(uid).collection("venteLignes")
+        val snap = if (isInitialSync) base.get().await()
+        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue
-            val remote = mapToVenteLigne(data)
-            val local = venteDao.getVenteLigneById(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                venteDao.insertLigne(remote.copy(isDirty = false))
+            try {
+                val remote = mapToVenteLigne(data)
+
+                // 1) s'assurer que la Vente parente existe
+                if (venteDao.getVenteById(remote.venteId) == null) {
+                    val venteDoc = cloud.collection("users").document(uid)
+                        .collection("ventes").document(remote.venteId.toString())
+                        .get().await()
+                    if (venteDoc.exists()) {
+                        val vente = mapToVente(venteDoc.data!!)
+                        // (option) s'assurer du vendeur parent si vendeurId != null (même logique qu'on a ajouté)
+                        venteDao.insertVente(vente.copy(isDirty = false)) // upsert
+                    } else {
+                        // parent introuvable => on ne peut pas insérer cette ligne
+                        Log.w("SyncWorker", "Skip VL sans parent Vente=${remote.venteId}")
+                        continue
+                    }
+                }
+
+                // 2) s'assurer que le Produit parent existe
+                if (produitDao.getProduitById(remote.produitId) == null) {
+                    val prodDoc = cloud.collection("users").document(uid)
+                        .collection("produits").document(remote.produitId.toString())
+                        .get().await()
+                    if (prodDoc.exists()) {
+                        val prod = mapToProduit(prodDoc.data!!)
+                        produitDao.insertProduit(prod.copy(isDirty = false)) // upsert
+                    } else {
+                        Log.w("SyncWorker", "Skip VL sans parent Produit=${remote.produitId}")
+                        continue
+                    }
+                }
+
+                // 3) enfin, upsert de la ligne
+                val local = venteDao.getVenteLigneById(remote.id)
+                if (local == null || remote.updatedAt >= local.updatedAt) {
+                    venteDao.insertLigne(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "VL invalide doc=${doc.id}: ${e.message}")
+                continue
             }
         }
     }
+
     private suspend fun pullVendeursSince(
         cloud: FirebaseFirestore,
         uid: String,
@@ -323,22 +383,32 @@ class SyncWorker(
         "date" to v.date,
         "vendeurId" to v.vendeurId,
         "total" to v.total,
-        "tableId" to v.tableId.toString(),
+        "tableId" to v.tableId?.toString(),
         "updatedAt" to v.updatedAt,
         "isDirty" to v.isDirty,
         "isDeleted" to v.isDeleted
     )
 
     private fun mapToVente(m: Map<String, Any?>): Vente {
+
+        val id = parseUuidOrNull(getString(m, "id"))
+            ?: throw IllegalArgumentException("vente.id invalide")
+        val date = getNumberAsLong(m, "date") ?: System.currentTimeMillis()
+        val vendeurId = (m["vendeurId"] as? Number)?.toInt()
+            ?: (m["vendeurId"] as? String)?.toIntOrNull()
+        val total = getNumberAsDouble(m, "total") ?: 0.0
+        val updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis()
+        val tableId = parseUuidOrNull(getString(m, "tableId"))
+
         return Vente(
-            id = UUID.fromString(m["id"] as String),
-            date = (m["date"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-            vendeurId = (m["vendeurId"] as? Number)?.toInt() ,
-            total = (m["total"] as? Number)?.toDouble() ?: 0.0,
-            updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-            tableId = (m["tableId"] as? String)?.let(UUID::fromString),
-            isDirty = m["isDirty"] as? Boolean ?: false,
-            isDeleted = m["isDeleted"] as? Boolean ?: false
+            id = id,
+            date = date,
+            vendeurId = vendeurId,
+            total = total,
+            updatedAt = updatedAt,
+            tableId = tableId,
+            isDirty = (m["isDirty"] as? Boolean) ?: false,
+            isDeleted = (m["isDeleted"] as? Boolean) ?: false
         )
     }
 
@@ -383,5 +453,26 @@ class SyncWorker(
         isDeleted = m["isDeleted"] as? Boolean ?: false,
         isDirty = false
     )
+    private fun getString(map: Map<String, Any?>, key: String): String? =
+        (map[key] as? String)?.takeIf { it.isNotBlank() }
+
+    private fun getNumberAsLong(map: Map<String, Any?>, key: String): Long? =
+        when (val v = map[key]) {
+            is Number -> v.toLong()
+            is String -> v.toLongOrNull()
+            else -> null
+        }
+
+    private fun getNumberAsDouble(map: Map<String, Any?>, key: String): Double? =
+        when (val v = map[key]) {
+            is Number -> v.toDouble()
+            is String -> v.toDoubleOrNull()
+            else -> null
+        }
+
+    private fun parseUuidOrNull(s: String?): UUID? =
+        try { s?.let(UUID::fromString) } catch (_: Exception) { null }
+
+
 
 }

@@ -34,6 +34,8 @@ class CaisseRepository(
     suspend fun getProduitById(id: UUID): Produit? = produitDao.getProduitById(id)
     suspend fun updateProduit(produit: Produit) = produitDao.updateProduit(produit)
     suspend fun getAllProduitsOnce(): List<Produit> = produitDao.getAllProduitsOnce()
+    suspend fun insertProduit(produit: Produit) = produitDao.insertProduit(produit)
+
 
 
 
@@ -46,6 +48,7 @@ class CaisseRepository(
     // --- VENTES ---
     fun getAllVentes() = venteDao.getAllVentes()
     fun getLignesForVente(venteId: UUID) = venteDao.getLignesForVente(venteId)
+    suspend fun updateVente(vente: Vente) = venteDao.updateVente(vente)
     suspend fun insertVente(vente: Vente) = venteDao.insertVente(vente)
     suspend fun insertLigne(ligne: VenteLigne) = venteDao.insertLigne(ligne)
     suspend fun deleteVente(vente: Vente) = venteDao.deleteVente(vente)

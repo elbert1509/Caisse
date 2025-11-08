@@ -20,6 +20,8 @@ import java.util.UUID
 class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     private fun now() = System.currentTimeMillis()
+    private val sentinelPanier = UUID.fromString("22222222-0000-2222-2222-222222222222")
+
     // ---- Flows exposés ----
     val categories: StateFlow<List<Category>> =
         repository.getAllCategories().stateIn(
@@ -133,7 +135,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
 
-    fun confirmerVente(vendeurId: Int? = null) {
+    fun confirmerVente(vendeurId: Int? = 1) {
         viewModelScope.launch {
             val cartItems = cart.value
             if (cartItems.isEmpty()) return@launch
@@ -396,7 +398,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun loadVentesHistory() {
         viewModelScope.launch {
             repository.getAllVentes().collect { allVentes ->
-                val onlyCart = allVentes.filter { it.tableId == null }
+                val onlyCart = allVentes.filter { it.tableId ==  UUID.fromString("22222222-0000-2222-2222-222222222222") }
                 val details = onlyCart.map { vente ->
                     // Collecter les lignes de cette vente
                     val lignes = repository.getLignesForVente(vente.id).first()
@@ -411,7 +413,24 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
+    private val _ventesTablesWithDetails = MutableStateFlow<List<VenteWithDetails>>(emptyList())
+    val ventesTablesWithDetails: StateFlow<List<VenteWithDetails>> = _ventesTablesWithDetails.asStateFlow()
 
+    fun loadVentesTablesHistory() {
+        viewModelScope.launch {
+            repository.getAllVentes().collect { allVentes ->
+                val onlyTables = allVentes.filter { it.tableId != null && it.tableId != sentinelPanier }
+                val details = onlyTables.map { vente ->
+                    val lignes = repository.getLignesForVente(vente.id).first()
+                    val tickets = lignes.mapNotNull { l ->
+                        repository.getProduitById(l.produitId)?.let { p -> Ticket(p, l.quantity) }
+                    }
+                    VenteWithDetails(vente, tickets)
+                }
+                _ventesTablesWithDetails.value = details
+            }
+        }
+    }
     private suspend fun updateStocksForTickets(tickets: List<Ticket>) {
         tickets.forEach { ticket ->
             val produitActuel = repository.getProduitById(ticket.produit.id)

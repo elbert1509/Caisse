@@ -46,7 +46,7 @@ fun HistoriqueScreen(
     navController: NavController,
     menuViewModel: MenuViewModel
 ) {
-    val invoicesWithDetails by menuViewModel.invoicesWithDetails.collectAsState()
+    val invoicesWithDetails by menuViewModel.ventesTablesWithDetails.collectAsState()
     val ventesWithDetails by menuViewModel.ventesWithDetails.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -71,7 +71,7 @@ fun HistoriqueScreen(
     ) { padding ->
 
         LaunchedEffect(Unit) {
-            menuViewModel.loadHistory()
+            menuViewModel.loadVentesTablesHistory()
             menuViewModel.loadVentesHistory()
         }
 
@@ -95,14 +95,14 @@ fun HistoriqueScreen(
 
             if (selectedTab == 0) {
                 LazyColumn {
-                    items(invoicesWithDetails) { invoiceDetails ->
-                        InvoiceCard(invoiceDetails)
+                    items(invoicesWithDetails) { venteDetails ->
+                        VenteCard(venteDetails, title = "Vente Table")
                     }
                 }
             } else {
                 LazyColumn {
                     items(ventesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails)
+                        VenteCard(venteDetails, title = "Vente Panier")
                     }
                 }
             }
@@ -110,56 +110,29 @@ fun HistoriqueScreen(
     }
 }
 
-@Composable
-fun InvoiceCard(invoiceDetails: MenuViewModel.InvoiceWithDetails) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(6.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                .format(Date(invoiceDetails.invoice.date))
 
-            Text("Facture Table", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text("Date: $formattedDate", style = MaterialTheme.typography.bodySmall)
-            Text("Total: ${invoiceDetails.invoice.totalAmount} €", fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
-
-            Spacer(Modifier.height(8.dp))
-            invoiceDetails.items.forEach { ticket ->
-                ArticleRow(ticket)
-            }
-        }
-    }
-}
 
 @Composable
-fun VenteCard(venteDetails: VenteWithDetails) {
+fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente") {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(6.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                 .format(Date(venteDetails.vente.date))
-
-            Text("Vente Panier", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+            Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Text("Date: $formattedDate", style = MaterialTheme.typography.bodySmall)
-            Text("Total: ${venteDetails.vente.total} €", fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
-
+            Text("Total: ${venteDetails.vente.total} €",
+                fontWeight = FontWeight.Bold,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize
+            )
             Spacer(Modifier.height(8.dp))
-            venteDetails.lignes.forEach { ticket ->
-                ArticleRow(ticket)
-            }
+            venteDetails.lignes.forEach { ArticleRow(it) }
         }
     }
 }
-
 @Composable
 fun ArticleRow(ticket: Ticket) {
     Row(

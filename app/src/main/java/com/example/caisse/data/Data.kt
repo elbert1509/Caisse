@@ -87,22 +87,14 @@ data class Vendeur(
 
 @Entity(
     tableName = "Vente",
-    foreignKeys = [
-        ForeignKey(
-            entity = Vendeur::class,
-            parentColumns = ["id"],
-            childColumns = ["vendeurId"],
-            onDelete = ForeignKey.SET_NULL
-        )
-    ],
     indices = [Index("vendeurId")]
 )
 data class Vente(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val date: Long = System.currentTimeMillis(),
-    val vendeurId: Int? = null,
+    val vendeurId: Int? = 1,
     val total: Double,
-    val tableId: UUID? = null,
+    val tableId: UUID? =  UUID.fromString("22222222-0000-2222-2222-222222222222"),
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -203,6 +195,14 @@ data class ProductReport(
     val totalQuantity: Int,
     val productStock: Int,
     val revenue: Double
+)
+
+data class ShopInfos (
+    val name: String,
+    val address: String,
+    val phone: String,
+    val email: String,
+    val logo: Int? = null,
 )
 
 @Entity(tableName = "app_table")

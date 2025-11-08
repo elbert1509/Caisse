@@ -72,15 +72,18 @@ fun LoginScreen(
                 val uid = Firebase.auth.currentUser?.uid
                 val storedUid = prefs.getString("uid", null)
 
+                // ⚙️ Si un autre utilisateur se connecte, ou premier lancement
                 if (uid != null && uid != storedUid) {
-                    // ⚠️ TOUT ce bloc en IO (sinon crash)
+                    // 🔄 vider la base locale (en thread IO)
                     withContext(Dispatchers.IO) {
                         CaisseDataBase.getDatabase(ctx).clearAllTables()
-                        prefs.edit()
-                            .putString("uid", uid)
-                            .putLong("lastSyncAt", 0L) // force initial sync
-                            .apply()
                     }
+
+                    // ♻️ réinitialiser les infos de sync
+                    prefs.edit()
+                        .putString("uid", uid)
+                        .putLong("lastSyncAt", 0L) // ⚠️ force initial sync
+                        .apply()
                 }
 
                 // Lance la sync APRES le wipe

@@ -13,7 +13,7 @@ import java.util.*
 interface VenteDao {
 
     // ---- VENTES ----
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertVente(vente: Vente)
 
     @Delete
@@ -22,8 +22,11 @@ interface VenteDao {
     @Query("SELECT * FROM Vente ORDER BY date DESC")
     fun getAllVentes(): Flow<List<Vente>>
 
+    @Update
+    suspend fun updateLigne(ligne: VenteLigne)
+
     // ---- LIGNES DE VENTE ----
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertLigne(ligne: VenteLigne)
 
     @Query("SELECT * FROM VenteLigne WHERE venteId = :venteId")
@@ -128,6 +131,11 @@ interface VenteDao {
     WHERE v.date >= :start AND v.date < :end
 """)
     fun getTotalRevenueBetween(start: Long, end: Long): Flow<Double>
+
+    @Update
+    suspend fun updateVente(vente: Vente)
+
+
 
     @Query("SELECT * FROM Vente")
     suspend fun getAllVentesOnce(): List<Vente>

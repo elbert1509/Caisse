@@ -52,6 +52,7 @@ fun AppNavigation() {
                     HomeActionButton.DONNES ->   navController.navigate("donnee")
                     HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
                     HomeActionButton.STOCK ->  navController.navigate("stock")
+                    HomeActionButton.GESTION ->  navController.navigate("gestion")
                 }
             },
             navController = navController,
@@ -99,6 +100,9 @@ fun AppNavigation() {
             val authVm = remember { AuthViewModel() } // ou via hiltViewModel() si tu utilises Hilt
             LoginScreen(navController = navController, vm = authVm, onSignedInNavigateRoute = "home")
         }
+        composable("infos") { InfosScreen(navController = navController, viewModel = menuViewModel) }
+        composable("gestion") { GestionScreen(navController = navController, viewModel = menuViewModel) }
+        composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
 
     }
 

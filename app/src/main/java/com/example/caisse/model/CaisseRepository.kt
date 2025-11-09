@@ -1,6 +1,7 @@
 package com.example.caisse.data
 
 import com.example.caisse.model.CategorieDao
+import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.ProduitDao
 import com.example.caisse.model.TableDao
@@ -15,7 +16,8 @@ class CaisseRepository(
     private val vendeurDao: VendeurDao,
      val venteDao: VenteDao,
     private val tableDao: TableDao,
-    private val invoiceDao: InvoiceDao
+    private val invoiceDao: InvoiceDao,
+    private val infosDao: InfosDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -80,5 +82,11 @@ class CaisseRepository(
     suspend fun addInvoiceItem(invoiceItem: InvoiceItem) = invoiceDao.addInvoiceItem(invoiceItem)
     suspend fun getAllInvoices(): List<Invoice> = invoiceDao.getAllInvoices()
     suspend fun getInvoiceItems(invoiceId: UUID): List<InvoiceItem> = invoiceDao.getInvoiceItems(invoiceId)
+
+    //Infos
+    suspend fun insertInfos(infos: ShopInfos) = infosDao.insertInfos(infos)
+    suspend fun updateInfos(infos: ShopInfos) = infosDao.updateInfos(infos)
+    suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
+
 
 }

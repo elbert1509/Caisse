@@ -22,7 +22,8 @@ enum class HomeActionButton{
     TABLE,
     DONNES,
     DASHBOARD,
-    STOCK
+    STOCK,
+    GESTION,
     }
 
 @Immutable
@@ -197,12 +198,15 @@ data class ProductReport(
     val revenue: Double
 )
 
+@Entity(tableName = "ShopInfos")
 data class ShopInfos (
+    @PrimaryKey val id: Int = 1,
     val name: String,
     val address: String,
     val phone: String,
     val email: String,
     val logo: Int? = null,
+    val password: String? = null,
 )
 
 @Entity(tableName = "app_table")

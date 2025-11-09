@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.caisse.model.CategorieDao
+import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.ProduitDao
 import com.example.caisse.model.TableDao
@@ -22,9 +23,10 @@ import com.example.caisse.model.VenteDao
         AppTable :: class,
         TableItem::class,
         Invoice::class,
-        InvoiceItem::class
+        InvoiceItem::class,
+        ShopInfos::class
                ],
-    version = 11
+    version = 4
     ,
     exportSchema = false
 )
@@ -39,6 +41,8 @@ abstract class CaisseDataBase : RoomDatabase() {
     abstract fun venteDao(): VenteDao
     abstract fun tableDao(): TableDao
     abstract fun invoiceDao(): InvoiceDao
+    abstract fun infosDao(): InfosDao
+
 
 
     companion object {

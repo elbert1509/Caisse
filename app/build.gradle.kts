@@ -72,6 +72,8 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.work.runtime.ktx)
+    implementation(libs.androidx.foundation)
+    implementation(libs.androidx.compose.foundation.layout)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

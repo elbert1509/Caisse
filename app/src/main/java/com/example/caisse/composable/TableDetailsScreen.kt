@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +59,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
     val table = tables.find { it.id == tableUuid }
     val categories by menuViewModel.categories.collectAsState()
     val products by menuViewModel.produits.collectAsState()
+    val info = menuViewModel.getInfos()
     var selecredCategoryID by remember {
         mutableStateOf(categories.firstOrNull()?.id)
     }
@@ -204,7 +204,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                 ).show()
                                 return@Button
                             }else{
-                                bluetoothViewModel.printInvoice(tableItems, totaltable)
+                                bluetoothViewModel.printInvoice(tableItems, totaltable,info)
                                 Toast.makeText(
                                     navController.context,
                                     "Ticket imprimé",

@@ -1,7 +1,6 @@
 package com.example.caisse.bluetooth
 
 import android.Manifest
-import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
@@ -14,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.caisse.data.ShopInfos
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,16 +99,16 @@ class BluetoothViewModel : ViewModel() {
         }
     }
 
-    fun printInvoice(tableItems: List<Ticket>, total: Double) {
+    fun printInvoice(tableItems: List<Ticket>, total: Double, infos: ShopInfos?) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val sb = StringBuilder()
 
                 // --- En-tête ---
                 sb.appendln("\n")
-                sb.appendln("*** COMME DES GARÇONS ***")
-                sb.appendln("Adresse: 123 Rue Exemple, Paris")
-                sb.appendln("Tel: 01 23 45 67 89")
+                sb.appendln("*** ${infos?.name} ***")
+                sb.appendln("Adresse: ${infos?.address}")
+                sb.appendln("Tel: ${infos?.phone}")
                 sb.appendln("-------------------------------------------")
                 sb.appendln("               FACTURE CLIENT              ")
                 sb.appendln("-------------------------------------------")

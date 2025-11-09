@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.UUID
 
 class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
@@ -93,6 +94,25 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    // Infos
+
+    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null) {
+        viewModelScope.launch {
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo))
+        }
+    }
+    fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null) {
+        viewModelScope.launch {
+            repository.updateInfos(ShopInfos(1, name, address, phone, email, logo))
+        }
+    }
+
+   fun getInfos(): ShopInfos? {
+        return runBlocking {
+            repository.getInfos()
+        }
+    }
+
     // ---- VENDEURS ----
     fun addVendeur(vendeur: Vendeur) {
         viewModelScope.launch {
@@ -167,6 +187,45 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    fun deleteVenteWithStock(vente: Vente) {
+        viewModelScope.launch {
+            // 1) Récupérer les lignes de la vente
+            val lignes = repository.getLignesForVente(vente.id).first()
+
+            // 2) Rétablir les stocks (on ajoute les quantités vendues)
+            lignes.forEach { l ->
+                val p = repository.getProduitById(l.produitId)
+                if (p != null) {
+                    repository.updateProduit(
+                        p.copy(
+                            stock = (p.stock + l.quantity),
+                            updatedAt = now(),
+                            isDirty = true
+                        )
+                    )
+                }
+            }
+
+            // 3) Marquer la vente + ses lignes en "supprimé" (soft delete) et "dirty" pour synchro
+            repository.updateVente(
+                vente.copy(
+                    isDeleted = true,
+                    isDirty = true,
+                    updatedAt = now()
+                )
+            )
+
+            lignes.forEach { l ->
+                // on marque la ligne supprimée + dirty pour push
+                val updated = l.copy(isDeleted = true, isDirty = true, updatedAt = now())
+                // accès direct au DAO exposé par le repo pour faire un @Update
+                repository.venteDao.updateLigne(updated)
+            }
+
+            // (Option) si tu veux vraiment purger localement, tu pourrais deleteVente + deleteLigne,
+            // mais ça ne pousserait pas l'info au cloud. Le soft delete permet à SyncWorker d'envoyer isDeleted.
+        }
+    }
 
 
     // ---- PANIER ----
@@ -398,7 +457,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun loadVentesHistory() {
         viewModelScope.launch {
             repository.getAllVentes().collect { allVentes ->
-                val onlyCart = allVentes.filter { it.tableId ==  UUID.fromString("22222222-0000-2222-2222-222222222222") }
+                val onlyCart = allVentes.filter { it.tableId ==  UUID.fromString("22222222-0000-2222-2222-222222222222") &&  !it.isDeleted}
                 val details = onlyCart.map { vente ->
                     // Collecter les lignes de cette vente
                     val lignes = repository.getLignesForVente(vente.id).first()
@@ -413,13 +472,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
+
+
     private val _ventesTablesWithDetails = MutableStateFlow<List<VenteWithDetails>>(emptyList())
     val ventesTablesWithDetails: StateFlow<List<VenteWithDetails>> = _ventesTablesWithDetails.asStateFlow()
 
     fun loadVentesTablesHistory() {
         viewModelScope.launch {
             repository.getAllVentes().collect { allVentes ->
-                val onlyTables = allVentes.filter { it.tableId != null && it.tableId != sentinelPanier }
+                val onlyTables = allVentes.filter { it.tableId != null && it.tableId != sentinelPanier && !it.isDeleted }
                 val details = onlyTables.map { vente ->
                     val lignes = repository.getLignesForVente(vente.id).first()
                     val tickets = lignes.mapNotNull { l ->
@@ -478,7 +539,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                         database.vendeurDao(),
                         database.venteDao(),
                         database.tableDao(),
-                        database.invoiceDao()
+                        database.invoiceDao(),
+                        database.infosDao()
                     )
                     MenuViewModel(repository)
                 }

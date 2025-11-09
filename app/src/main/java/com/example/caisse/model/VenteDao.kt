@@ -39,7 +39,7 @@ interface VenteDao {
     @Query("""
         SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch') as label, SUM(total) as amount
         FROM Vente
-        WHERE date >= :startDate
+        WHERE date >= :startDate AND isDeleted = 0
         GROUP BY label
         ORDER BY label ASC
     """)
@@ -48,6 +48,7 @@ interface VenteDao {
     @Query("""
         SELECT strftime('%Y-%m', date / 1000, 'unixepoch') as label, SUM(total) as amount
         FROM Vente
+        WHERE isDeleted = 0
         GROUP BY label
         ORDER BY label ASC
     """)
@@ -55,31 +56,39 @@ interface VenteDao {
 
     @Query("""
     SELECT COALESCE(c.name, 'Sans catégorie') AS label,
-           COALESCE(SUM(vl.quantity * p.prix), 0) AS amount
+           COALESCE(SUM(vl.quantity * vl.prixUnitaire), 0) AS amount
     FROM VenteLigne vl
-    LEFT JOIN Produit p
-         ON CAST(vl.produitId AS TEXT) = CAST(p.id AS TEXT)
+    INNER JOIN Vente v
+        ON v.id = vl.venteId AND v.isDeleted = 0
+    INNER JOIN Produit p
+        ON CAST(vl.produitId AS TEXT) = CAST(p.id AS TEXT)
+       AND p.isDeleted = 0
     LEFT JOIN category c
-         ON CAST(p.categoryId AS TEXT) = CAST(c.id AS TEXT)
+        ON CAST(p.categoryId AS TEXT) = CAST(c.id AS TEXT)
+    WHERE vl.isDeleted = 0
     GROUP BY COALESCE(c.name, 'Sans catégorie')
     ORDER BY amount DESC
 """)
     fun getSalesByCategory(): Flow<List<SalesData>>
 
     @Query("""
-    SELECT p.nom AS productName, SUM(vl.quantity) AS totalQuantity
+    SELECT COALESCE(p.nom, 'Produit inconnu') AS productName,
+           COALESCE(SUM(vl.quantity), 0)      AS totalQuantity
     FROM VenteLigne vl
-    JOIN Produit p ON vl.produitId = p.id
-    GROUP BY p.nom
+    LEFT JOIN Produit p
+      ON CAST(vl.produitId AS TEXT) = CAST(p.id AS TEXT)
+       AND p.isDeleted = 0
+    WHERE vl.isDeleted = 0
+    GROUP BY COALESCE(p.nom, 'Produit inconnu')
     ORDER BY totalQuantity DESC
     LIMIT 10
 """)
     fun getTopSellingProducts(): Flow<List<ProductSale>>
 
-    @Query("SELECT SUM(total) FROM Vente WHERE date >= :startDate AND date < :endDate")
+    @Query("SELECT SUM(total) FROM Vente WHERE date >= :startDate AND date < :endDate AND isDeleted = 0")
     fun getTotalSalesBetween(startDate: Long, endDate: Long): Flow<Double>
 
-    @Query("SELECT COALESCE(SUM(total), 0) FROM vente WHERE date >= :start")
+    @Query("SELECT COALESCE(SUM(total), 0) FROM vente WHERE date >= :start AND isDeleted = 0" )
     fun getTotalSalesSince(start: Long): Flow<Double>
 
 
@@ -116,9 +125,9 @@ interface VenteDao {
            p.stock AS productStock,
            SUM(vl.quantity * vl.prixUnitaire) AS revenue
     FROM VenteLigne vl
-    JOIN Produit p ON vl.produitId = p.id
-    JOIN Vente v   ON vl.venteId = v.id
-    WHERE v.date >= :start AND v.date < :end
+    JOIN Produit p ON vl.produitId = p.id AND p.isDeleted = 0
+    JOIN Vente v   ON vl.venteId = v.id AND v.isDeleted = 0
+    WHERE vl.isDeleted = 0 AND v.date >= :start AND v.date < :end
     GROUP BY p.nom,p.stock
     ORDER BY revenue DESC
 """)
@@ -127,7 +136,7 @@ interface VenteDao {
     @Query("""
     SELECT COALESCE(SUM(vl.quantity * vl.prixUnitaire), 0)
     FROM VenteLigne vl
-    INNER JOIN Vente v ON vl.venteId = v.id
+    INNER JOIN Vente v ON vl.venteId = v.id AND v.isDeleted = 0
     WHERE v.date >= :start AND v.date < :end
 """)
     fun getTotalRevenueBetween(start: Long, end: Long): Flow<Double>

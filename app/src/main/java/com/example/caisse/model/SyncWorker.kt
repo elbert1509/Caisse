@@ -29,6 +29,7 @@ class SyncWorker(
         val venteLigneDao = dbLocal.venteDao()
         val categorieDao = dbLocal.categorieDao()
         val vendeurDao = dbLocal.vendeurDao()
+        val infosDao = dbLocal.infosDao()
         val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
         val since = prefs.getLong("lastSyncAt", 0L)
         val isInitialSync = since == 0L
@@ -42,6 +43,8 @@ class SyncWorker(
         pushDirtyVentes(cloud, uid, venteDao)
         pushDirtyVenteLignes(cloud, uid, venteDao,isInitialSync)
         pushDirtyVendeurs(cloud, uid, vendeurDao)
+        pushInfos(cloud, uid, infosDao)
+
 
 
 
@@ -54,6 +57,8 @@ class SyncWorker(
         pullVendeursSince(cloud, uid, since, vendeurDao)                                    // 3️⃣ (Vente.vendeurId nullable, mais mieux avant)
         pullVentesSince(cloud, uid, since, venteDao, isInitialSync)                         // 4️⃣
         pullVenteLignesSince(cloud, uid, since, venteDao,produitDao, isInitialSync)                    // 5️⃣
+        pullInfos(cloud, uid, infosDao)
+
 
 
         Log.d("SyncWorker", "Sync terminé")
@@ -152,6 +157,24 @@ class SyncWorker(
         }
     }
 
+    private suspend fun  pushInfos(
+        cloud: FirebaseFirestore,
+        uid: String,
+        infosDao: com.example.caisse.model.InfosDao
+    ){
+        val infos = infosDao.getInfos()
+        if (infos != null && infos.password != null) {
+            cloud.collection("users").document(uid)
+                .collection("infos").document("1")
+                .set(infosToMap(infos))
+                .await()
+            infosDao.updateInfos(infos)
+        }
+
+
+    }
+
+
 
     // ---------------- PULL ----------------
 
@@ -183,6 +206,27 @@ class SyncWorker(
             }
         }
     }
+
+    private suspend fun pullInfos(
+        cloud: FirebaseFirestore,
+        uid: String,
+        infosDao: com.example.caisse.model.InfosDao
+    ) {
+        val doc = cloud.collection("users").document(uid)
+            .collection("infos").document("1")
+            .get().await()
+        if (!doc.exists()) return
+        val data = doc.data ?: return
+        val remote = mapToInfos(data).copy(id = 1)  // sécurité : force id=1
+        val local = infosDao.getInfos()
+
+        if (local == null ) {
+            infosDao.insertInfos(remote)   // insert
+        } else {
+            infosDao.updateInfos(remote)   // update (écrase avec la version cloud)
+        }
+    }
+
 
     private suspend fun pullCategoriesSince(
         cloud: FirebaseFirestore,
@@ -350,6 +394,29 @@ class SyncWorker(
         "updatedAt" to c.updatedAt,
         "isDeleted" to c.isDeleted
     )
+
+    private fun infosToMap(i: com.example.caisse.data.ShopInfos) = mapOf(
+        "id" to i.id.toString(),
+        "name" to i.name,
+        "address" to i.address,
+        "phone" to i.phone,
+        "email" to i.email,
+        "logo" to i.logo,
+        "password" to i.password,
+        )
+
+    private fun mapToInfos(m: Map<String, Any?>) = com.example.caisse.data.ShopInfos(
+        id = (m["id"] as? Number)?.toInt() ?: 0,
+        name = m["name"] as String,
+        address = m["address"] as String,
+        phone = m["phone"] as String,
+        email = m["email"] as String,
+        logo = m["logo"] as? Int,
+        password = m["password"] as String,
+    )
+
+
+
 
     private fun mapToCategorie(m: Map<String, Any?>) = com.example.caisse.data.Category(
         id = UUID.fromString(m["id"] as String),

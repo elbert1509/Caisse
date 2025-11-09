@@ -154,7 +154,7 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
         context: Context,
         title: String,
         items: List<ProductReport>,
-        total: Double
+        total: Double,
     ) {
         // 1) Créer le doc PDF (A4 portrait)
         val pdf = PdfDocument()

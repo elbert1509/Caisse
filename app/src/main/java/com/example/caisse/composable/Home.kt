@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DataExploration
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Liquor
@@ -153,12 +154,7 @@ private fun defaultHomeButton() : List<HomeTileData> = listOf(
     HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
     HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
     HomeTileData("Table", Icons.Default.TableRestaurant, color = Gray, HomeActionButton.TABLE),
-    HomeTileData("Inventaire", Icons.Default.Liquor, color = Gray, HomeActionButton.GERER_INVENTAIRE),
-    HomeTileData("Produits", Icons.Default.Inventory, color = Blue, HomeActionButton.GERER_PRODUITS),
-    HomeTileData("Catégories", Icons.Default.Fastfood, color = Blue, HomeActionButton.GERE_CATEGORIE),
-    HomeTileData("Donnee", Icons.Default.DataExploration, color = Blue, HomeActionButton.DONNES),
-    HomeTileData("Dashboard", Icons.Default.BarChart, color = Blue, HomeActionButton.DASHBOARD),
-    HomeTileData("Stock", Icons.Default.Warehouse, color = Blue, HomeActionButton.STOCK)
+    HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
 )
 
 

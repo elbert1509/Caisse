@@ -4,34 +4,94 @@ import android.Manifest
 import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Build
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BluetoothConnected
+import androidx.compose.material.icons.filled.BluetoothDisabled
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.*
 import androidx.compose.material3.AlertDialog
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import androidx.room.util.TableInfo
 import androidx.work.WorkManager
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
 import com.google.firebase.auth.auth
+
+
+private fun requiredBtPerms(): Array<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+    else
+        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+
+private fun hasAllBtPermissions(ctx: android.content.Context): Boolean =
+    requiredBtPerms().all {
+        ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+private fun safeRun(action: () -> Unit) {
+    try { action() } catch (_: SecurityException) { /* ignore/log if needed */ }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavController,authVm: AuthViewModel, menuViewModel: MenuViewModel) {
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
+    val info  = menuViewModel.getInfos()
+
     var showLogoutDialog by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -60,119 +120,279 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {   },
+                title = {
+                    Text(
+                        "Paramètres ${info?.name}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
-                    Row (modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
-                        }
-                        Text(email)
-                        IconButton(onClick = {  showLogoutDialog = true }) {
-                            Icon(Icons.Filled.Logout, contentDescription = "Quitter ")
-
-                        }
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
                     }
-
-                }
-            )
-        }
-    ) { padding ->
-
-        Column(Modifier.padding(padding)) {
-            Spacer(Modifier.height(12.dp))
-            Text("Sélectionner une imprimante Bluetooth", style = MaterialTheme.typography.titleMedium)
-
-            Spacer(Modifier.height(12.dp))
-
-            Button(onClick = { viewModel.loadPairedDevices() }) {
-                Text("Actualiser")
-            }
-            pairedDevices.forEach { device: BluetoothDevice ->
-                val deviceName = if (hasPermission) device.name else "Nom indisponible"
-
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (hasPermission){
-                                viewModel.connecToDevice(device, navController.context)
-                                Log.d("BluetoothViewModel", "Connecting to device: $deviceName with ${device.address}")
+                },
+                actions = {
+                    // Scan/Refresh
+                    IconButton(
+                        onClick = {
+                            if (!hasAllBtPermissions(context)) {
+                                launcher.launch(requiredBtPerms())
+                            } else {
+                                safeRun { viewModel.loadPairedDevices() }
                             }
                         }
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(deviceName ?: "Appareil inconnu")
-                    if (isConnected ) {
-                        Text("✅", style = MaterialTheme.typography.titleLarge)
-                    }else{
-                        Text("❌", style = MaterialTheme.typography.titleLarge)
+                    ) { Icon(Icons.Filled.Refresh, contentDescription = "Actualiser") }
+
+                    // Logout
+                    IconButton(onClick = { showLogoutDialog = true }) {
+                        Icon(Icons.Filled.Logout, contentDescription = "Se déconnecter")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
+    ) { padding ->
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+
+        ) {
+
+            // ==== Carte : Compte & statut ====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(6.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    AccentBar()
+                    Spacer(Modifier.height(12.dp))
+
+                    Text("Compte connecté", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        email ,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(
+                            if (isConnected) Icons.Filled.BluetoothConnected else Icons.Filled.BluetoothDisabled,
+                            contentDescription = null,
+                            tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            if (isConnected) "Appareil connecté" else "Aucun appareil connecté",
+                            color = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
 
-            if (isConnected) {
-                Button(onClick = { viewModel.disconnect() }) {
-                    Text("Déconnecter l'appareil")
-                }
-            }
+            // ==== Carte : Imprimante Bluetooth (appareils jumelés) ====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(6.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    AccentBar()
+                    Spacer(Modifier.height(12.dp))
 
-            Button(
-                onClick = {
-                    authVm.enqueueSync(
-                        context = context,
-                        tag = "sync"
-                    )
-                }
-
-            )
-            {
-                Column (verticalArrangement = Arrangement.Center, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally){
-                    Icon(Icons.Filled.Sync, contentDescription = "Synchroniser")
-                    Text("Synchroniser les données")
-                }
-
-            }
-            if (showLogoutDialog) {
-                AlertDialog(
-                    onDismissRequest = { showLogoutDialog = false },
-                    confirmButton = {
-                        TextButton(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Imprimante Bluetooth", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Sélectionnez un appareil jumelé pour vous connecter.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        OutlinedButton(
                             onClick = {
-                                showLogoutDialog = false
-                                authVm.enqueueSync(
-                                    context = context,
-                                    tag = "sync"
-                                )
-                                authVm.signOut();
-                                try {
-                                    menuViewModel.clearCart()
-                                    menuViewModel.clearTableItems()
-                                } catch (_: Exception) { /* no-op si pas dispo ici */ }
-
-                                if (isConnected) viewModel.disconnect()
-                                try { WorkManager.getInstance(context).cancelAllWorkByTag("sync") } catch (_: Exception) {}
-                                navController.navigate("login"){
-                                    popUpTo(0) { inclusive = true }
-                                    launchSingleTop = true
+                                if (!hasAllBtPermissions(context)) {
+                                    launcher.launch(requiredBtPerms())
+                                } else {
+                                    safeRun { viewModel.loadPairedDevices() }
                                 }
                             }
                         ) {
-                            Text("Déconnexion")
+                            Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Actualiser")
                         }
-                    },
-                    dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Annuler") } },
-                    title = { Text("Confirmer") },
-                    text  = { Text("Voulez-vous vous déconnecter ?") }
+                    }
 
-                )
+                    Spacer(Modifier.height(12.dp))
+
+                    if (pairedDevices.isEmpty()) {
+                        Text("Aucun appareil détecté", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pairedDevices.forEach { device: BluetoothDevice ->
+                                val deviceName = try {
+                                    if (hasAllBtPermissions(context)) device.name else "Nom indisponible"
+                                } catch (_: SecurityException) { "Nom indisponible" }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (!hasAllBtPermissions(context)) {
+                                                launcher.launch(requiredBtPerms())
+                                            } else {
+                                                safeRun { viewModel.connecToDevice(device, context) }
+                                            }
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(deviceName ?: "Appareil inconnu", fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            device.address,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (isConnected && pairedDevices.any { it.address == device.address }) {
+                                        Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
+                                    } else {
+                                        Icon(Icons.Filled.Bluetooth, null, tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (isConnected) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { safeRun { /*viewModel.testPrint(context) */} }
+                            ) { Icon(Icons.Filled.Print, null); Spacer(Modifier.width(6.dp)); Text("Test impression") }
+
+                            OutlinedButton(
+                                onClick = { safeRun { viewModel.disconnect() } }
+                            ) { Icon(Icons.Filled.BluetoothDisabled, null); Spacer(Modifier.width(6.dp)); Text("Déconnecter") }
+                        }
+                    }
+                }
+            }
+
+            // ==== Carte : Actions rapides ====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(6.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    AccentBar()
+                    Spacer(Modifier.height(12.dp))
+
+                    Text("Actions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        ActionButton(Icons.Filled.Sync, "Synchroniser") {
+                            authVm.enqueueSync(context = context, tag = "sync")
+                        }
+                        ActionButton(Icons.Filled.Info, "Infos") {
+                            navController.navigate("infos")
+                        }
+                    }
+                }
             }
         }
+
+        // ==== Dialog de déconnexion ====
+        if (showLogoutDialog) {
+            AlertDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogoutDialog = false
+                            authVm.enqueueSync(context = context, tag = "sync")
+                            authVm.signOut()
+                            try {
+                                menuViewModel.clearCart()
+                                menuViewModel.clearTableItems()
+                                WorkManager.getInstance(context).cancelAllWorkByTag("sync")
+                            } catch (_: Exception) {}
+                            if (isConnected) safeRun { viewModel.disconnect() }
+                            navController.navigate("login") {
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    ) { Text("Déconnexion") }
+                },
+                dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Annuler") } },
+                title = { Text("Confirmer la déconnexion") },
+                text = { Text("Voulez-vous vous déconnecter et arrêter la synchronisation ?") }
+            )
+        }
     }
-
-
 }
+
+// ---------- UI helpers ----------
+@Composable
+private fun AccentBar() {
+    Box(
+        modifier = Modifier
+            .height(6.dp)
+            .fillMaxWidth(0.35f)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.tertiary
+                    )
+                ),
+                shape = RoundedCornerShape(50)
+            )
+    )
+}
+
+@Composable
+private fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Surface(
+            tonalElevation = 4.dp,
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        ) {
+            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(14.dp))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+

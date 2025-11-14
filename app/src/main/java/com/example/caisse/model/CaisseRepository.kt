@@ -75,6 +75,10 @@ class CaisseRepository(
     suspend fun updateProductInTable(tableItem: TableItem) = tableDao.updateProductInTable(tableItem)
     suspend fun deleteProductFromTable(tableId: UUID, productId: UUID) = tableDao.deleteProductFromTable(tableId, productId)
     suspend fun getTableItems(tableId: UUID): List<TableItem> = tableDao.getTableItems(tableId)
+    suspend fun getAllTableItemsOnce(): List<TableItem> = tableDao.getAllTableItemsOnce()
+    suspend fun upsertTable(appTable: AppTable) = tableDao.upsertTable(appTable)
+    suspend fun upsertTableItem(ti: TableItem) = tableDao.upsertTableItem(ti)
+    suspend fun getTableById(id: UUID): AppTable? = tableDao.getTableById(id)
 
 
     // Invoice methods

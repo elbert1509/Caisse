@@ -336,6 +336,7 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                             try {
                                 menuViewModel.clearCart()
                                 menuViewModel.clearTableItems()
+                                menuViewModel.stopRealtimeTables()
                                 WorkManager.getInstance(context).cancelAllWorkByTag("sync")
                             } catch (_: Exception) {}
                             if (isConnected) safeRun { viewModel.disconnect() }

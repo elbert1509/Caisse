@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
@@ -47,12 +47,13 @@ import androidx.navigation.NavController
 import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
-
+import com.example.caisse.model.AuthViewModel
+import com.google.firebase.auth.auth
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String, bluetoothViewModel: BluetoothViewModel){
+fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String, bluetoothViewModel: BluetoothViewModel,authVm: AuthViewModel){
     var selectedTab by remember { mutableIntStateOf(0) }
     val tables by menuViewModel.tables.collectAsState()
     val tableUuid = remember(tableId) { UUID.fromString(tableId) }
@@ -60,10 +61,16 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
     val categories by menuViewModel.categories.collectAsState()
     val products by menuViewModel.produits.collectAsState()
     val info = menuViewModel.getInfos()
-    var selecredCategoryID by remember {
-        mutableStateOf(categories.firstOrNull()?.id)
+    var selecredCategoryID by remember { mutableStateOf(categories.firstOrNull()?.id) }
+
+    LaunchedEffect(categories) {
+        if (selecredCategoryID == null || categories.none { it.id == selecredCategoryID }) {
+            selecredCategoryID = categories.firstOrNull()?.id
+        }
     }
     val tableItems by menuViewModel.tableItems.collectAsState()
+
+    val ctx = navController.context
 
     // Load items when the screen is displayed for the first time
     LaunchedEffect(tableUuid) {
@@ -71,10 +78,23 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
     }
 
     // Clear items when the user leaves the screen
-    DisposableEffect(Unit) {
-        onDispose {
-            menuViewModel.clearTableItems()
+    DisposableEffect(tableUuid) {
+        val uid = com.google.firebase.Firebase.auth.currentUser?.uid
+        var reg: com.google.firebase.firestore.ListenerRegistration? = null
+        if (uid != null) {
+            val cloud = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            reg = cloud.collection("users").document(uid)
+                .collection("table_items")
+                .whereEqualTo("tableId", tableUuid.toString())
+                .addSnapshotListener { snap, _ ->
+                    if (snap != null) {
+                        // Recharger depuis Room (pull a déjà upsert) ou reconstruire localement
+                        // Ici on recharge proprement via Room -> VM
+                        menuViewModel.loadTableItems(tableUuid)
+                    }
+                }
         }
+        onDispose { reg?.remove() }
     }
 
 
@@ -145,7 +165,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 //Spacer(modifier = Modifier.height(16.dp))
 
                 LazyColumn( modifier = Modifier.weight(0.7f)) {
-                    items(tableItems, key = { it.produit.id }) { ticket ->
+                    itemsIndexed(tableItems, key ={ index, ticket -> "${ticket.produit.id}@$index" }) {  _,ticket ->
                         TableItemRow(
                             ticket = ticket,
                             onIncrease = {
@@ -159,7 +179,9 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                     ticket.produit.id,
                                     tableUuid,
                                     ticket.quantity - 1
-                                ) }
+
+                                )
+                            }
                         )
 
                     }
@@ -188,6 +210,10 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         onClick = {
                             menuViewModel.payTable(tableUuid)
                             navController.popBackStack() // revenir en arrière après validation
+                            authVm.enqueueSync(
+                                context = ctx,
+                                tag = "sync"
+                            )
                         },
                         enabled = totaltable > 0
                     ) {

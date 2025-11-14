@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -312,15 +313,17 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun addTable(name: String) {
         viewModelScope.launch {
-            repository.addTable(AppTable(name = name))
-            _tableItems.value = emptyList() // Clear items from previous table
+            repository.addTable(
+                AppTable(name = name).copy(updatedAt = now(), isDirty = true)
+            )
+            _tableItems.value = emptyList()
             loadTables()
         }
     }
 
     fun loadTableItems(tableId: UUID) {
         viewModelScope.launch {
-            val items = repository.getTableItems(tableId)
+            val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
             val tickets = items.mapNotNull { item ->
                 repository.getProduitById(item.productId)?.let { product ->
                     Ticket(product, item.quantity)
@@ -336,7 +339,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val table = _tables.value.find { it.id == tableId }
             if (table != null) {
-                repository.updateTable(table.copy(active = false))
+                repository.updateTable(
+                    table.copy(active = false, updatedAt = now(), isDirty = true)
+                )
                 loadTables()
             }
         }
@@ -345,24 +350,40 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val existingItem = repository.getTableItems(tableId).find { it.productId == productId }
             if (existingItem != null) {
-                repository.updateProductInTable(existingItem.copy(quantity = existingItem.quantity + 1))
+                repository.updateProductInTable(
+                    existingItem.copy(quantity = existingItem.quantity + 1, updatedAt = now(), isDirty = true)
+                )
             } else {
-                repository.addProductToTable(TableItem(tableId = tableId, productId = productId, quantity = 1))
+                repository.addProductToTable(
+                    TableItem(tableId = tableId, productId = productId, quantity = 1).copy(updatedAt = now(), isDirty = true)
+                )
             }
             loadTableItems(tableId)
         }
     }
+
+
 
     fun updateTableItemQuantity(productId: UUID, tableId: UUID, newQuantity: Int) {
         viewModelScope.launch {
             if (newQuantity > 0) {
                 val item = repository.getTableItems(tableId).find { it.productId == productId }
                 item?.let {
-                    repository.updateProductInTable(it.copy(quantity = newQuantity))
+                    repository.updateProductInTable(it.copy(quantity = newQuantity, updatedAt = now(), isDirty = true))
                 }
             } else {
-                // If quantity is 0 or less, delete the item
-                repository.deleteProductFromTable(tableId, productId)
+                val item = repository.getTableItems(tableId).find { it.productId == productId }
+                item?.let {
+                    repository.updateProductInTable(
+                        it.copy(
+                            quantity = 0,
+                            updatedAt = now(),
+                            isDirty = true,
+                            isDeleted = true
+                        )
+                    )
+                }
+               // repository.deleteProductFromTable(tableId, productId)
             }
             loadTableItems(tableId)
         }
@@ -546,5 +567,51 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 }
             }
         }
+    }
+
+    // -------- Temps réel Tables (liste) --------
+    private var tablesListener: ListenerRegistration? = null
+
+    fun startRealtimeTables(uid: String) {
+        stopRealtimeTables()
+        val cloud = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        tablesListener = cloud.collection("users").document(uid)
+            .collection("tables")
+            .addSnapshotListener { snap, _ ->
+                if (snap != null) {
+                    viewModelScope.launch {
+                        val remote = snap.documents.mapNotNull { doc ->
+                            val m = doc.data ?: return@mapNotNull null
+                            AppTable(
+                                id = java.util.UUID.fromString(m["id"] as String),
+                                name = m["name"] as String,
+                                active = (m["active"] as? Boolean) ?: true,
+                                updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                                isDirty = false,
+                                isDeleted = (m["isDeleted"] as? Boolean) ?: false
+                            )
+                        }
+                        // upsert local (Room) + rafraîchir _tables
+                        remote.forEach { r ->
+                            val local = repository.getTableById(r.id) // ⚠️ pas seulement les actives
+                            val shouldApply =
+                                local == null ||
+                                        r.updatedAt >= local.updatedAt ||           // version plus récente
+                                        r.active != local.active ||                 // état actif changé → applique
+                                        r.isDeleted != local.isDeleted              // statut supprimé changé → applique
+
+                            if (shouldApply) {
+                                repository.upsertTable(r.copy(isDirty = false))
+                            }
+                        }
+                        loadTables()
+                    }
+                }
+            }
+    }
+
+    fun stopRealtimeTables() {
+        tablesListener?.remove()
+        tablesListener = null
     }
 }

@@ -29,15 +29,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.model.AuthViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PanierScreen(
     navController: NavController,
-    menuViewModel: MenuViewModel
+    menuViewModel: MenuViewModel,
+    authVm: AuthViewModel
 ) {
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
+    val ctx = navController.context
+
 
     Scaffold(
         topBar = {
@@ -85,6 +89,10 @@ fun PanierScreen(
                 onClick = {
                     menuViewModel.confirmerVente()
                     navController.navigate("home")
+                    authVm.enqueueSync(
+                        context = ctx,
+                        tag = "sync"
+                    )
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

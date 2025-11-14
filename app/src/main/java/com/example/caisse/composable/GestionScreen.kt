@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.DataExploration
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.PointOfSale
@@ -137,6 +138,7 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
                         GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock") },
                         GestionTile("Dashboard", Icons.Default.Warehouse) { navController.navigate("Dashboard") },
                         GestionTile("Vente", Icons.Default.PointOfSale) { navController.navigate("vente") },
+                        GestionTile("infos", Icons.Default.Info) { navController.navigate("infos") },
 
                     )
                 }

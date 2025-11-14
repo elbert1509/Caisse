@@ -55,12 +55,18 @@ import com.example.caisse.ui.theme.Slate900
 @Composable
 fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboardViewModel: DashboardViewModel, initialTab: Int = 0){
 
-    val todayList  by dashboardViewModel.productReportToday.collectAsState()
-    val weekList   by dashboardViewModel.productReportThisWeek.collectAsState()
-    val monthList  by dashboardViewModel.productReportThisMonth.collectAsState()
-    val revToday    by dashboardViewModel.revenueTodayBounded.collectAsState()
-    val revWeek   by dashboardViewModel.revenueThisWeekBounded.collectAsState()
-    val revMonth  by dashboardViewModel.revenueThisMonthBounded.collectAsState()
+    val todayList   by dashboardViewModel.productReportToday.collectAsState()
+    val weekList    by dashboardViewModel.productReportThisWeek.collectAsState()
+    val monthList   by dashboardViewModel.productReportThisMonth.collectAsState()
+    val revToday    by dashboardViewModel.salesToday.collectAsState()
+    val revWeek     by dashboardViewModel.salesThisWeek.collectAsState()
+    val revMonth    by dashboardViewModel.salesThisMonth.collectAsState()
+    val weeklySales by dashboardViewModel.weeklySales.collectAsState()
+
+
+
+
+
 
     val tabs = listOf("Journalier", "Hebdomadaire", "Mensuel")
     var selectedTab by remember { mutableStateOf(initialTab.coerceIn(0, 2)) }

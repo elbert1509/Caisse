@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.CaisseDataBase
+import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
 import com.example.caisse.ui.theme.MintEnd
 import com.example.caisse.ui.theme.MintStart
@@ -57,7 +58,8 @@ import kotlinx.coroutines.withContext
 fun LoginScreen(
     navController: NavController,
     vm: AuthViewModel,
-    onSignedInNavigateRoute: String = "home" // adapte au nom de ta route Dashboard
+    onSignedInNavigateRoute: String = "home", // adapte au nom de ta route Dashboard
+    menuViewModel: MenuViewModel
 ) {
     val ui by vm.ui.collectAsState()
     var isSignUp by remember { mutableStateOf(false) }
@@ -88,6 +90,12 @@ fun LoginScreen(
 
                 // Lance la sync APRES le wipe
                 vm.enqueueSync(context = ctx, tag = "sync")
+
+                // Démarre la surveillance temps réel des tables
+
+                if (uid != null) {
+                   // menuViewModel.startRealtimeTables(uid)
+                }
 
                 // Puis navigation
                 navController.navigate(onSignedInNavigateRoute) {

@@ -206,7 +206,7 @@ data class ShopInfos (
     val phone: String,
     val email: String,
     val logo: Int? = null,
-    val password: String? = null,
+    val password: String? = "1234",
 )
 
 @Entity(tableName = "app_table")

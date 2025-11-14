@@ -64,8 +64,8 @@ fun AppNavigation() {
             viewModel = menuViewModel
         ) }
         composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel) }
-        composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel) }
-        composable("table") { TableScreen(navController = navController, menuViewModel = menuViewModel) }
+        composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel, authVm = authViewModel) }
+        composable("table") { TableScreen(navController = navController, menuViewModel = menuViewModel, authViewModel = authViewModel) }
         composable(
             "table_details/{tableId}",
             arguments = listOf(navArgument("tableId") { type = NavType.StringType })
@@ -74,7 +74,8 @@ fun AppNavigation() {
                 navController = navController,
                 menuViewModel = menuViewModel,
                 tableId = backStackEntry.arguments?.getString("tableId") ?: "",
-                bluetoothViewModel = bluetoothViewModel
+                bluetoothViewModel = bluetoothViewModel,
+                authVm = authViewModel
             )
         }
         composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel) }
@@ -98,7 +99,7 @@ fun AppNavigation() {
         }
         composable("login") {
             val authVm = remember { AuthViewModel() } // ou via hiltViewModel() si tu utilises Hilt
-            LoginScreen(navController = navController, vm = authVm, onSignedInNavigateRoute = "home")
+            LoginScreen(navController = navController, vm = authVm, onSignedInNavigateRoute = "home", menuViewModel = menuViewModel)
         }
         composable("infos") { InfosScreen(navController = navController, viewModel = menuViewModel) }
         composable("gestion") { GestionScreen(navController = navController, viewModel = menuViewModel) }

@@ -37,7 +37,7 @@ interface VenteDao {
 
     // ---- STATS ----
     @Query("""
-        SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch') as label, SUM(total) as amount
+        SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch','localtime') as label, SUM(total) as amount
         FROM Vente
         WHERE date >= :startDate AND isDeleted = 0
         GROUP BY label
@@ -46,7 +46,7 @@ interface VenteDao {
     fun getSalesSince(startDate: Long): Flow<List<SalesData>>
 
     @Query("""
-        SELECT strftime('%Y-%m', date / 1000, 'unixepoch') as label, SUM(total) as amount
+        SELECT strftime('%Y-%m', date / 1000, 'unixepoch','localtime') as label, SUM(total) as amount
         FROM Vente
         WHERE isDeleted = 0
         GROUP BY label

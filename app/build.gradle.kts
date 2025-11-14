@@ -84,5 +84,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
     implementation(libs.mpandroidchart)
+    implementation("androidx.compose.material:material:1.9.0")
+    implementation("androidx.compose.material3:material3:1.3.0") // exemple
 
 }

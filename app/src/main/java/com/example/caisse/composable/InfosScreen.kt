@@ -44,6 +44,8 @@ fun InfosScreen(
     var address by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var devise by remember { mutableStateOf("") }
+
 
     val scope = rememberCoroutineScope()
 
@@ -58,6 +60,7 @@ fun InfosScreen(
             address = info.address
             phone = info.phone
             email = info.email
+            devise = info.devise
         } else {
             // Pas d’infos -> mode édition
             isEdit = true
@@ -100,7 +103,8 @@ fun InfosScreen(
                                         address = address.trim(),
                                         phone = phone.trim(),
                                         email = email.trim(),
-                                        logo = null
+                                        logo = null,
+                                        devise = devise
                                     )
                                 } else {
                                     viewModel.updateInfos(
@@ -108,7 +112,8 @@ fun InfosScreen(
                                         address = address.trim(),
                                         phone = phone.trim(),
                                         email = email.trim(),
-                                        logo = null
+                                        logo = null,
+                                        devise = devise
                                     )
                                 }
                                 navController.popBackStack()
@@ -188,6 +193,15 @@ fun InfosScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = devise,
+                            onValueChange = { devise = it },
+                            label = { Text("devise") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         Spacer(Modifier.height(18.dp))
 
                         Row(
@@ -205,7 +219,8 @@ fun InfosScreen(
                                                 address = address.trim(),
                                                 phone = phone.trim(),
                                                 email = email.trim(),
-                                                logo = null
+                                                logo = null,
+                                                devise = devise
                                             )
                                         } else {
                                             viewModel.updateInfos(
@@ -213,7 +228,8 @@ fun InfosScreen(
                                                 address = address.trim(),
                                                 phone = phone.trim(),
                                                 email = email.trim(),
-                                                logo = null
+                                                logo = null,
+                                                devise = devise
                                             )
                                         }
                                         navController.popBackStack()
@@ -241,6 +257,7 @@ fun InfosScreen(
                             ReadOnlyRow("Adresse", existing!!.address)
                             ReadOnlyRow("Téléphone", existing!!.phone)
                             ReadOnlyRow("Email", existing!!.email)
+                            ReadOnlyRow("devise", existing!!.devise)
 
                             Spacer(Modifier.height(16.dp))
                             Row(

@@ -109,15 +109,15 @@ class BluetoothViewModel : ViewModel() {
                 sb.appendln("*** ${infos?.name} ***")
                 sb.appendln("Adresse: ${infos?.address}")
                 sb.appendln("Tel: ${infos?.phone}")
-                sb.appendln("-------------------------------------------")
-                sb.appendln("               FACTURE CLIENT              ")
-                sb.appendln("-------------------------------------------")
-                sb.appendln("Article               Qté   PU     Total")
-                sb.appendln("-------------------------------------------")
+                sb.appendln("--------------------------")
+                sb.appendln("    FACTURE CLIENT   ")
+                sb.appendln("---------------------------")
+                sb.appendln("Article   Qté   PU     Total")
+                sb.appendln("-------------------------")
 
                 // --- Détail des articles ---
                 tableItems.forEach { ticket ->
-                    val name = ticket.produit.nom.padEnd(18, ' ').take(18)
+                    val name = ticket.produit.nom.padEnd(10 , ' ').take(18)
                     val qty = ticket.quantity.toString().padStart(3, ' ')
                     val price = String.format("%.2f", ticket.produit.prix).padStart(6, ' ')
                     val lineTotal = String.format("%.2f", ticket.produit.prix * ticket.quantity).padStart(7, ' ')
@@ -125,7 +125,7 @@ class BluetoothViewModel : ViewModel() {
                 }
 
                 sb.appendln("--------------------------------")
-                sb.appendln(String.format("TOTAL:%36.2f ", total))
+                sb.appendln(String.format("TOTAL:%36.2f",total))
                 sb.appendln("--------------------------------")
                 sb.appendln("      Merci pour votre confiance ")
                 sb.appendln("********************************")

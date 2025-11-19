@@ -2,7 +2,9 @@ package com.example.caisse.composable
 
 import android.view.MotionEvent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +69,8 @@ fun PrendreCommandeScreen(
     val products by menuViewModel.produits.collectAsState()
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
+    val shopInfos = menuViewModel.getInfos()
+
 
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id) }
 
@@ -144,7 +149,7 @@ fun PrendreCommandeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(String.format("%.2f €", totalPrice), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(String.format("%.2f ${shopInfos?.devise}", totalPrice), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
@@ -199,13 +204,19 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Image(
-                painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
-                contentDescription = product.nom,
-                modifier = Modifier
-                    .size(80.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
+                    contentDescription = product.nom,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(Color.Transparent),
+                    contentScale = ContentScale.Fit
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 product.nom,
@@ -213,7 +224,7 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
             )
-            Text(String.format("%.2f €", product.prix), fontSize = 12.sp)
+            Text(String.format("%.2f ", product.prix), fontSize = 12.sp)
         }
     }
 }

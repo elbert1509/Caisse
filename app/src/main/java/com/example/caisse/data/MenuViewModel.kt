@@ -76,19 +76,24 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
     // ---- PRODUITS ----
-    fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12) {
+    fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12, photo : Int? = null) {
         viewModelScope.launch {
-            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock).copy(updatedAt = now(), isDirty = true)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,image = photo).copy(updatedAt = now(), isDirty = true)
             repository.addProduit(newProduit)
         }
     }
 
+
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
-            repository.addProduit(produit.copy(updatedAt = now(), isDirty = true)) // OnConflictStrategy.REPLACE will handle the update
+            repository.updateProduit(
+                produit.copy(
+                    updatedAt = now(),
+                    isDirty = true
+                )
+            )
         }
     }
-
     fun deleteProduit(produit: Produit) {
         viewModelScope.launch {
             repository.deleteProduit(produit)
@@ -97,14 +102,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // Infos
 
-    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null) {
+    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String) {
         viewModelScope.launch {
-            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo))
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo, devise = devise))
         }
     }
-    fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null) {
+    fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String) {
         viewModelScope.launch {
-            repository.updateInfos(ShopInfos(1, name, address, phone, email, logo))
+            repository.updateInfos(ShopInfos(1, name, address, phone, email, logo,devise = devise))
         }
     }
 

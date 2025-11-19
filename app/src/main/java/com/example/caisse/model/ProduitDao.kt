@@ -13,7 +13,7 @@ import java.util.UUID
 @Dao
 interface ProduitDao {
 
-    @Insert(onConflict = OnConflictStrategy.ABORT) // ou IGNORE si tu préfères
+    @Insert(onConflict = OnConflictStrategy.REPLACE) // ou IGNORE si tu préfères
     suspend fun insertProduit(produit: Produit)
 
     @Update

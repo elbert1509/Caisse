@@ -493,6 +493,7 @@ class SyncWorker(
         "id" to p.id.toString(),
         "nom" to p.nom,
         "prix" to p.prix,
+        "image" to p.image,
         "categoryId" to p.categoryId.toString(),
         "stock" to p.stock,
         "description" to p.description,
@@ -518,6 +519,7 @@ class SyncWorker(
         "email" to i.email,
         "logo" to i.logo,
         "password" to i.password,
+        "devise" to i.devise
         )
 
     private fun mapToInfos(m: Map<String, Any?>) = com.example.caisse.data.ShopInfos(
@@ -528,6 +530,7 @@ class SyncWorker(
         email = m["email"] as String,
         logo = m["logo"] as? Int,
         password = m["password"] as String,
+        devise = m["devise"] as String
     )
 
 
@@ -547,18 +550,27 @@ class SyncWorker(
 
 
 
-    private fun mapToProduit(m: Map<String, Any?>) = Produit(
-        id = UUID.fromString(m["id"] as String),
-        nom = m["nom"] as String,
-        prix = (m["prix"] as Number).toDouble(),
-        categoryId = UUID.fromString(m["categoryId"] as String),
-        stock = (m["stock"] as Number).toInt(),
-        description = m["description"] as String?,
-        isActive = m["isActive"] as? Boolean ?: true,
-        updatedAt = (m["updatedAt"] as Number?)?.toLong() ?: System.currentTimeMillis(),
-        isDirty = false,
-        isDeleted = m["isDeleted"] as? Boolean ?: false
-    )
+    private fun mapToProduit(m: Map<String, Any?>): Produit {
+        val imageRes: Int? = when (val img = m["image"]) {
+            is Number -> img.toInt()          // Firestore renvoie souvent un Long
+            is String -> img.toIntOrNull()    // au cas où
+            else -> null
+        }
+
+        return Produit(
+            id = UUID.fromString(m["id"] as String),
+            nom = m["nom"] as String,
+            prix = (m["prix"] as Number).toDouble(),
+            image = imageRes,
+            categoryId = UUID.fromString(m["categoryId"] as String),
+            stock = (m["stock"] as Number).toInt(),
+            description = m["description"] as String?,
+            isActive = m["isActive"] as? Boolean ?: true,
+            updatedAt = (m["updatedAt"] as Number?)?.toLong() ?: System.currentTimeMillis(),
+            isDirty = false,
+            isDeleted = m["isDeleted"] as? Boolean ?: false
+        )
+    }
 
     private fun venteToMap(v: Vente) = mapOf(
         "id" to v.id.toString(),

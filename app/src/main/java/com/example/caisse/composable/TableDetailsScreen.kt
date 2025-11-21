@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -124,7 +125,11 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.padding(16.dp).weight(0.6f)) {
+            Column(    modifier = Modifier
+                .fillMaxHeight()
+                .weight(0.65f)
+                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
+            ) {
 
                 TabRow(
                     selectedTabIndex = categories.indexOfFirst { it.id == selecredCategoryID }
@@ -147,14 +152,17 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(products.filter { it.categoryId == selecredCategoryID }) { product ->
-                        ProductItem(product = product) {
+                        ProductItemHorizontal(product = product) {
                             menuViewModel.addProductToTable(product.id, tableUuid)
                         }
                     }
                 }
 
             }
-            Column(modifier = Modifier.padding(16.dp).weight(0.4f)
+            Column(modifier = Modifier
+                .fillMaxHeight()
+                .weight(0.35f)
+                .padding(16.dp)
             )
             {
                 Text(
@@ -190,20 +198,25 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 Spacer(Modifier.height(16.dp))
 
                 Row (
-                    modifier = Modifier.fillMaxWidth().weight(0.1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
 
                 ){
-                    Text(text = "Total", style = MaterialTheme.typography.headlineMedium)
-                    Text(text = String.format("%.2f €", totaltable), style = MaterialTheme.typography.headlineMedium,fontWeight = FontWeight.Bold)
+                    Text(text = "Total", style = MaterialTheme.typography.headlineSmall)
+                    Text(text = String.format("%.2f €", totaltable),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
 
                 Row (modifier = Modifier
                     .padding(bottom = 8.dp)
                     .fillMaxWidth()
-                    .weight(0.1f),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    .weight(0.2f),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ){
                     Button(

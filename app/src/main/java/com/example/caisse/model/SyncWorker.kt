@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.example.caisse.R
 import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Vente
@@ -551,17 +552,25 @@ class SyncWorker(
 
 
     private fun mapToProduit(m: Map<String, Any?>): Produit {
-        val imageRes: Int? = when (val img = m["image"]) {
-            is Number -> img.toInt()          // Firestore renvoie souvent un Long
-            is String -> img.toIntOrNull()    // au cas où
+        val rawImage: Int? = when (val img = m["image"]) {
+            is Number -> img.toInt()
+            is String -> img.toIntOrNull()
             else -> null
         }
+
+        // 🛑 1. Liste complète des IDs systèmes à exclure
+        val isSystemDrawable =
+            rawImage != null &&
+                    rawImage in 1..2000000000 && // range typique des android.R
+                    rawImage !in R.drawable::class.java.fields.mapNotNull { it.getInt(null) }
+
+        val safeImage = if (isSystemDrawable) null else rawImage
 
         return Produit(
             id = UUID.fromString(m["id"] as String),
             nom = m["nom"] as String,
             prix = (m["prix"] as Number).toDouble(),
-            image = imageRes,
+            image = safeImage,               // 🔥 on met l’image nettoyée !
             categoryId = UUID.fromString(m["categoryId"] as String),
             stock = (m["stock"] as Number).toInt(),
             description = m["description"] as String?,

@@ -154,6 +154,7 @@ private fun defaultHomeButton() : List<HomeTileData> = listOf(
     HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
     HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
     HomeTileData("Table", Icons.Default.TableRestaurant, color = Gray, HomeActionButton.TABLE),
+    HomeTileData("donnee", Icons.Default.Fastfood, color = Gray, HomeActionButton.DONNES),
     HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
 )
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -171,7 +172,7 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp) // zone cliquable bien grande
+            .height(110.dp) // zone cliquable bien grande
             .pointerInteropFilter { event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
@@ -200,7 +201,7 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
         shape = MaterialTheme.shapes.large,
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -212,19 +213,23 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
                     painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
                     contentDescription = product.nom,
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(50.dp)
                         .background(Color.Transparent),
                     contentScale = ContentScale.Fit
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 product.nom,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2, // Limite à 2 lignes pour éviter que ça déborde
+                lineHeight = 14.sp
             )
-            Text(String.format("%.2f ", product.prix), fontSize = 12.sp)
+            Text(String.format("%.2f ", product.prix), fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary, // Couleur pour distinguer le prix
+                fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -251,6 +256,74 @@ fun CartItemRow(
             }
             IconButton(onClick = onIncrease, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.Add, "Augmenter")
+            }
+        }
+    }
+}
+@Composable
+fun ProductItemHorizontal(product: Produit, onProductClick: () -> Unit) {
+    var isPressed by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp) // Hauteur fixe et compacte
+            .pointerInteropFilter { event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        isPressed = true
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        isPressed = false
+                        onProductClick()
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        isPressed = false
+                        true
+                    }
+                    else -> false
+                }
+            },
+        elevation = cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isPressed) Color.LightGray else Color.White),
+        shape = MaterialTheme.shapes.medium // Coins moins arrondis pour gagner de la place
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Image à gauche
+            Image(
+                painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
+                contentDescription = product.nom,
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(4.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Textes à droite
+            Column(
+                modifier = Modifier.weight(1f), // Prend tout l'espace restant
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = product.nom,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Text(
+                    text = String.format("%.2f", product.prix),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
             }
         }
     }

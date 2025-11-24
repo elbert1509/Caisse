@@ -49,6 +49,7 @@ import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
 import com.example.caisse.model.AuthViewModel
 import com.google.firebase.auth.auth
+import java.util.Locale
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -158,13 +159,13 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
             )
             {
                 Text(
-                    text = "Facture",
+                    text = "Facture de la table ${table?.name}",
                     style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp).weight(0.1f)
+                    modifier = Modifier.padding(bottom = 2.dp).weight(0.1f)
                 )
                 //Spacer(modifier = Modifier.height(16.dp))
 
-                LazyColumn( modifier = Modifier.weight(0.7f)) {
+                LazyColumn( modifier = Modifier.weight(0.6f)) {
                     itemsIndexed(tableItems, key ={ index, ticket -> "${ticket.produit.id}@$index" }) {  _,ticket ->
                         TableItemRow(
                             ticket = ticket,
@@ -195,14 +196,14 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                 ){
                     Text(text = "Total", style = MaterialTheme.typography.headlineMedium)
-                    Text(text = String.format("%.2f €", totaltable), style = MaterialTheme.typography.headlineMedium,fontWeight = FontWeight.Bold)
+                    Text(text = String.format(Locale.US, "%,d", totaltable.toInt()).replace(',', ' ') + " FCFA", style = MaterialTheme.typography.headlineMedium,fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(16.dp))
 
                 Row (modifier = Modifier
                     .padding(bottom = 8.dp)
                     .fillMaxWidth()
-                    .weight(0.1f),
+                    .weight(0.2f),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ){

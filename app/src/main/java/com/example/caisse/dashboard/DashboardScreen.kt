@@ -1,13 +1,30 @@
 package com.example.caisse.composable
 
-import android.R.attr.onClick
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,12 +34,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.toColorInt
 import androidx.navigation.NavController
 import com.example.caisse.data.DashboardViewModel
-import com.github.mikephil.charting.charts.BarChart
-import com.github.mikephil.charting.charts.LineChart
-import com.github.mikephil.charting.charts.PieChart
-import androidx.compose.ui.viewinterop.AndroidView
 import com.example.caisse.ui.theme.Indigo
 import com.example.caisse.ui.theme.MintEnd
 import com.example.caisse.ui.theme.MintStart
@@ -30,9 +45,20 @@ import com.example.caisse.ui.theme.Slate100
 import com.example.caisse.ui.theme.Slate500
 import com.example.caisse.ui.theme.Slate700
 import com.example.caisse.ui.theme.Slate900
-import com.github.mikephil.charting.data.*
+import com.github.mikephil.charting.charts.BarChart
+import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.charts.PieChart
+import com.github.mikephil.charting.data.BarData
+import com.github.mikephil.charting.data.BarDataSet
+import com.github.mikephil.charting.data.BarEntry
+import com.github.mikephil.charting.data.Entry
+import com.github.mikephil.charting.data.LineData
+import com.github.mikephil.charting.data.LineDataSet
+import com.github.mikephil.charting.data.PieData
+import com.github.mikephil.charting.data.PieDataSet
+import com.github.mikephil.charting.data.PieEntry
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
-import androidx.core.graphics.toColorInt
+import java.util.Locale
 
 /* ------------------------- Palette “bank app” douce ------------------------- */
 
@@ -59,6 +85,11 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
                     Column {
                         Text("Tableau de bord", style = MaterialTheme.typography.titleLarge, color = Slate900)
                         Text("Aperçu des ventes", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -94,7 +125,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
                             update = { chart ->
                                 val dayLabels = listOf("Lun","Mar","Mer","Jeu","Ven","Sam","Dim")
                                 val amounts = FloatArray(7) { 0f }
-                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
                                 weeklySales.forEach { data ->
                                     try {
@@ -119,7 +150,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
                                     setDrawFilled(true)
                                     valueFormatter = object : com.github.mikephil.charting.formatter.ValueFormatter() {
                                         override fun getPointLabel(entry: Entry?): String =
-                                            if (entry != null && entry.y > 0f) "${entry.y.toInt()} €" else ""
+                                            if (entry != null && entry.y > 0f) "${entry.y.toInt()} " else ""
                                     }
                                     val grad = android.graphics.drawable.GradientDrawable(
                                         android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
@@ -393,7 +424,7 @@ private fun KpiCard(
                 Text(title, style = MaterialTheme.typography.labelMedium, color = Slate500)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "€ ${amount.formatMoney()}",
+                    text = String.format(Locale.US, "%,d", amount.toInt()).replace(',', ' ') + " FCFA",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = Slate900
                 )
@@ -412,11 +443,6 @@ private fun KpiCard(
 
 /* ------------------------------ Utils ------------------------------ */
 
-private fun Double.formatMoney(): String {
-    val v = this
-    return if (v % 1.0 == 0.0) "%,.0f".format(java.util.Locale.FRANCE, v)
-    else "%,.2f".format(java.util.Locale.FRANCE, v)
-}
 @Composable
 private fun EmptyState(title: String, subtitle: String) {
     Column(

@@ -98,6 +98,38 @@ class BluetoothViewModel : ViewModel() {
             }
         }
     }
+    fun testImpression(infos: ShopInfos?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val sb = StringBuilder()
+
+                sb.appendLine("\n------ TEST IMPRIMANTE ------")
+                sb.appendLine("Connexion Bluetooth :")
+                sb.appendLine("   - Connecté : ${_isConnected.value}")
+                sb.appendLine("   - Appareil : ${socket?.remoteDevice?.name ?: "Aucun"}")
+                sb.appendLine("   - Adresse : ${socket?.remoteDevice?.address ?: "N/A"}")
+                sb.appendLine("--------------------------------")
+
+                sb.appendLine("Informations Boutique :")
+                sb.appendLine("Nom     : ${infos?.name ?: "Non défini"}")
+                sb.appendLine("Adresse : ${infos?.address ?: "Non défini"}")
+                sb.appendLine("Téléphone : ${infos?.phone ?: "Non défini"}")
+                sb.appendLine("Email   : ${infos?.email ?: "Non défini"}")
+                sb.appendLine("Devise  : ${infos?.devise ?: "Non défini"}")
+                sb.appendLine("--------------------------------")
+                sb.appendLine("      TEST D'IMPRESSION OK      ")
+                sb.appendLine("********************************")
+                sb.appendLine("\n\n\n")
+
+                val text = sb.toString()
+                outputStream?.write(text.toByteArray(Charsets.UTF_8))
+                outputStream?.flush()
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     fun printInvoice(tableItems: List<Ticket>, total: Double, infos: ShopInfos?) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -112,7 +144,7 @@ class BluetoothViewModel : ViewModel() {
                 sb.appendln("--------------------------")
                 sb.appendln("    FACTURE CLIENT   ")
                 sb.appendln("---------------------------")
-                sb.appendln("Article   Qté   PU     Total")
+                sb.appendln("Article   Qte   PU     Total")
                 sb.appendln("-------------------------")
 
                 // --- Détail des articles ---

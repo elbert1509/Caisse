@@ -124,7 +124,7 @@ fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente") {
                 .format(Date(venteDetails.vente.date))
             Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Text("Date: $formattedDate", style = MaterialTheme.typography.bodySmall)
-            Text("Total: ${venteDetails.vente.total} €",
+            Text("Total: ${venteDetails.vente.total.toInt()} FCFA",
                 fontWeight = FontWeight.Bold,
                 fontSize = MaterialTheme.typography.titleMedium.fontSize
             )
@@ -141,8 +141,9 @@ fun ArticleRow(ticket: Ticket) {
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        val total = ticket.produit.prix * ticket.quantity
         Text(ticket.produit.nom, style = MaterialTheme.typography.bodyMedium)
-        Text("x${ticket.quantity} • ${String.format("%.2f €", ticket.produit.prix * ticket.quantity)}",
+        Text("x${ticket.quantity}     "  + total.toInt().toString() ,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium
         )

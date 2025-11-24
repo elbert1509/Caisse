@@ -58,6 +58,7 @@ import com.example.caisse.R
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Ticket
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,8 +149,8 @@ fun PrendreCommandeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(String.format("%.2f ${shopInfos?.devise}", totalPrice), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Total    ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text( String.format(Locale.US, "%,d", totalPrice.toInt()).replace(',', ' ')  + "   ${shopInfos?.devise}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
@@ -224,7 +225,7 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
             )
-            Text(String.format("%.2f ", product.prix), fontSize = 12.sp)
+            Text(product.prix.toInt().toString() , fontSize = 12.sp)
         }
     }
 }

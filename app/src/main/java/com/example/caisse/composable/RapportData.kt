@@ -61,7 +61,8 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
     val revToday    by dashboardViewModel.salesToday.collectAsState()
     val revWeek     by dashboardViewModel.salesThisWeek.collectAsState()
     val revMonth    by dashboardViewModel.salesThisMonth.collectAsState()
-    val weeklySales by dashboardViewModel.weeklySales.collectAsState()
+    val devise = viewModel.getInfos()
+
 
 
 
@@ -127,9 +128,9 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
             Spacer(Modifier.height(12.dp))
 
             when (selectedTab) {
-                0 -> RapportCard("Aujourd'hui", total = revToday, items = todayList)
-                1 -> RapportCard("Cette semaine", total = revWeek, items = weekList)
-                2 -> RapportCard("Ce mois-ci", total = revMonth, items = monthList)
+                0 -> RapportCard("Aujourd'hui", total = revToday, items = todayList, devise = devise?.devise ?: "")
+                1 -> RapportCard("Cette semaine", total = revWeek, items = weekList, devise = devise?.devise ?: "")
+                2 -> RapportCard("Ce mois-ci", total = revMonth, items = monthList, devise = devise?.devise ?: "")
             }
         }
 
@@ -142,7 +143,8 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
 private fun RapportCard(
     period : String,
     total : Double,
-    items : List<ProductReport>
+    items : List<ProductReport>,
+    devise : String
 ){
     Card(
         elevation = cardElevation(6.dp),
@@ -152,7 +154,7 @@ private fun RapportCard(
         Column(Modifier.padding(14.dp)) {
             Text("Ventes $period", style = MaterialTheme.typography.titleMedium, color = Slate900)
             Spacer(Modifier.height(8.dp))
-            TotalBar(total)
+            TotalBar(total,devise)
             Spacer(Modifier.height(12.dp))
 
             if (items.isEmpty()) {
@@ -167,7 +169,7 @@ private fun RapportCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(items) { p ->
-                        ProductLine(p)
+                        ProductLine(p, devise = devise)
                     }
                     item { Spacer(Modifier.height(4.dp)) }
                 }
@@ -180,7 +182,7 @@ private fun RapportCard(
 }
 
 @Composable
-private fun EmptyState(title: String, subtitle: String) {
+private fun EmptyState(title: String, subtitle: String ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -195,7 +197,7 @@ private fun EmptyState(title: String, subtitle: String) {
     }
 }
 @Composable
-private fun TotalBar(total: Double) {
+private fun TotalBar(total: Double, devise : String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -207,7 +209,7 @@ private fun TotalBar(total: Double) {
             Text("Chiffre d'affaires", style = MaterialTheme.typography.labelMedium, color = Slate500)
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "€ ${total.formatMoney()}",
+                text = " ${total.formatMoney()}  " + devise,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = Slate900
             )
@@ -227,7 +229,7 @@ private fun TotalBar(total: Double) {
 }
 
 @Composable
-private fun ProductLine(p: ProductReport) {
+private fun ProductLine(p: ProductReport,devise : String) {
     // une petite card par ligne
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -247,7 +249,7 @@ private fun ProductLine(p: ProductReport) {
                 Spacer(Modifier.height(2.dp))
                 Text("${p.totalQuantity} vendu(s)", style = MaterialTheme.typography.bodySmall, color = Slate700)
             }
-            Text("€ ${p.revenue.formatMoney()}",Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
+            Text(" ${p.revenue.formatMoney()}  $devise",Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
             Column(Modifier.weight(0.4f)) {
                 Text("Stock", style = MaterialTheme.typography.titleSmall, color = Slate900)
                 Spacer(Modifier.height(2.dp))

@@ -37,7 +37,11 @@ fun BottomHome(
         )
         NavigationBarItem(
             selected = selectedIndex == 1,
-            onClick = { onTabSelected(1) },
+            onClick =
+                {
+                    onTabSelected(1)
+                    navController?.navigate("prendre_commande")
+                },
             icon = { Icon(Icons.Filled.PointOfSale, contentDescription = "Commande") },
             label = { Text("Commande") }
         )

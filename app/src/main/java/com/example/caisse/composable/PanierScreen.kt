@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,13 +81,13 @@ fun PanierScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("${ticket.produit.nom} x${ticket.quantity}")
-                        Text(String.format("%.2f ${shopInfos?.devise}", ticket.produit.prix * ticket.quantity))
+                        Text( (ticket.produit.prix * ticket.quantity).toInt().toString())
                     }
                 }
             }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
-                value = if (paiement == 0.0) "" else paiement.toString(),  // Affiche une chaîne vide quand le paiement est 0.0
+                value = if (paiement == 0.0) "" else paiement.toInt().toString(),  // Affiche une chaîne vide quand le paiement est 0.0
                 onValueChange = { newValue ->
                     // Essaye de convertir la nouvelle valeur en Double
                     try {
@@ -96,7 +97,7 @@ fun PanierScreen(
                         paiement = 0.0
                     }
                 },
-                label = { Text(" ti") },
+                label = { Text(" Paiement") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
@@ -112,16 +113,16 @@ fun PanierScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Total : ", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Text(String.format("%.2f ${shopInfos?.devise}", totalPrice), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text(String.format(Locale.US, "%,d ", totalPrice.toInt()).replace(',', ' ') + shopInfos?.devise, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 }
 
                 Row(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     if (paiement != 0.0) {
-                        var monnaie = paiement - totalPrice
+                        val monnaie = paiement - totalPrice
                         Text("Monnaie  ", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Text(String.format("%.2f ${shopInfos?.devise}", monnaie), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(String.format(Locale.US, "%,d ", monnaie.toInt()).replace(',', ' ') + shopInfos?.devise, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                     }
                 }
 

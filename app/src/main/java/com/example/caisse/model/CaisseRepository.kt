@@ -25,6 +25,8 @@ class CaisseRepository(
     suspend fun deleteCategory(category: Category) = categorieDao.deleteCategory(category)
     suspend fun getAllCategoriesOnce(): List<Category> = categorieDao.getAllCategoryOnce()
     suspend fun getCategoryById(id: UUID): Category? = categorieDao.get(id)
+    suspend fun updateCategory(category: Category) = categorieDao.updateCategory(category)
+
 
 
 

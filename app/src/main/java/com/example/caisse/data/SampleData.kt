@@ -4,83 +4,106 @@ import com.example.caisse.R
 import java.util.UUID
 
 
-val CATEGORY_FOOD_ID = UUID.fromString("11111111-1111-1111-1111-111111111111")
+val CATEGORY_VIN_ID = UUID.fromString("11111111-1111-1111-1111-111111111111")
 val CATEGORY_DRINKS_ID = UUID.fromString("22222222-2222-2222-2222-222222222222")
-val CATEGORY_DESSERTS_ID = UUID.fromString("33333333-3333-3333-3333-333333333333")
-val CATEGORY_APPETIZERS_ID  = UUID.fromString("44444444-4444-4444-4444-444444444444")
+val CATEGORY_POISSON_ID = UUID.fromString("33333333-3333-3333-3333-333333333333")
+val CATEGORY_VIANDE_ID  = UUID.fromString("44444444-4444-4444-4444-444444444444")
+val CATEGORY_SOUPE_ID  = UUID.fromString("44444444-4444-4444-2222-444444444444")
+val CATEGORY_SAUCE_ID  = UUID.fromString("44444444-4444-4444-3333-444444444444")
+val CATEGORY_COMPLEMENT_ID  = UUID.fromString("44444444-4444-4444-0000-444444444444")
 
 val sampleCategories = listOf(
-    Category(id = CATEGORY_FOOD_ID, name = "Food", description = "Repas et plats principaux"),
-    Category(id = CATEGORY_DRINKS_ID, name = "Drinks", description = "Boissons"),
-    Category(id = CATEGORY_DESSERTS_ID, name = "Desserts", description = "Pâtisseries et douceurs"),
-    Category(id = CATEGORY_APPETIZERS_ID , name = "Appetizers", description = "Entrées")
+    Category(id = CATEGORY_VIN_ID, name = "Vin", description = "Repas et plats principaux"),
+    Category(id = CATEGORY_DRINKS_ID, name = "Biere", description = "Boissons"),
+    Category(id = CATEGORY_POISSON_ID, name = "Poisson", description = "Pâtisseries et douceurs"),
+    Category(id = CATEGORY_VIANDE_ID , name = "Viande", description = "Entrées"),
+    Category(id = CATEGORY_SOUPE_ID , name = "Soupe", description = "Entrées"),
+    Category(id = CATEGORY_SAUCE_ID , name = "Sauce", description = "Entrées"),
+    Category(id = CATEGORY_COMPLEMENT_ID , name = "Accompagnement", description = "Entrées")
 )
 val sampleProducts = listOf(
-    // --- Food (15 produits) ---
-    Produit(nom = "Burger", prix = 8.00, image = R.drawable.burger1, categoryId = CATEGORY_FOOD_ID, stock = 20, description = "Burger maison avec fromage et salade"),
-    Produit(nom = "Pizza Margherita", prix = 12.50, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 15, description = "Pizza classique à la tomate et mozzarella"),
-    Produit(nom = "Salad", prix = 7.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 10, description = "Salade fraîche aux légumes de saison"),
-    Produit(nom = "Steak", prix = 18.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 12, description = "Steak grillé accompagné de sauce"),
-    Produit(nom = "Spaghetti Bolognese", prix = 14.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 18, description = "Pâtes italiennes à la sauce bolognaise"),
-    Produit(nom = "Chicken Wings", prix = 9.50, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 25, description = "Ailes de poulet croustillantes"),
-    Produit(nom = "Sushi Set", prix = 20.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 10, description = "Assortiment de sushis variés"),
-    Produit(nom = "Tacos", prix = 11.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 20, description = "Tacos mexicains garnis de viande"),
-    Produit(nom = "Lasagna", prix = 13.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 15, description = "Lasagnes italiennes au four"),
-    Produit(nom = "Grilled Salmon", prix = 17.50, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 8, description = "Saumon grillé avec légumes"),
-    Produit(nom = "Hot Dog", prix = 6.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 30, description = "Hot dog classique avec ketchup et moutarde"),
-    Produit(nom = "Ramen", prix = 12.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 14, description = "Nouilles japonaises au bouillon"),
-    Produit(nom = "Couscous", prix = 15.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 10, description = "Couscous marocain aux légumes et viande"),
-    Produit(nom = "Falafel Wrap", prix = 9.00, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 22, description = "Wrap végétarien aux falafels"),
-    Produit(nom = "Quiche Lorraine", prix = 8.50, image = R.drawable.burgerr, categoryId = CATEGORY_FOOD_ID, stock = 12, description = "Quiche traditionnelle lorraine"),
 
-    // --- Drinks (15 produits) ---
-    Produit(nom = "Coca-Cola", prix = 1500.0, image = R.drawable.coca, categoryId = CATEGORY_DRINKS_ID, stock = 50, description = "Boisson gazeuse rafraîchissante"),
-    Produit(nom = "Orangina", prix = 1800.0, image = R.drawable.orangina, categoryId = CATEGORY_DRINKS_ID, stock = 100, description = "Eau minérale en bouteille"),
-    Produit(nom = "Castel", prix = 1500.00, image = R.drawable.castel, categoryId = CATEGORY_DRINKS_ID, stock = 40, description = "Jus d’orange pressé"),
-    Produit(nom = "XXL", prix = 1200.00, image = R.drawable.xxl, categoryId = CATEGORY_DRINKS_ID, stock = 35, description = "Jus de pommes frais"),
-    Produit(nom = "Tonic", prix = 2.80, image = R.drawable.imperial, categoryId = CATEGORY_DRINKS_ID, stock = 45, description = "Limonade maison"),
-    Produit(nom = "World Cola", prix = 3.20, image = R.drawable.wordcola, categoryId = CATEGORY_DRINKS_ID, stock = 30, description = "Thé glacé au citron"),
-    Produit(nom = "Top Orange", prix = 2.00, image = R.drawable.top_orange, categoryId = CATEGORY_DRINKS_ID, stock = 60, description = "Petit café serré"),
-    Produit(nom = "Djino", prix = 3.50, image = R.drawable.djino, categoryId = CATEGORY_DRINKS_ID, stock = 25, description = "Café au lait doux"),
-    Produit(nom = "Sumol ", prix = 1500.0, image = R.drawable.sumol, categoryId = CATEGORY_DRINKS_ID, stock = 25, description = "Café mousseux italien"),
-    Produit(nom = "Youzou", prix = 5.00, image = R.drawable.youzou, categoryId = CATEGORY_DRINKS_ID, stock = 40, description = "Bière blonde pression"),
-    Produit(nom = "Racine", prix = 8.00, image = R.drawable.racine, categoryId = CATEGORY_DRINKS_ID, stock = 20, description = "Vin rouge de Bordeaux"),
-    Produit(nom = "Vino ", prix = 8.00, image = R.drawable.vino, categoryId = CATEGORY_DRINKS_ID, stock = 18, description = "Vin blanc de Bourgogne"),
-    Produit(nom = "Zombie", prix = 7.50, image = R.drawable.zombie, categoryId = CATEGORY_DRINKS_ID, stock = 15, description = "Cocktail au rhum et menthe"),
-    Produit(nom = "Sombrero", prix = 4.50, image = R.drawable.sombrero, categoryId = CATEGORY_DRINKS_ID, stock = 28, description = "Smoothie aux fruits frais"),
-    Produit(nom = "Regab", prix = 5.00, image = R.drawable.regab, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
-    Produit(nom = "Doppel", prix = 5.00, image = R.drawable.doppel, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
-    Produit(nom = "Guiness", prix = 5.00, image = R.drawable.guiness, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
-    Produit(nom = "Castel", prix = 5.00, image = R.drawable.castel, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
-    Produit(nom = "Beaufort", prix = 5.00, image = R.drawable.beaufort, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
-    Produit(nom = "33 Export", prix = 5.00, image = R.drawable.export, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    // Bière
+    Produit(nom = "Guiness G", prix = 10.00, image = R.drawable.guiness, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Guiness P", prix = 5.00, image = R.drawable.guiness, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Leffe G", prix = 8.00, image = R.drawable.leffe, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Leffe P ", prix = 4.00, image = R.drawable.leffe, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Leffe Formule", prix = 12.00, image = R.drawable.leffeform, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "1664 G", prix = 10.00, image = R.drawable.r1664, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "1664 P", prix = 10.00, image = R.drawable.r1664, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "1664 Formule", prix = 10.00, image = R.drawable.r16form, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Desperados G", prix = 8.00, image = R.drawable.despe, categoryId = CATEGORY_DRINKS_ID, stock = 35, description = "Jus de pommes frais"),
+    Produit(nom = "Desperados P", prix = 5.00, image = R.drawable.despe, categoryId = CATEGORY_DRINKS_ID, stock = 35, description = "Jus de pommes frais"),
+    Produit(nom = "Desperados Formule", prix = 12.00, image = R.drawable.despeform, categoryId = CATEGORY_DRINKS_ID, stock = 35, description = "Jus de pommes frais"),
+    Produit(nom = "Castel", prix = 8.00, image = R.drawable.castel, categoryId = CATEGORY_DRINKS_ID, stock = 35, description = "Jus de pommes frais"),
+    Produit(nom = "33 Export", prix = 8.00, image = R.drawable.export, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Kandji", prix = 8.00, image = R.drawable.export, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Whisky kola", prix = 8.00, image = R.drawable.boostercola, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Top", prix = 6.00, image = R.drawable.top, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Djino", prix = 6.00, image = R.drawable.djino, categoryId = CATEGORY_DRINKS_ID, stock = 22, description = "Milkshake à la vanille"),
+
+    // Vin
+
+    Produit(nom = "Moelleux ", prix = 20.00, image = R.drawable.vinblanc, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Cabernet d'Anjou ", prix = 15.00, image = R.drawable.cabernet, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Côte de Rhone ", prix = 20.00, image = R.drawable.cabernet, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Côte de Provence ", prix = 20.00, image = R.drawable.cabernet, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Mouton Cadet ", prix = 20.00, image = R.drawable.moutoncadet, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Saint Emilion ", prix = 30.00, image = R.drawable.saintemilion, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Vin Bordeaux ", prix = 20.00, image = R.drawable.vinbordeaux, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Vin Bordeaux P ", prix = 10.00, image = R.drawable.vinbordeaux, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+    Produit(nom = "Vin Bordeaux P ", prix = 15.00, image = R.drawable.vinbordeaux, categoryId = CATEGORY_VIN_ID, stock = 22, description = "Milkshake à la vanille"),
+
+    // Grillade Poison
+    Produit(nom = "Malangwa", prix = 20.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Sole", prix = 40.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Capitaine ", prix = 20.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Capitaine ", prix = 25.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Capitaine ", prix = 30.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Maquereau", prix = 15.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Maquereau", prix = 20.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Maquereau", prix = 25.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Tilapia", prix = 15.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Tilapia", prix = 20.00, image = R.drawable.poisson1, categoryId = CATEGORY_POISSON_ID, stock = 22, description = "Grillade de Poisson"),
 
 
-    // --- Desserts (10 produits) ---
-    Produit(nom = "Ice Cream", prix = 4.00, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 30, description = "Glace à la vanille artisanale"),
-    Produit(nom = "Cake", prix = 5.00, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 25, description = "Part de gâteau au chocolat"),
-    Produit(nom = "Donut", prix = 3.50, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 40, description = "Donut glacé au sucre"),
-    Produit(nom = "Brownie", prix = 3.80, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 35, description = "Brownie au chocolat fondant"),
-    Produit(nom = "Cheesecake", prix = 5.50, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 20, description = "Cheesecake new-yorkais"),
-    Produit(nom = "Macarons", prix = 6.00, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 15, description = "Macarons colorés variés"),
-    Produit(nom = "Cupcake", prix = 4.20, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 25, description = "Cupcake à la crème"),
-    Produit(nom = "Pancakes", prix = 6.50, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 18, description = "Pancakes au sirop d’érable"),
-    Produit(nom = "Waffles", prix = 6.00, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 20, description = "Gaufres croustillantes"),
-    Produit(nom = "Mousse au chocolat", prix = 4.80, image = R.drawable.dessert, categoryId = CATEGORY_DESSERTS_ID, stock = 22, description = "Mousse légère au chocolat"),
+    // Grillade Viande
+    Produit(nom = "Brochettes", prix = 10.00, image = R.drawable.brochette, categoryId = CATEGORY_VIANDE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Porc Braisé", prix = 10.00, image = R.drawable.porc, categoryId = CATEGORY_VIANDE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Gesier ", prix = 10.00, image = R.drawable.porc, categoryId = CATEGORY_VIANDE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Poulet Braisé ", prix = 10.00, image = R.drawable.poulet, categoryId = CATEGORY_VIANDE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Aile de Poulet ", prix = 10.00, image = R.drawable.aile, categoryId = CATEGORY_VIANDE_ID, stock = 22, description = "Grillade de Poisson"),
 
-    // --- Appetizers (10 produits) ---
-    Produit(nom = "French Fries", prix = 6.00,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 35, description = "Frites dorées et croustillantes"),
-    Produit(nom = "Onion Rings", prix = 5.00,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 28, description = "Beignets d’oignons frits"),
-    Produit(nom = "Garlic Bread", prix = 4.50,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 20, description = "Pain à l’ail grillé"),
-    Produit(nom = "Spring Rolls", prix = 6.00,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 25, description = "Rouleaux de printemps vietnamiens"),
-    Produit(nom = "Mozzarella Sticks", prix = 6.50,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 22, description = "Bâtonnets de mozzarella panés"),
-    Produit(nom = "Chicken Nuggets", prix = 7.00, image = R.drawable.aperitif,categoryId = CATEGORY_APPETIZERS_ID, stock = 30, description = "Nuggets de poulet frits"),
-    Produit(nom = "Bruschetta", prix = 5.50,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 18, description = "Tartines à la tomate et basilic"),
-    Produit(nom = "Stuffed Mushrooms", prix = 7.50,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 15, description = "Champignons farcis au fromage"),
-    Produit(nom = "Nachos", prix = 8.00,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 20, description = "Nachos au fromage et guacamole"),
-    Produit(nom = "Shrimp Cocktail", prix = 9.00,image = R.drawable.aperitif, categoryId = CATEGORY_APPETIZERS_ID, stock = 12, description = "Cocktail de crevettes")
-)
 
+    // Soupe
+    Produit(nom = "Bouillon de Poisson", prix = 15.00, image = R.drawable.soupe, categoryId = CATEGORY_SOUPE_ID, stock = 22, description = "Soupe de Poisson"),
+    Produit(nom = "Bouillon de Poisson", prix = 20.00, image = R.drawable.soupe, categoryId = CATEGORY_SOUPE_ID, stock = 22, description = "Soupe de Poisson"),
+    Produit(nom = "Bouillon de Poisson", prix = 25.00, image = R.drawable.soupe, categoryId = CATEGORY_SOUPE_ID, stock = 22, description = "Soupe de Poisson"),
+    Produit(nom = "Bouillon de Boeuf ", prix = 15.00, image = R.drawable.soupe, categoryId = CATEGORY_SOUPE_ID, stock = 22, description = "Soupe de Poisson"),
+    Produit(nom = "Bouillon de Porc", prix = 15.00, image = R.drawable.soupe, categoryId = CATEGORY_SOUPE_ID, stock = 22, description = "Soupe de Poisson"),
+    Produit(nom = "Rôti de Porc", prix = 15.00, image = R.drawable.soupe, categoryId = CATEGORY_SOUPE_ID, stock = 22, description = "Soupe de Poisson"),
+
+
+    // Sauce
+    Produit(nom = "Sauce Tomate ", prix = 15.00, image = R.drawable.soupe, categoryId = CATEGORY_SAUCE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Maffe Viande ", prix = 15.00, image = R.drawable.maffe, categoryId = CATEGORY_SAUCE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Maffe Poisson fumé ", prix = 15.00, image = R.drawable.maffe, categoryId = CATEGORY_SAUCE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Gombo (Viande + Poisson) ", prix = 18.00, image = R.drawable.gombo, categoryId = CATEGORY_SAUCE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Gombo Poisson fumé ", prix = 15.00, image = R.drawable.gombo, categoryId = CATEGORY_SAUCE_ID, stock = 22, description = "Grillade de Poisson"),
+    Produit(nom = "Yassa Poulet ", prix = 15.00, image = R.drawable.yassa, categoryId = CATEGORY_SAUCE_ID, stock = 22, description = "Grillade de Poisson"),
+
+    // Compléments
+    Produit(nom = " Bâton de Manioc  ", prix = 0.00, image = R.drawable.manioc, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Miodo  ", prix = 0.00, image = R.drawable.miodo, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Plantain vapeur   ", prix = 0.00, image = R.drawable.plantainvap, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Plantain tapé  ", prix = 0.00, image = R.drawable.tape, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Riz  ", prix = 0.00, image = R.drawable.riz, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Semoule", prix = 0.00, image = R.drawable.semoule, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Aloko", prix = 0.00, image = R.drawable.alloco, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Attieké", prix = 0.00, image = R.drawable.attikie, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+    Produit(nom = " Supplément", prix = 5.00, image = R.drawable.supplement, categoryId = CATEGORY_COMPLEMENT_ID, stock = 22, description = "Complement de Poisson"),
+
+    )
 val sampleVendeurs = listOf(
     Vendeur(id = 1, nom = "John", prenom = "Doe"),
     Vendeur(id = 2, nom = "Jane", prenom = "Smith"),

@@ -168,11 +168,15 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 Text(
                     text = "Facture",
                     style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp).weight(0.1f)
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
                 //Spacer(modifier = Modifier.height(16.dp))
 
-                LazyColumn( modifier = Modifier.weight(0.7f)) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
                     itemsIndexed(tableItems, key ={ index, ticket -> "${ticket.produit.id}@$index" }) {  _,ticket ->
                         TableItemRow(
                             ticket = ticket,
@@ -194,8 +198,10 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                     }
                 }
+
+
                 val totaltable  by menuViewModel.totalAmount.collectAsState()
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
 
                 Row (
                     modifier = Modifier
@@ -205,7 +211,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                 ){
                     Text(text = "Total", style = MaterialTheme.typography.headlineSmall)
-                    Text(text = String.format("%.2f €", totaltable),
+                    Text(text = totaltable.toInt().toString(),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -214,12 +220,12 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                 Row (modifier = Modifier
                     .padding(bottom = 8.dp)
-                    .fillMaxWidth()
-                    .weight(0.2f),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ){
                     Button(
+                        modifier = Modifier.weight(1f),
                         onClick = {
                             menuViewModel.payTable(tableUuid)
                             navController.popBackStack() // revenir en arrière après validation
@@ -230,9 +236,10 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         },
                         enabled = totaltable > 0
                     ) {
-                        Text("Valider la table")
+                        Text("Valider", maxLines = 1)
                     }
                     Button(
+                        modifier = Modifier.weight(1f),
                         onClick = {
 
                             if (!bluetoothViewModel.isConnected.value) {
@@ -256,7 +263,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         },
                         enabled = totaltable > 0
                     ) {
-                        Text("Imprimer la facture")
+                        Text("Imprimer",maxLines = 1)
                     }
                 }
 

@@ -201,7 +201,7 @@ fun LoginScreen(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .clickable { isSignUp = !isSignUp }
+                            //.clickable { isSignUp = !isSignUp }
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.bodySmall
                     )

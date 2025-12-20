@@ -51,6 +51,7 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import java.util.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -149,8 +150,8 @@ fun PrendreCommandeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(String.format("%.2f ${shopInfos?.devise}", totalPrice), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Total    ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text( String.format(Locale.US, "%,d", totalPrice.toInt()).replace(',', ' ')  + "   ${shopInfos?.devise}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
@@ -227,7 +228,7 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
                 maxLines = 2, // Limite à 2 lignes pour éviter que ça déborde
                 lineHeight = 14.sp
             )
-            Text(String.format("%.2f ", product.prix), fontSize = 12.sp,
+            Text(product.prix.toInt().toString(), fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.primary, // Couleur pour distinguer le prix
                 fontWeight = FontWeight.Bold)
         }
@@ -320,7 +321,7 @@ fun ProductItemHorizontal(product: Produit, onProductClick: () -> Unit) {
                     maxLines = 1
                 )
                 Text(
-                    text = String.format("%.2f", product.prix),
+                    text =  product.prix.toInt().toString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )

@@ -38,6 +38,22 @@ fun ProductScreen(
     var renamePrice by remember { mutableStateOf(TextFieldValue("")) }
     var renameCategory by remember { mutableStateOf<Category?>(null) }
 
+    var productText by remember { mutableStateOf(TextFieldValue("")) }
+
+    // Liste filtrée en fonction de la recherche
+    val filteredProducts = remember(products, productText.text, selectedCategory) {
+        products.filter { produit ->
+            val matchesText =
+                productText.text.isBlank() ||
+                        produit.nom.contains(productText.text, ignoreCase = true)
+
+            val matchesCategory =
+                selectedCategory == null || produit.categoryId == selectedCategory!!.id
+
+            matchesText && matchesCategory
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,9 +69,9 @@ fun ProductScreen(
         ) {
             // Add Product Form
             OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
-                label = { Text("Nom du produit") },
+                value = productText,
+                onValueChange = { productText = it },
+                label = { Text("ajouter / rechercher") },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
@@ -74,12 +90,12 @@ fun ProductScreen(
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
-                    val name = newName.text.trim()
+                    val name = productText.text.trim()
                     val price = newPrice.text.trim().toDoubleOrNull()
                     val category = selectedCategory
                     if (name.isNotEmpty() && price != null && category != null) {
                         viewModel.addProduit(name, price, category.id)
-                        newName = TextFieldValue("")
+                        productText = TextFieldValue("")
                         newPrice = TextFieldValue("")
                         selectedCategory = null
                     }
@@ -96,7 +112,7 @@ fun ProductScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(products, key = { it.id }) { product ->
+                items(filteredProducts, key = { it.id }) { product ->
                     ProductRow(
                         product = product,
                         categoryName = categories.find { it.id == product.categoryId }?.name ?: "Inconnue",

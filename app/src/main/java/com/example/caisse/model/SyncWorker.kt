@@ -179,7 +179,7 @@ class SyncWorker(
     private suspend fun pushDirtyVendeurs(
         cloud: FirebaseFirestore,
         uid: String,
-        vendeurDao: com.example.caisse.model.VendeurDao
+        vendeurDao: VendeurDao
     ) {
         val list = vendeurDao.getAllVendeursOnce().filter { it.isDirty && !it.isDeleted }
         for (v in list) {

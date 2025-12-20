@@ -63,7 +63,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val category = categories.value.find { it.id == id }
             category?.let {
-                repository.addCategory(it.copy(name = newName)) // REPLACE grâce à onConflictStrategy
+                repository.updateCategory(it.copy(name = newName)) // REPLACE grâce à onConflictStrategy
             }
         }
     }

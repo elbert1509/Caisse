@@ -124,7 +124,7 @@ fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente") {
                 .format(Date(venteDetails.vente.date))
             Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Text("Date: $formattedDate", style = MaterialTheme.typography.bodySmall)
-            Text("Total: ${venteDetails.vente.total} €",
+            Text("Total: ${venteDetails.vente.total.toInt()} ",
                 fontWeight = FontWeight.Bold,
                 fontSize = MaterialTheme.typography.titleMedium.fontSize
             )

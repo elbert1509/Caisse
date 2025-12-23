@@ -35,7 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -211,7 +210,6 @@ private fun PasswordGate(
     infos: ShopInfos?
 ) {
     var pwd by remember { mutableStateOf("") }
-    var pwd2 by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
     Column(
@@ -263,7 +261,11 @@ private fun PasswordGate(
 /* ---------- Storage (SharedPreferences simple) ---------- */
 
 
-private fun checkPwd( pwd: String, infos: ShopInfos?): Boolean {
-    val saved = infos?.password
-    return saved != null && saved == pwd
+private fun checkPwd(pwd: String, infos: ShopInfos?): Boolean {
+    if (infos == null) return false
+    return com.example.caisse.util.PasswordHasher.verify(
+        inputPassword = pwd,
+        storedHash = infos.passwordHash,
+        storedSalt = infos.passwordSalt
+    )
 }

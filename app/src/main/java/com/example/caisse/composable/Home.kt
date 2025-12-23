@@ -11,19 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.DataExploration
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Liquor
-import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.PointOfSale
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.TableRestaurant
-import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
@@ -47,7 +41,6 @@ import androidx.compose.ui.graphics.Color.Companion.Blue
 import androidx.compose.ui.graphics.Color.Companion.Gray
 import androidx.compose.ui.graphics.Color.Companion.White
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -101,7 +94,7 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
         bottomBar = {
             BottomHome(
                 selectedIndex = selectedTab,
-                onTabSelected = { selectedTab = it },
+                onTabSelected = { },
                 navController = navController
             )
         }
@@ -153,9 +146,9 @@ private fun defaultHomeButton() : List<HomeTileData> = listOf(
     HomeTileData("Prendre Commande", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
     HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
     HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
-    HomeTileData("Table", Icons.Default.TableRestaurant, color = Gray, HomeActionButton.TABLE),
     HomeTileData("donnee", Icons.Default.Fastfood, color = Gray, HomeActionButton.DONNES),
     HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
+    HomeTileData("Recherche", Icons.Default.Search, color = Blue, HomeActionButton.RECHERCHE)
 )
 
 

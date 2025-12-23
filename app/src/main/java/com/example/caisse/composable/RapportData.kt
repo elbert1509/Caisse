@@ -39,10 +39,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.caisse.data.MenuViewModel
 import androidx.navigation.NavController
-import androidx.room.util.getTotalChangedRows
 import com.example.caisse.data.DashboardViewModel
+import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ProductReport
 import com.example.caisse.ui.theme.MintEnd
 import com.example.caisse.ui.theme.MintStart
@@ -50,6 +49,7 @@ import com.example.caisse.ui.theme.Slate100
 import com.example.caisse.ui.theme.Slate500
 import com.example.caisse.ui.theme.Slate700
 import com.example.caisse.ui.theme.Slate900
+import com.example.caisse.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,7 +61,6 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
     val revToday    by dashboardViewModel.salesToday.collectAsState()
     val revWeek     by dashboardViewModel.salesThisWeek.collectAsState()
     val revMonth    by dashboardViewModel.salesThisMonth.collectAsState()
-    val weeklySales by dashboardViewModel.weeklySales.collectAsState()
     val devise = viewModel.getInfos()
 
 
@@ -209,7 +208,7 @@ private fun TotalBar(total: Double,devise : String) {
             Text("Chiffre d'affaires", style = MaterialTheme.typography.labelMedium, color = Slate500)
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "€ ${total.formatMoney()}" + devise,
+                text = formatPrice(total,devise),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = Slate900
             )
@@ -249,7 +248,7 @@ private fun ProductLine(p: ProductReport, devise: String) {
                 Spacer(Modifier.height(2.dp))
                 Text("${p.totalQuantity} vendu(s)", style = MaterialTheme.typography.bodySmall, color = Slate700)
             }
-            Text(" ${p.revenue.formatMoney()}  $devise",Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
+            Text(formatPrice(p.revenue,devise),Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
             Column(Modifier.weight(0.4f)) {
                 Text("Stock", style = MaterialTheme.typography.titleSmall, color = Slate900)
                 Spacer(Modifier.height(2.dp))
@@ -259,8 +258,3 @@ private fun ProductLine(p: ProductReport, devise: String) {
     }
 }
 
-private fun Double.formatMoney(): String {
-    val v = this
-    return if (v % 1.0 == 0.0) "%,.0f".format(java.util.Locale.FRANCE, v)
-    else "%,.2f".format(java.util.Locale.FRANCE, v)
-}

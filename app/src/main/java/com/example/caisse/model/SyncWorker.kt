@@ -110,7 +110,7 @@ class SyncWorker(
     private suspend fun pushDirtyProduits(
         cloud: FirebaseFirestore,
         uid: String,
-        produitDao: com.example.caisse.model.ProduitDao,
+        produitDao: ProduitDao,
         isInitialSync: Boolean
     ) {
         val all = produitDao.getAllProduitsOnce() // existe déjà :contentReference[oaicite:2]{index=2}
@@ -127,7 +127,7 @@ class SyncWorker(
     private suspend fun pushDirtyVentes(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: VenteDao
     ) {
         val list = venteDao.getAllVentesOnce().filter { it.isDirty && !it.isDeleted }
         for (v in list) {
@@ -143,7 +143,7 @@ class SyncWorker(
     private suspend fun pushDirtyVenteLignes(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: com.example.caisse.model.VenteDao,
+        venteDao: VenteDao,
         isInitialSync: Boolean
     ) {
         val all = venteDao.getAllVenteLignesOnce()
@@ -160,7 +160,7 @@ class SyncWorker(
     private suspend fun pushDirtyCategories(
         cloud: FirebaseFirestore,
         uid: String,
-        categorieDao: com.example.caisse.model.CategorieDao,
+        categorieDao: CategorieDao,
         isInitialSync: Boolean
     ){
         val all = categorieDao.getAllCategoryOnce()
@@ -194,15 +194,16 @@ class SyncWorker(
     private suspend fun  pushInfos(
         cloud: FirebaseFirestore,
         uid: String,
-        infosDao: com.example.caisse.model.InfosDao
+        infosDao: InfosDao
     ){
+
         val infos = infosDao.getInfos()
-        if (infos != null && infos.password != null) {
+        if (infos != null) {
             cloud.collection("users").document(uid)
                 .collection("infos").document("1")
                 .set(infosToMap(infos))
                 .await()
-            infosDao.updateInfos(infos)
+            infosDao.updateInfos(infos.copy(isDirty = false))
         }
 
 
@@ -264,7 +265,7 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        produitDao: com.example.caisse.model.ProduitDao,
+        produitDao: ProduitDao,
         isInitialSync: Boolean
     ) {
         val query = cloud.collection("users").document(uid)
@@ -292,7 +293,7 @@ class SyncWorker(
     private suspend fun pullInfos(
         cloud: FirebaseFirestore,
         uid: String,
-        infosDao: com.example.caisse.model.InfosDao
+        infosDao: InfosDao
     ) {
         val doc = cloud.collection("users").document(uid)
             .collection("infos").document("1")
@@ -314,7 +315,7 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        categorieDao: com.example.caisse.model.CategorieDao,
+        categorieDao: CategorieDao,
         isInitialSync: Boolean
     ){
         val query = cloud.collection("users").document(uid)
@@ -342,7 +343,7 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        venteDao: com.example.caisse.model.VenteDao,
+        venteDao: VenteDao,
         isInitialSync: Boolean
     ) {
         val base = cloud.collection("users").document(uid).collection("ventes")
@@ -438,7 +439,7 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        vendeurDao: com.example.caisse.model.VendeurDao
+        vendeurDao: VendeurDao
     ) {
         val snap = cloud.collection("users").document(uid)
             .collection("vendeurs")
@@ -473,7 +474,7 @@ class SyncWorker(
         "isDeleted" to ti.isDeleted
     )
     private fun mapToTable(m: Map<String, Any?>) = com.example.caisse.data.AppTable(
-        id = java.util.UUID.fromString(m["id"] as String),
+        id = UUID.fromString(m["id"] as String),
         name = m["name"] as String,
         active = (m["active"] as? Boolean) ?: true,
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
@@ -482,9 +483,9 @@ class SyncWorker(
     )
 
     private fun mapToTableItem(m: Map<String, Any?>) = com.example.caisse.data.TableItem(
-        id = java.util.UUID.fromString(m["id"] as String),
-        tableId = java.util.UUID.fromString(m["tableId"] as String),
-        productId = java.util.UUID.fromString(m["productId"] as String),
+        id = UUID.fromString(m["id"] as String),
+        tableId = UUID.fromString(m["tableId"] as String),
+        productId = UUID.fromString(m["productId"] as String),
         quantity = (m["quantity"] as? Number)?.toInt() ?: 0,
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDirty = false,
@@ -513,14 +514,17 @@ class SyncWorker(
     )
 
     private fun infosToMap(i: com.example.caisse.data.ShopInfos) = mapOf(
-        "id" to i.id.toString(),
+        "id" to i.id,
         "name" to i.name,
         "address" to i.address,
         "phone" to i.phone,
         "email" to i.email,
         "logo" to i.logo,
-        "password" to i.password,
-        "devise" to i.devise
+        "passwordHash" to i.passwordHash,
+        "passwordSalt" to i.passwordSalt,
+        "devise" to i.devise,
+        "updatedAt" to i.updatedAt,
+        "isDeleted" to i.isDeleted
         )
 
     private fun mapToInfos(m: Map<String, Any?>) = com.example.caisse.data.ShopInfos(
@@ -530,8 +534,21 @@ class SyncWorker(
         phone = m["phone"] as String,
         email = m["email"] as String,
         logo = m["logo"] as? Int,
-        password = m["password"] as String,
-        devise = m["devise"] as String
+        passwordHash =
+            (m["passwordHash"] as? String)
+                ?: (m["password"] as? String)      // ancien format cloud
+                ?: "",
+
+        passwordSalt =
+            (m["passwordSalt"] as? String)
+                ?: "",
+
+        devise = m["devise"] as? String ?: "FCFA",
+
+        // si tu as ces champs dans ShopInfos
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
     )
 
 

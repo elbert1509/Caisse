@@ -24,6 +24,7 @@ enum class HomeActionButton{
     DASHBOARD,
     STOCK,
     GESTION,
+    RECHERCHE,
     }
 
 @Immutable
@@ -206,8 +207,13 @@ data class ShopInfos (
     val phone: String,
     val email: String,
     val logo: Int? = null,
-    val password: String? = "1234",
+    val passwordHash: String,
+    val passwordSalt: String,
     val devise : String,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 @Entity(tableName = "app_table")

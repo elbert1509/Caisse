@@ -49,6 +49,7 @@ import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
 import com.example.caisse.model.AuthViewModel
+import com.example.caisse.util.formatPrice
 import com.google.firebase.auth.auth
 import java.util.UUID
 
@@ -114,7 +115,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
         bottomBar = {
             BottomHome(
                 selectedIndex = selectedTab,
-                onTabSelected = { selectedTab = it },
+                onTabSelected = { },
                 navController = navController
             )
         }
@@ -152,7 +153,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(products.filter { it.categoryId == selecredCategoryID }) { product ->
-                        ProductItemHorizontal(product = product) {
+                        ProductItemHorizontal(product = product,devise = info?.devise ?: "") {
                             menuViewModel.addProductToTable(product.id, tableUuid)
                         }
                     }
@@ -211,7 +212,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                 ){
                     Text(text = "Total", style = MaterialTheme.typography.headlineSmall)
-                    Text(text = totaltable.toInt().toString(),
+                    Text(text = formatPrice(totaltable,info?.devise),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Vente
+import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -58,7 +59,8 @@ fun VenteScreen(
                     items(visibleVentes, key = { it.id }) { v ->
                         VenteRow(
                             vente = v,
-                            onDelete = { toDelete = v }
+                            onDelete = { toDelete = v },
+                            devise = viewModel.getInfos()?.devise ?: ""
                         )
                     }
                 }
@@ -78,14 +80,14 @@ fun VenteScreen(
 }
 
 @Composable
-private fun VenteRow(vente: Vente, onDelete: () -> Unit) {
+private fun VenteRow(vente: Vente, devise: String, onDelete: () -> Unit) {
     val df = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("Total : %.2f €".format(vente.total), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Total :" + formatPrice(vente.total,devise), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text("Date : ${df.format(Date(vente.date))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
 

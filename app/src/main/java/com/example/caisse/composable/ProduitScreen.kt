@@ -1,35 +1,58 @@
 package com.example.caisse.composable
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import com.example.caisse.data.Category
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
-import java.util.*
+import com.example.caisse.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductScreen(
     modifier: Modifier = Modifier,
-    navController: NavController,
     viewModel: MenuViewModel
 ) {
     val products by viewModel.produits.collectAsState()
     val categories by viewModel.categories.collectAsState()
 
-    var newName by remember { mutableStateOf(TextFieldValue("")) }
     var newPrice by remember { mutableStateOf(TextFieldValue("")) }
     var selectedCategory by remember { mutableStateOf<Category?>(null) }
 
@@ -122,7 +145,8 @@ fun ProductScreen(
                             renamePrice = TextFieldValue(product.prix.toString())
                             renameCategory = categories.find { it.id == product.categoryId }
                         },
-                        onDelete = { viewModel.deleteProduit(product) }
+                        onDelete = { viewModel.deleteProduit(product) },
+                        devise = viewModel.getInfos()?.devise ?: ""
                     )
                 }
             }
@@ -131,7 +155,7 @@ fun ProductScreen(
         // Rename/Edit Dialog
         if (renameTarget != null) {
             AlertDialog(
-                onDismissRequest = { renameTarget = null },
+                onDismissRequest = { },
                 title = { Text("Modifier le produit") },
                 text = {
                     Column {
@@ -169,12 +193,11 @@ fun ProductScreen(
                                 categoryId = category.id
                             )
                             viewModel.updateProduit(updatedProduct)
-                            renameTarget = null
                         }
                     }) { Text("Enregistrer") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { renameTarget = null }) { Text("Annuler") }
+                    TextButton(onClick = { }) { Text("Annuler") }
                 }
             )
         }
@@ -226,7 +249,8 @@ private fun ProductRow(
     categoryName: String,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    devise : String
 ) {
     Surface(tonalElevation = 1.dp, shape = MaterialTheme.shapes.medium) {
         Row(
@@ -237,7 +261,7 @@ private fun ProductRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(product.nom, style = MaterialTheme.typography.bodyLarge)
-                Text("${product.prix} € - ($categoryName)", style = MaterialTheme.typography.bodySmall)
+                Text(formatPrice( product.prix,devise)+"($categoryName)", style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onRename) {
                 Icon(Icons.Default.Edit, contentDescription = "Modifier")

@@ -6,11 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.caisse.util.PasswordHasher
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -83,6 +85,32 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    // ---- RECHERCHE PRODUITS ----
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    val filteredProduits: StateFlow<List<Produit>> =
+        produits
+            .combine(_searchQuery) { produits, query ->
+                if (query.length < 2) {
+                    emptyList()
+                } else {
+                    produits.filter {
+                        it.isActive &&
+                                !it.isDeleted &&
+                                it.nom.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                emptyList()
+            )
 
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
@@ -102,14 +130,28 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // Infos
 
-    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String) {
+    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String,initialPassword: String="1234") {
+        val salt = PasswordHasher.generateSalt()
+        val hash = PasswordHasher.hash(initialPassword, salt)
         viewModelScope.launch {
-            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo, devise = devise))
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo, passwordHash = hash, passwordSalt = salt, devise = devise))
         }
     }
     fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String) {
         viewModelScope.launch {
-            repository.updateInfos(ShopInfos(1, name, address, phone, email, logo,devise = devise))
+            val existing = repository.getInfos()
+                ?: return@launch // ou alors créer par défaut
+
+            repository.updateInfos(
+                existing.copy(
+                    name = name,
+                    address = address,
+                    phone = phone,
+                    email = email,
+                    logo = logo,
+                    devise = devise
+                )
+            )
         }
     }
 
@@ -118,6 +160,22 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             repository.getInfos()
         }
     }
+
+    fun supdatePassword(passwordHash: String, passwordSalt: String) {
+        viewModelScope.launch {
+            val existing = repository.getInfos() ?: return@launch
+
+            repository.updateInfos(
+                existing.copy(
+                    passwordHash = passwordHash,
+                    passwordSalt = passwordSalt,
+                    updatedAt = System.currentTimeMillis(),
+                    isDirty = true
+                )
+            )
+        }
+    }
+
 
     // ---- VENDEURS ----
     fun addVendeur(vendeur: Vendeur) {
@@ -619,4 +677,33 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         tablesListener?.remove()
         tablesListener = null
     }
+
+    fun changePassword(
+        oldPassword: String,
+        newPassword: String
+    ): Result<Unit> {
+
+        val shop = getInfos() ?: return Result.failure(Exception("Aucune config"))
+
+        val isValid = PasswordHasher.verify(
+            inputPassword = oldPassword,
+            storedHash = shop.passwordHash,
+            storedSalt = shop.passwordSalt
+        )
+
+        if (!isValid) {
+            return Result.failure(Exception("Ancien mot de passe incorrect"))
+        }
+
+        val newSalt = PasswordHasher.generateSalt()
+        val newHash = PasswordHasher.hash(newPassword, newSalt)
+
+        supdatePassword(
+            passwordHash = newHash,
+            passwordSalt = newSalt
+        )
+
+        return Result.success(Unit)
+    }
+
 }

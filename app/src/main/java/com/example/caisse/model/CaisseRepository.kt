@@ -93,6 +93,7 @@ class CaisseRepository(
     suspend fun insertInfos(infos: ShopInfos) = infosDao.insertInfos(infos)
     suspend fun updateInfos(infos: ShopInfos) = infosDao.updateInfos(infos)
     suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
+    suspend fun updatePassword(passwordHash: String, passwordSalt: String) = infosDao.updatePassword(passwordHash, passwordSalt)
 
 
 }

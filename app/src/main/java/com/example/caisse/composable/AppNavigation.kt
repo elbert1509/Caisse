@@ -53,6 +53,8 @@ fun AppNavigation() {
                     HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
                     HomeActionButton.STOCK ->  navController.navigate("stock")
                     HomeActionButton.GESTION ->  navController.navigate("gestion")
+                    HomeActionButton.RECHERCHE ->  navController.navigate("recherche")
+
                 }
             },
             navController = navController,
@@ -60,10 +62,10 @@ fun AppNavigation() {
         composable("categorie") { CategoriesScreen( navController = navController, modifier = Modifier,
             viewModelcategories = menuViewModel
         ) }
-        composable("produit") { ProductScreen( navController = navController, modifier = Modifier,
+        composable("produit") { ProductScreen(  modifier = Modifier,
             viewModel = menuViewModel
         ) }
-        composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel) }
+        composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel, bluetoothViewModel = bluetoothViewModel) }
         composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel, authVm = authViewModel) }
         composable("table") { TableScreen(navController = navController, menuViewModel = menuViewModel, authViewModel = authViewModel) }
         composable(
@@ -104,6 +106,7 @@ fun AppNavigation() {
         composable("infos") { InfosScreen(navController = navController, viewModel = menuViewModel) }
         composable("gestion") { GestionScreen(navController = navController, viewModel = menuViewModel) }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
+        composable("recherche") { RechercheScreen( viewModel = menuViewModel) }
 
     }
 

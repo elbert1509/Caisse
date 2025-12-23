@@ -45,7 +45,9 @@ fun InfosScreen(
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var devise by remember { mutableStateOf("") }
-
+    var expanded by remember { mutableStateOf(false) }
+    val listDevise = listOf("FCFA", "€", "£", "US$")
+    var showChangePassword by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -195,15 +197,44 @@ fun InfosScreen(
                         )
                         Spacer(Modifier.height(10.dp))
 
-                        OutlinedTextField(
-                            value = devise,
-                            onValueChange = { devise = it },
-                            label = { Text("devise") },
-                            singleLine = true,
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = !expanded },
                             modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(18.dp))
+                        ) {
+                            OutlinedTextField(
+                                value = devise,
+                                onValueChange = {},            // lecture seule
+                                readOnly = true,
+                                label = { Text("Devise") },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                },
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                            )
 
+                            ExposedDropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                listDevise.forEach { currency ->
+                                    DropdownMenuItem(
+                                        text = { Text(currency) },
+                                        onClick = {
+                                            devise = currency
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(18.dp))
+                        OutlinedButton(onClick = { showChangePassword = true }) {
+                            Text("Changer le mot de passe")
+                        }
+                        Spacer(Modifier.height(18.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
@@ -241,7 +272,12 @@ fun InfosScreen(
                                 Text("Enregistrer", fontWeight = FontWeight.SemiBold)
                             }
                         }
-
+                        if (showChangePassword) {
+                            com.example.caisse.util.ChangePasswordDialog(
+                                viewModel = viewModel,
+                                onDismiss = { showChangePassword = false }
+                            )
+                        }
                         if (!canSave) {
                             Spacer(Modifier.height(8.dp))
                             Text(

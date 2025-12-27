@@ -1,6 +1,5 @@
 package com.example.caisse.composable
 
-
 import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +17,7 @@ import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
@@ -41,9 +41,11 @@ import androidx.compose.ui.graphics.Color.Companion.Blue
 import androidx.compose.ui.graphics.Color.Companion.Gray
 import androidx.compose.ui.graphics.Color.Companion.White
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource // Import ajouté
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.caisse.R // Assurez-vous que cet import correspond à votre package
 import com.example.caisse.data.HomeActionButton
 import com.example.caisse.data.HomeTileData
 
@@ -59,17 +61,18 @@ import com.example.caisse.data.HomeTileData
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen( onAction: (HomeActionButton) -> Unit,
-                navController: NavController
-
+fun HomeScreen(
+    onAction: (HomeActionButton) -> Unit,
+    navController: NavController
 ) {
-
-
     // Détecte l’orientation et la largeur pour fixer dynamiquement le nombre de colonnes
     val config = LocalConfiguration.current
     val orientation = config.orientation
     val screenWidthDp = config.screenWidthDp
+
+    // Récupération des tuiles avec les textes issus de strings.xml
     val items = rememberHomeTiles()
+
     var selectedTab by remember { mutableIntStateOf(0) }
     val columns = when {
         // Très grands écrans ou tablette paysage -> 4 colonnes
@@ -82,13 +85,17 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Caisse PoS") },
+                // [MODIFICATION] Utilisation de stringResource
+                title = { Text(text = stringResource(id = R.string.home_title)) },
                 actions = {
                     IconButton(onClick = { navController.navigate("bluetooth") }) {
-                        Icon(Icons.Filled.Settings, contentDescription = null)
+                        // [MODIFICATION] Ajout de la description pour l'accessibilité
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = stringResource(id = R.string.settings_description)
+                        )
                     }
                 }
-
             )
         },
         bottomBar = {
@@ -98,7 +105,6 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
                 navController = navController
             )
         }
-
     ) { padding ->
 
         LazyVerticalGrid(
@@ -107,75 +113,79 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
                 .fillMaxSize()
                 .padding(padding)
         ){
-            items(items){tile->
-                ActionButton(data = tile, onClick = {onAction(tile.action)}, modifier = Modifier.padding(8.dp))
-
+            items(items){ tile ->
+                ActionButton(data = tile, onClick = { onAction(tile.action) }, modifier = Modifier.padding(8.dp))
             }
         }
-
     }
 }
 
-
 @Composable
-fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Modifier)
-{
-
-    Card(modifier = modifier
-                .clickable { onClick() },
+fun ActionButton(data: HomeTileData, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = data.color),
         elevation = cardElevation(6.dp),
-        shape = MaterialTheme.shapes.large)
-    {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth(),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center)
-        {
+            verticalArrangement = Arrangement.Center
+        ) {
             Icon(data.icon, contentDescription = null, tint = White)
-            Text(text = data.title , color = White, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(
+                text = data.title,
+                color = White,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }
 
-
-
-
-
-
-private fun defaultHomeButton() : List<HomeTileData> = listOf(
-    HomeTileData("Prendre Commande", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
-    HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
-    HomeTileData("donnee", Icons.Default.Fastfood, color = Gray, HomeActionButton.DONNES),
-    HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
-    HomeTileData("Recherche", Icons.Default.Search, color = Blue, HomeActionButton.RECHERCHE)
-)
-
+/**
+ * Génère la liste par défaut des boutons en utilisant les ressources strings.xml.
+ */
+@Composable
+private fun getLocalizedHomeButtons(): List<HomeTileData> {
+    return listOf(
+        HomeTileData(stringResource(R.string.tile_prendre_commande), Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
+        HomeTileData(stringResource(R.string.tile_historique), Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
+        HomeTileData(stringResource(R.string.tile_exporter), Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
+        HomeTileData(stringResource(R.string.tile_table), Icons.Default.TableRestaurant, color = Blue, HomeActionButton.TABLE),
+        HomeTileData(stringResource(R.string.tile_gestion), Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
+        HomeTileData(stringResource(R.string.tile_recherche), Icons.Default.Search, color = Blue, HomeActionButton.RECHERCHE)
+    )
+}
 
 @Composable
-private fun  rememberHomeTiles() : List<HomeTileData> {
-    return rememberSaveable(saver = HomeTilesSaver) {
-        defaultHomeButton()
+private fun rememberHomeTiles(): List<HomeTileData> {
+    // On récupère la liste traduite
+    val defaultTiles = getLocalizedHomeButtons()
+
+    // On passe cette liste par défaut au Saver pour qu'il puisse restaurer les éléments manquants
+    return rememberSaveable(saver = homeTilesSaver(defaultTiles)) {
+        defaultTiles
     }
 }
 
-
-
-
-private val HomeTilesSaver: Saver<List<HomeTileData>, Any> = Saver(
+/**
+ * Le Saver est maintenant une fonction qui prend la liste par défaut en paramètre
+ * pour pouvoir reconstruire les objets correctement lors de la restauration.
+ */
+private fun homeTilesSaver(defaultList: List<HomeTileData>): Saver<List<HomeTileData>, Any> = Saver(
     save = { list -> list.map { it.title } }, // on sauvegarde juste les titres (ordre)
     restore = { saved ->
         val order = (saved as List<*>).filterIsInstance<String>()
-        val byTitle = defaultHomeButton().associateBy { it.title }
-// Recompose la liste dans l’ordre sauvegardé, puis ajoute les manquants
-        (order.mapNotNull { byTitle[it] } + defaultHomeButton().filter { it.title !in order })
+        val byTitle = defaultList.associateBy { it.title }
+
+        // Recompose la liste dans l’ordre sauvegardé, puis ajoute les manquants
+        (order.mapNotNull { byTitle[it] } + defaultList.filter { it.title !in order })
     }
 )
+
 @Preview
 @Composable
 fun HomeScreenPreview() {
-    //HomeScreen( navController = NavController(LocalContext.current))
+    // HomeScreen( navController = NavController(LocalContext.current))
 }
-
-
-

@@ -248,7 +248,7 @@ fun ProductItem(product: Produit, devise : String, onProductClick: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
+                    painter = painterResource(id = product.image ?: R.drawable.placeholder_image), // c'est ici l'erreur
                     contentDescription = product.nom,
                     modifier = Modifier
                         .size(50.dp)

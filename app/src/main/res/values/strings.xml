@@ -1,3 +1,43 @@
 <resources>
     <string name="app_name">Caisse</string>
+    <string name="boisson"> Boisson </string>
+    <string name="Prendrecommande"> Prendre commande</string>
+
+    <string name="home_title">Caisse PoS</string>
+    <string name="settings_description">Paramètres</string>
+
+    <string name="tile_prendre_commande">Prendre Commande</string>
+    <string name="tile_historique">Historique</string>
+    <string name="tile_exporter">Exporter</string>
+    <string name="tile_donnees">Données</string>
+    <string name="tile_table">Table</string>
+    <string name="tile_gestion">Gestion</string>
+    <string name="tile_recherche">Recherche</string>
+    <string name="tile_parametres">Paramètres</string>
+    <string name="tile_bluetooth">Bluetooth</string>
+    <string name="tile_compte_connecte">Compte connecté</string>
+    <string name="tile_aide">Aide</string>
+    <string name="tile_quitter">Quitter</string>
+    <string name="tile_appareil_connecte">Appareil connecté</string>
+    <string name="tile_aucun_connecte"> Aucun Appareil connecté</string>
+    <string name="parametre"> Paramètres </string>
+    <string name="Retour"> Retour </string>
+    <string name="Actualiser"> Actualiser </string>
+    <string name="Sedeconnecter"> Se déconecter </string>
+    <string name="imprimante_bluetooth"> Imprimante Bluetooth </string>
+    <string name="text_selection_app"> Sélectionnez un appareil jumelé pour vous connecter </string>
+    <string name="text_nom_indispo"> Nom indisponible </string>
+    <string name="text_aucun_app_trou"> Aucun appareil détecté </string>
+    <string name="text_appareil_inconnu"> Appareil inconnu </string>
+    <string name="text_test_impres"> Test impression </string>
+    <string name="text_deconnecter"> Déconnecter </string>
+    <string name="text_deconnexion"> Déconnexion </string>
+    <string name="text_langue"> Langue </string>
+    <string name="text_synch"> Synchroniser </string>
+    <string name="text_annuler"> Annuler </string>
+    <string name="text_confirmer_decon"> Confirmer la déconnexion </string>
+    <string name="text_confirmatio_dec"> Voulez-vous vous déconnecter et arrêter la synchronisation ? </string>
+
+
+
 </resources>

@@ -1,6 +1,7 @@
 package com.example.caisse.data
 
 import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -114,6 +115,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
+            if (repository.countSameBarcode(
+                barcode = produit.codeBarre!!,
+                excludeId = produit.id
+            ) > 0)
+            {
+               // Toast.makeText(context, "Ce code barre existe déjà", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             repository.updateProduit(
                 produit.copy(
                     updatedAt = now(),

@@ -29,6 +29,11 @@ interface ProduitDao {
     @Query("SELECT * FROM produit")
     suspend fun getAllProduitsOnce(): List<Produit> // one-shot pour le Worker
 
+    @Query("SELECT * FROM Produit WHERE codeBarre = :barcode AND isDeleted = 0 LIMIT 1")
+    suspend fun getProduitByBarcode(barcode: String): Produit?
+    @Query("SELECT COUNT(*) FROM Produit WHERE codeBarre = :barcode AND id != :excludeId")
+    suspend fun countSameBarcode(barcode: String, excludeId: UUID): Int
+
 
 
 

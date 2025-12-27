@@ -58,7 +58,10 @@ data class Category(
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("categoryId")]
+    indices = [
+        Index("categoryId"),
+        Index(value = ["codeBarre"], unique = true)
+    ]
 )
 data class Produit(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
@@ -69,6 +72,7 @@ data class Produit(
     val stock: Int = 0,
     val description: String? = null,
     val isActive: Boolean = true,
+    val codeBarre: String? = null,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,

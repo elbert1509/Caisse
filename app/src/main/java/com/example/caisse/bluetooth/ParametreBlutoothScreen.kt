@@ -1,11 +1,15 @@
 package com.example.caisse.bluetooth
 
 import android.Manifest
+import android.app.LocaleManager
 import android.bluetooth.BluetoothDevice
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.LocaleList
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +38,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,11 +64,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.navigation.NavController
 import androidx.work.WorkManager
+import com.example.caisse.R
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
 import com.google.firebase.auth.auth
@@ -122,14 +130,14 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
             TopAppBar(
                 title = {
                     Text(
-                        "Paramètres ${info?.name}",
+                         stringResource(R.string.parametre) + ":  "+ "${info?.name}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.Retour))
                     }
                 },
                 actions = {
@@ -142,11 +150,11 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                                 safeRun { viewModel.loadPairedDevices() }
                             }
                         }
-                    ) { Icon(Icons.Filled.Refresh, contentDescription = "Actualiser") }
+                    ) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.Actualiser)) }
 
                     // Logout
                     IconButton(onClick = { showLogoutDialog = true }) {
-                        Icon(Icons.Filled.Logout, contentDescription = "Se déconnecter")
+                        Icon(Icons.Filled.Logout, contentDescription = stringResource(R.string.Sedeconnecter))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -176,7 +184,7 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                     AccentBar()
                     Spacer(Modifier.height(12.dp))
 
-                    Text("Compte connecté", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.tile_compte_connecte), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
                         email ,
                         style = MaterialTheme.typography.bodySmall,
@@ -192,7 +200,7 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                             tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
                         Text(
-                            if (isConnected) "Appareil connecté" else "Aucun appareil connecté",
+                            if (isConnected) stringResource(R.string.tile_appareil_connecte)  else  stringResource(R.string.tile_aucun_connecte),
                             color = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
                     }
@@ -216,9 +224,9 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Imprimante Bluetooth", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.imprimante_bluetooth), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(
-                                "Sélectionnez un appareil jumelé pour vous connecter.",
+                                stringResource(R.string.text_selection_app),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -232,20 +240,20 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                                 }
                             }
                         ) {
-                            Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Actualiser")
+                            Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.Actualiser))
                         }
                     }
 
                     Spacer(Modifier.height(12.dp))
 
                     if (pairedDevices.isEmpty()) {
-                        Text("Aucun appareil détecté", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.text_aucun_app_trou), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             pairedDevices.forEach { device: BluetoothDevice ->
                                 val deviceName = try {
                                     if (hasAllBtPermissions(context)) device.name else "Nom indisponible"
-                                } catch (_: SecurityException) { "Nom indisponible" }
+                                } catch (_: SecurityException) { stringResource(R.string.text_nom_indispo) }
 
                                 Row(
                                     modifier = Modifier
@@ -262,7 +270,7 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(deviceName ?: "Appareil inconnu", fontWeight = FontWeight.SemiBold)
+                                        Text(deviceName ?: stringResource(R.string.text_appareil_inconnu), fontWeight = FontWeight.SemiBold)
                                         Text(
                                             device.address,
                                             style = MaterialTheme.typography.bodySmall,
@@ -284,11 +292,11 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(
                                 onClick = { safeRun { /*viewModel.testPrint(context) */} }
-                            ) { Icon(Icons.Filled.Print, null); Spacer(Modifier.width(6.dp)); Text("Test impression") }
+                            ) { Icon(Icons.Filled.Print, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.text_test_impres)) }
 
                             OutlinedButton(
                                 onClick = { safeRun { viewModel.disconnect() } }
-                            ) { Icon(Icons.Filled.BluetoothDisabled, null); Spacer(Modifier.width(6.dp)); Text("Déconnecter") }
+                            ) { Icon(Icons.Filled.BluetoothDisabled, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.text_deconnecter)) }
                         }
                     }
                 }
@@ -312,11 +320,46 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        ActionButton(Icons.Filled.Sync, "Synchroniser") {
+                        ActionButton(Icons.Filled.Sync, stringResource(R.string.text_synch)) {
                             authVm.enqueueSync(context = context, tag = "sync")
                         }
                         ActionButton(Icons.Filled.Info, "Infos") {
                             navController.navigate("infos")
+                        }
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(6.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    AccentBar()
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(stringResource(R.string.text_langue), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+
+                    SettingsSection(title = "Langue / Language") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            LanguageButton(
+                                text = "Français",
+                                code = "fr",
+                                isSelected = getCurrentLanguage() == "fr",
+                                onClick = { setAppLocale(context, "fr") }
+                            )
+                            LanguageButton(
+                                text = "English",
+                                code = "en",
+                                isSelected = getCurrentLanguage() == "en",
+                                onClick = { setAppLocale(context, "en") }
+                            )
                         }
                     }
                 }
@@ -345,11 +388,11 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                                 launchSingleTop = true
                             }
                         }
-                    ) { Text("Déconnexion") }
+                    ) { Text(stringResource(R.string.text_deconnexion)) }
                 },
-                dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Annuler") } },
-                title = { Text("Confirmer la déconnexion") },
-                text = { Text("Voulez-vous vous déconnecter et arrêter la synchronisation ?") }
+                dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text(stringResource(R.string.text_annuler)) } },
+                title = { Text(stringResource(R.string.text_confirmer_decon)) },
+                text = { Text(stringResource(R.string.text_confirmatio_dec)) }
             )
         }
     }
@@ -396,4 +439,53 @@ private fun ActionButton(
     }
 }
 
+@Composable
+fun SettingsSection(title: String, content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        content()
+    }
+}
+
+fun getCurrentLanguage(): String {
+    val locales = AppCompatDelegate.getApplicationLocales()
+    return if (!locales.isEmpty) {
+        locales[0]?.language ?: "fr"
+    } else {
+        LocaleListCompat.getDefault()[0]?.language ?: "fr"
+    }
+}
+@Composable
+fun LanguageButton(text: String, code: String, isSelected: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.width(140.dp)
+    ) {
+        Text(text)
+    }
+}
+
+/**
+ * Change la langue de l'application dynamiquement.
+ * Nécessite que MainActivity hérite de AppCompatActivity.
+ */
+fun setAppLocale(context: Context, language: String) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.getSystemService(LocaleManager::class.java).applicationLocales =
+            LocaleList.forLanguageTags(language)
+    } else {
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language))
+    }
+}
 

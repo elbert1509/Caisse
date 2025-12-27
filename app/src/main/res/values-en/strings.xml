@@ -1,0 +1,41 @@
+<resources>
+    <string name="app_name">POS</string>
+    <string name="boisson"> Drink </string>
+    <string name="Prendrecommande"> Take Order</string>
+
+    <string name="home_title">POS Register</string>
+    <string name="settings_description">Settings</string>
+
+    <string name="tile_prendre_commande">Take Order</string>
+    <string name="tile_historique">History</string>
+    <string name="tile_exporter">Export</string>
+    <string name="tile_donnees">Data</string>
+    <string name="tile_table">Table</string>
+    <string name="tile_gestion">Management</string>
+    <string name="tile_recherche">Search</string>
+    <string name="tile_parametres">Settings</string>
+    <string name="tile_bluetooth">Bluetooth</string>
+    <string name="tile_compte_connecte">Connected Account</string>
+    <string name="tile_aide">Help</string>
+    <string name="tile_quitter">Exit</string>
+    <string name="tile_appareil_connecte">Connected Device</string>
+    <string name="tile_aucun_connecte"> No Device Connected</string>
+    <string name="parametre"> Settings </string>
+    <string name="Retour"> Back </string>
+    <string name="Actualiser"> Refresh </string>
+    <string name="Sedeconnecter"> Log Out </string>
+    <string name="imprimante_bluetooth"> Bluetooth Printer </string>
+    <string name="text_selection_app"> Select a paired device to connect </string>
+    <string name="text_nom_indispo"> Name unavailable </string>
+    <string name="text_aucun_app_trou"> No device detected </string>
+    <string name="text_appareil_inconnu"> Unknown device </string>
+    <string name="text_test_impres"> Print Test </string>
+    <string name="text_deconnecter"> Disconnect </string>
+    <string name="text_deconnexion"> Log Out </string>
+    <string name="text_langue"> Language </string>
+    <string name="text_synch"> Synchronize </string>
+    <string name="text_annuler"> Cancel </string>
+    <string name="text_confirmer_decon"> Confirm Logout </string>
+    <string name="text_confirmatio_dec"> Do you want to log out and stop synchronization? </string>
+
+</resources>

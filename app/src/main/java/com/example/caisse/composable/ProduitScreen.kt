@@ -60,6 +60,7 @@ fun ProductScreen(
     var renameText by remember { mutableStateOf(TextFieldValue("")) }
     var renamePrice by remember { mutableStateOf(TextFieldValue("")) }
     var renameCategory by remember { mutableStateOf<Category?>(null) }
+    var renameBarcode by remember { mutableStateOf(TextFieldValue("")) }
 
     var productText by remember { mutableStateOf(TextFieldValue("")) }
 
@@ -144,6 +145,7 @@ fun ProductScreen(
                             renameText = TextFieldValue(product.nom)
                             renamePrice = TextFieldValue(product.prix.toString())
                             renameCategory = categories.find { it.id == product.categoryId }
+                            renameBarcode = TextFieldValue(product.codeBarre ?: "")
                         },
                         onDelete = { viewModel.deleteProduit(product) },
                         devise = viewModel.getInfos()?.devise ?: ""
@@ -173,6 +175,14 @@ fun ProductScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = renameBarcode,
+                            onValueChange = { renameBarcode = it },
+                            label = { Text("Code-barres") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
                         CategoryDropdown(
                             categories = categories,
                             selectedCategory = renameCategory,
@@ -186,11 +196,14 @@ fun ProductScreen(
                         val price = renamePrice.text.trim().toDoubleOrNull()
                         val category = renameCategory
                         val target = renameTarget
+                        val barcode = renameBarcode.text.trim().ifBlank { null }
                         if (target != null && name.isNotEmpty() && price != null && category != null) {
                             val updatedProduct = target.copy(
                                 nom = name,
                                 prix = price,
-                                categoryId = category.id
+                                categoryId = category.id,
+                                codeBarre = barcode
+
                             )
                             viewModel.updateProduit(updatedProduct)
                         }

@@ -39,6 +39,8 @@ class CaisseRepository(
     suspend fun updateProduit(produit: Produit) = produitDao.updateProduit(produit)
     suspend fun getAllProduitsOnce(): List<Produit> = produitDao.getAllProduitsOnce()
     suspend fun insertProduit(produit: Produit) = produitDao.insertProduit(produit)
+    suspend fun getProduitByBarcode(barcode: String): Produit? = produitDao.getProduitByBarcode(barcode)
+    suspend fun countSameBarcode(barcode: String, excludeId: UUID): Int = produitDao.countSameBarcode(barcode, excludeId)
 
 
 

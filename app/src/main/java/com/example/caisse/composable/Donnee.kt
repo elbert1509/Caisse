@@ -1,6 +1,9 @@
 package com.example.caisse.composable
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -13,10 +16,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.caisse.data.Category
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.Produit
 import com.example.caisse.data.sampleCategories
+import com.example.caisse.data.sampleCategoriesCeny
+import com.example.caisse.data.sampleCategoriesGeo
+import com.example.caisse.data.sampleCategoriesRef
 import com.example.caisse.data.sampleProducts
+import com.example.caisse.data.sampleProductsCeny
+import com.example.caisse.data.sampleProductsGeo
+import com.example.caisse.data.sampleProductsRef
 import com.example.caisse.data.sampleVendeurs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,13 +50,46 @@ fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
         }
 
     ) { padding ->
-        Button(
+        Row(
             modifier = Modifier.padding(padding),
-            onClick = { addSampleData(menuViewModel) },
-            enabled = true,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+
         ) {
-            Text(text = "Données")
+            Button(
+                modifier = Modifier.padding(padding),
+                onClick = { addSampleData(menuViewModel, sampleCategories, sampleProducts) },
+                enabled = true,
+            ) {
+                Text(text = "Données KA")
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(
+                modifier = Modifier.padding(padding),
+                onClick = { addSampleData(menuViewModel, sampleCategoriesGeo, sampleProductsGeo) },
+                enabled = true,
+            ) {
+                Text(text = "Données Geo")
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(
+                modifier = Modifier.padding(padding),
+                onClick = { addSampleData(menuViewModel, sampleCategoriesRef, sampleProductsRef) },
+                enabled = true,
+            ) {
+                Text(text = "Données Ref")
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(
+                modifier = Modifier.padding(padding),
+                onClick = { addSampleData(menuViewModel, sampleCategoriesCeny, sampleProductsCeny) },
+                enabled = true,
+            ) {
+                Text(text = "Données Ceny")
+            }
+
         }
+
     }
 
 
@@ -54,7 +99,7 @@ fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
 
 
 
-fun addSampleData(menuViewModel: MenuViewModel) {
+fun addSampleData(menuViewModel: MenuViewModel, sampleCategories: List<Category>, sampleProducts: List<Produit>,) {
     // 1. Ajouter les catégories
     for (category in sampleCategories) {
         menuViewModel.addCategorySample(category)

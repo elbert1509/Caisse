@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.caisse"
+    namespace = "com.example.oudeika"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.caisse"
+        applicationId = "com.example.oudeika"
         minSdk = 23
         targetSdk = 34
         versionCode = 1

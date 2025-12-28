@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.caisse"
+    namespace = "com.example.gestion"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.caisse"
+        applicationId = "com.example.gestion"
         minSdk = 23
         targetSdk = 34
         versionCode = 1

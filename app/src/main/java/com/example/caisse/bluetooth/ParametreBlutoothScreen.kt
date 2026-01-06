@@ -291,7 +291,7 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(
-                                onClick = { safeRun { /*viewModel.testPrint(context) */} }
+                                onClick = { safeRun { viewModel.testPrint(context,menuViewModel) } }
                             ) { Icon(Icons.Filled.Print, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.text_test_impres)) }
 
                             OutlinedButton(

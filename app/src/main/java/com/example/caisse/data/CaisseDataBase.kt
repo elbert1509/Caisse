@@ -9,9 +9,11 @@ import com.example.caisse.model.CategorieDao
 import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.ProduitDao
+import com.example.caisse.model.RecetteDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
+import com.example.caisse.model.VoitureDao
 
 @Database(
     entities = [
@@ -24,9 +26,11 @@ import com.example.caisse.model.VenteDao
         TableItem::class,
         Invoice::class,
         InvoiceItem::class,
-        ShopInfos::class
+        ShopInfos::class,
+        Voiture::class,
+        Recette::class
                ],
-    version = 8
+    version = 10
     ,
     exportSchema = false
 )
@@ -42,6 +46,9 @@ abstract class CaisseDataBase : RoomDatabase() {
     abstract fun tableDao(): TableDao
     abstract fun invoiceDao(): InvoiceDao
     abstract fun infosDao(): InfosDao
+    abstract fun voitureDao(): VoitureDao
+    abstract fun recetteDao(): RecetteDao
+
 
 
 

@@ -54,16 +54,20 @@ fun AppNavigation() {
                     HomeActionButton.STOCK ->  navController.navigate("stock")
                     HomeActionButton.GESTION ->  navController.navigate("gestion")
                     HomeActionButton.RECHERCHE ->  navController.navigate("recherche")
+                    HomeActionButton.VOITURE ->  navController.navigate("voiture")
 
                 }
             },
             navController = navController,
+            menuViewModel = menuViewModel,
+            authVm = authViewModel
         ) }
         composable("categorie") { CategoriesScreen( navController = navController, modifier = Modifier,
             viewModelcategories = menuViewModel
         ) }
         composable("produit") { ProductScreen(  modifier = Modifier,
-            viewModel = menuViewModel
+            viewModel = menuViewModel,
+            navController = navController
         ) }
         composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel, bluetoothViewModel = bluetoothViewModel) }
         composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel, authVm = authViewModel) }
@@ -107,6 +111,18 @@ fun AppNavigation() {
         composable("gestion") { GestionScreen(navController = navController, viewModel = menuViewModel) }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
         composable("recherche") { RechercheScreen( viewModel = menuViewModel) }
+        composable("voiture") { VoitureHomeScreen( viewModel = menuViewModel, navController = navController) }
+        composable(
+            "voiture_details/{voitureId}",
+            arguments = listOf(navArgument("voitureId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            VoitureDetailScreen(
+                navController = navController,
+                menuViewModel = menuViewModel,
+                voitureId = backStackEntry.arguments?.getString("voitureId") ?: ""
+            )
+        }
+
 
     }
 

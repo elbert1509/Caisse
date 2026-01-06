@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import com.example.caisse.data.Category
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
@@ -48,7 +49,8 @@ import com.example.caisse.util.formatPrice
 @Composable
 fun ProductScreen(
     modifier: Modifier = Modifier,
-    viewModel: MenuViewModel
+    viewModel: MenuViewModel,
+    navController: NavController
 ) {
     val products by viewModel.produits.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -206,11 +208,14 @@ fun ProductScreen(
 
                             )
                             viewModel.updateProduit(updatedProduct)
+                            navController.navigate("produit")
+
+
                         }
                     }) { Text("Enregistrer") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { }) { Text("Annuler") }
+                    TextButton(onClick = { navController.navigate("produit")}) { Text("Annuler") }
                 }
             )
         }

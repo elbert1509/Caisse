@@ -7,8 +7,10 @@ import androidx.work.WorkerParameters
 import com.example.caisse.R
 import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.Produit
+import com.example.caisse.data.Recette
 import com.example.caisse.data.Vente
 import com.example.caisse.data.VenteLigne
+import com.example.caisse.data.Voiture
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -31,6 +33,8 @@ class SyncWorker(
         val categorieDao = dbLocal.categorieDao()
         val vendeurDao = dbLocal.vendeurDao()
         val infosDao = dbLocal.infosDao()
+        val voitureDao = dbLocal.voitureDao()
+        val recetteDao = dbLocal.recetteDao()
         val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
         val since = prefs.getLong("lastSyncAt", 0L)
         val isInitialSync = since == 0L
@@ -47,6 +51,8 @@ class SyncWorker(
         pushInfos(cloud, uid, infosDao)
         pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync)
         pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync)
+        pushDirtyVoitures(cloud, uid, voitureDao, isInitialSync)
+        pushDirtyRecettes(cloud, uid, recetteDao, isInitialSync)
 
 
 
@@ -64,10 +70,10 @@ class SyncWorker(
         pullVentesSince(cloud, uid, since, venteDao, isInitialSync)
         pullVenteLignesSince(cloud, uid, since, venteDao, produitDao, isInitialSync)
         pullInfos(cloud, uid, infosDao)
+        pullVoituresSince(cloud, uid, since, voitureDao, isInitialSync)
+        pullRecettesSince(cloud, uid, since, recetteDao, isInitialSync)
 
 
-        Log.d("SyncWorker", "Sync terminé")
-        Log.d("SyncWorker", "venteDao : ${venteDao.getAllVentesOnce()}")
 
 
         // 3) MAJ horodatage de sync
@@ -209,6 +215,43 @@ class SyncWorker(
 
     }
 
+    private suspend fun pushDirtyVoitures(
+        cloud: FirebaseFirestore,
+        uid: String,
+        voitureDao: VoitureDao,
+        isInitialSync: Boolean
+    ) {
+        val all = voitureDao.getAllVoituresOnce()
+        // ✅ initial: tout push
+        // ✅ normal: tout ce qui est dirty, y compris supprimé (pour propager le delete)
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
+
+        for (v in list) {
+            cloud.collection("users").document(uid)
+                .collection("voitures").document(v.id.toString())
+                .set(voitureToMap(v.copy(isDirty = false))).await()
+
+            voitureDao.updateVoiture(v.copy(isDirty = false))
+        }
+    }
+
+    private suspend fun pushDirtyRecettes(
+        cloud: FirebaseFirestore,
+        uid: String,
+        recetteDao: RecetteDao,
+        isInitialSync: Boolean
+    ) {
+        val all = recetteDao.getAllRecettesOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty } // ✅ y compris isDeleted
+
+        for (r in list) {
+            cloud.collection("users").document(uid)
+                .collection("recettes").document(r.id.toString())
+                .set(recetteToMap(r.copy(isDirty = false))).await()
+
+            recetteDao.updateRecette(r.copy(isDirty = false))
+        }
+    }
 
 
     // ---------------- PULL ----------------
@@ -455,6 +498,55 @@ class SyncWorker(
             }
         }
     }
+
+    private suspend fun pullVoituresSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        voitureDao: VoitureDao,
+        isInitialSync: Boolean
+    ) {
+        val base = cloud.collection("users").document(uid).collection("voitures")
+        val snap = if (isInitialSync) base.get().await()
+        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+
+        for (doc in snap.documents) {
+            val m = doc.data ?: continue
+            val remote = mapToVoiture(m)
+            val local = voitureDao.getVoitureById(remote.id)
+
+            if (local == null) {
+                voitureDao.insertVoiture(remote.copy(isDirty = false))
+            } else if (remote.updatedAt >= local.updatedAt) {
+                voitureDao.updateVoiture(remote.copy(isDirty = false))
+            }
+        }
+    }
+
+    private suspend fun pullRecettesSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        recetteDao: RecetteDao,
+        isInitialSync: Boolean
+    ) {
+        val base = cloud.collection("users").document(uid).collection("recettes")
+        val snap = if (isInitialSync) base.get().await()
+        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+
+        for (doc in snap.documents) {
+            val m = doc.data ?: continue
+            val remote = mapToRecette(m)
+            val local = recetteDao.getRecetteById(remote.id)
+
+            if (local == null) {
+                recetteDao.insertRecette(remote.copy(isDirty = false))
+            } else if (remote.updatedAt >= local.updatedAt) {
+                recetteDao.updateRecette(remote.copy(isDirty = false))
+            }
+        }
+    }
+
     // --------------- MAPPERS (copiés depuis repo) ---------------
 
     private fun tableToMap(t: com.example.caisse.data.AppTable) = mapOf(
@@ -673,6 +765,46 @@ class SyncWorker(
         isDeleted = m["isDeleted"] as? Boolean ?: false,
         isDirty = false
     )
+
+
+    private fun voitureToMap(v: Voiture) = mapOf(
+        "id" to v.id.toString(),
+        "name" to v.name,
+        "updatedAt" to v.updatedAt,
+        "isDeleted" to v.isDeleted
+    )
+
+    private fun mapToVoiture(m: Map<String, Any?>) = Voiture(
+        id = UUID.fromString(m["id"] as String),
+        name = m["name"] as String,
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
+
+    private fun recetteToMap(r: Recette) = mapOf(
+        "id" to r.id.toString(),
+        "name" to r.name,
+        "date" to r.date,
+        "voitureId" to r.voitureId.toString(),
+        "amount" to r.amount,
+        "isRecette" to r.isRecette,
+        "updatedAt" to r.updatedAt,
+        "isDeleted" to r.isDeleted
+    )
+
+    private fun mapToRecette(m: Map<String, Any?>) = Recette(
+        id = UUID.fromString(m["id"] as String),
+        name = m["name"] as String,
+        date = getNumberAsLong(m, "date") ?: System.currentTimeMillis(),
+        voitureId = UUID.fromString(m["voitureId"] as String),
+        amount = getNumberAsDouble(m, "amount") ?: 0.0,
+        isRecette = (m["isRecette"] as? Boolean) ?: false,
+        updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
+
     private fun getString(map: Map<String, Any?>, key: String): String? =
         (map[key] as? String)?.takeIf { it.isNotBlank() }
 

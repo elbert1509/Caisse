@@ -1,8 +1,11 @@
 package com.example.caisse.composable
 
 import android.content.res.Configuration
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CarRental
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.History
@@ -37,17 +41,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.Blue
 import androidx.compose.ui.graphics.Color.Companion.Gray
 import androidx.compose.ui.graphics.Color.Companion.White
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.stringResource // Import ajouté
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.R // Assurez-vous que cet import correspond à votre package
 import com.example.caisse.data.HomeActionButton
 import com.example.caisse.data.HomeTileData
+import com.example.caisse.data.MenuViewModel
+import com.example.caisse.model.AuthViewModel
 
 /**
  * Écran d’accueil PoS en Jetpack Compose
@@ -63,12 +73,15 @@ import com.example.caisse.data.HomeTileData
 @Composable
 fun HomeScreen(
     onAction: (HomeActionButton) -> Unit,
-    navController: NavController
+    navController: NavController,
+    authVm: AuthViewModel,
+    menuViewModel: MenuViewModel
 ) {
     // Détecte l’orientation et la largeur pour fixer dynamiquement le nombre de colonnes
     val config = LocalConfiguration.current
     val orientation = config.orientation
     val screenWidthDp = config.screenWidthDp
+    val name = menuViewModel.getInfos()?.name
 
     // Récupération des tuiles avec les textes issus de strings.xml
     val items = rememberHomeTiles()
@@ -82,48 +95,83 @@ fun HomeScreen(
         // Portrait -> 2 colonnes
         else -> 2
     }
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                // [MODIFICATION] Utilisation de stringResource
-                title = { Text(text = stringResource(id = R.string.home_title)) },
-                actions = {
-                    IconButton(onClick = { navController.navigate("bluetooth") }) {
-                        // [MODIFICATION] Ajout de la description pour l'accessibilité
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = stringResource(id = R.string.settings_description)
-                        )
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            BottomHome(
-                selectedIndex = selectedTab,
-                onTabSelected = { },
-                navController = navController
-            )
-        }
-    ) { padding ->
+    Box(modifier = Modifier.fillMaxSize()) {
 
-        LazyVerticalGrid(
-            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(columns),
+        // 🖼️ Image de fond
+        Image(
+            painter = painterResource(id = R.drawable.pieceautos),
+            contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-        ){
-            items(items){ tile ->
-                ActionButton(data = tile, onClick = { onAction(tile.action) }, modifier = Modifier.padding(8.dp))
+                .alpha(0.2f),
+            contentScale = ContentScale.Crop
+        )
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Color.White.copy(alpha = 0.35f)
+                )
+        )
+        
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(text = name ?: stringResource(id = R.string.app_name)) },
+                    actions = {
+                        IconButton(onClick = { navController.navigate("bluetooth") }) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = stringResource(id = R.string.settings_description)
+                            )
+                        }
+                    }
+                )
+            },
+            bottomBar = {
+                BottomHome(
+                    selectedIndex = selectedTab,
+                    onTabSelected = { },
+                    navController = navController
+                )
+            },
+            containerColor = Color.Transparent // 👈 IMPORTANT
+        ) { padding ->
+
+            LazyVerticalGrid(
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(columns),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                items(items) { tile ->
+                    ActionButton(
+                        data = tile,
+                        onClick = { onAction(tile.action) },
+                        modifier = Modifier.padding(8.dp),
+                        authVm = authVm,
+                        navController = navController
+                    )
+                }
             }
         }
     }
+
 }
 
 @Composable
-fun ActionButton(data: HomeTileData, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ActionButton(data: HomeTileData, onClick: () -> Unit, modifier: Modifier = Modifier, authVm: AuthViewModel, navController: NavController) {
+
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = modifier
+            .clickable {
+                onClick()
+                authVm.enqueueSync(
+                    context = navController.context,
+                    tag = "sync"
+                )
+                       },
         colors = CardDefaults.cardColors(containerColor = data.color),
         elevation = cardElevation(6.dp),
         shape = MaterialTheme.shapes.large
@@ -152,9 +200,10 @@ private fun getLocalizedHomeButtons(): List<HomeTileData> {
         HomeTileData(stringResource(R.string.tile_prendre_commande), Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
         HomeTileData(stringResource(R.string.tile_historique), Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
         HomeTileData(stringResource(R.string.tile_exporter), Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
-        HomeTileData(stringResource(R.string.tile_table), Icons.Default.TableRestaurant, color = Blue, HomeActionButton.TABLE),
         HomeTileData(stringResource(R.string.tile_gestion), Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
-        HomeTileData(stringResource(R.string.tile_recherche), Icons.Default.Search, color = Blue, HomeActionButton.RECHERCHE)
+        HomeTileData(stringResource(R.string.tile_recherche), Icons.Default.Search, color = Blue, HomeActionButton.RECHERCHE),
+        HomeTileData(stringResource(R.string.tile_voiture), Icons.Default.CarRental, color = Blue, HomeActionButton.VOITURE),
+
     )
 }
 

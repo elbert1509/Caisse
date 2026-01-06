@@ -4,9 +4,11 @@ import com.example.caisse.model.CategorieDao
 import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.ProduitDao
+import com.example.caisse.model.RecetteDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
+import com.example.caisse.model.VoitureDao
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
@@ -14,10 +16,12 @@ class CaisseRepository(
     private val categorieDao: CategorieDao,
     private val produitDao: ProduitDao,
     private val vendeurDao: VendeurDao,
-     val venteDao: VenteDao,
+    val venteDao: VenteDao,
     private val tableDao: TableDao,
     private val invoiceDao: InvoiceDao,
-    private val infosDao: InfosDao
+    private val infosDao: InfosDao,
+    private val voitureDao: VoitureDao,
+    private val recetteDao: RecetteDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -96,6 +100,29 @@ class CaisseRepository(
     suspend fun updateInfos(infos: ShopInfos) = infosDao.updateInfos(infos)
     suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
     suspend fun updatePassword(passwordHash: String, passwordSalt: String) = infosDao.updatePassword(passwordHash, passwordSalt)
+
+    // ----- VOITURE -----
+    fun getAllVoitures() = voitureDao.getAllVoitures()
+    suspend fun addVoiture(voiture: Voiture) = voitureDao.insertVoiture(voiture)
+    suspend fun updateVoiture(voiture: Voiture) = voitureDao.updateVoiture(voiture)
+    suspend fun deleteVoiture(voiture: Voiture) = voitureDao.deleteVoiture(voiture)
+    suspend fun softDeleteVoiture(id: UUID) = voitureDao.softDeleteVoiture(id)
+    suspend fun getVoitureById(id: UUID) = voitureDao.getVoitureById(id)
+    suspend fun getDirtyVoituresOnce() = voitureDao.getDirtyVoituresOnce()
+
+    // ----- RECETTE -----
+    fun getAllRecettes() = recetteDao.getAllRecettes()
+    fun getRecettesByVoiture(voitureId: UUID) = recetteDao.getRecettesByVoiture(voitureId)
+    fun getRecettesBetween(start: Long, end: Long) = recetteDao.getRecettesBetween(start, end)
+    suspend fun addRecette(recette: Recette) = recetteDao.insertRecette(recette)
+    suspend fun updateRecette(recette: Recette) = recetteDao.updateRecette(recette)
+    suspend fun deleteRecette(recette: Recette) = recetteDao.deleteRecette(recette)
+    suspend fun softDeleteRecette(id: UUID) = recetteDao.softDeleteRecette(id)
+    suspend fun getDirtyRecettesOnce() = recetteDao.getDirtyRecettesOnce()
+    suspend fun getRecetteById(id: UUID): Recette? = recetteDao.getRecetteById(id)
+
+
+
 
 
 }

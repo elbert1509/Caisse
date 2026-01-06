@@ -1,6 +1,7 @@
 package com.example.caisse.data
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -80,9 +81,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // ---- PRODUITS ----
     fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12, photo : Int? = null) {
+        val randomBarcode = UUID.randomUUID().toString().substring(0, 8)
         viewModelScope.launch {
-            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,image = photo).copy(updatedAt = now(), isDirty = true)
-            repository.addProduit(newProduit)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,codeBarre = randomBarcode,image = photo).copy(updatedAt = now(), isDirty = true)
+            repository.insertProduit(newProduit)
         }
     }
 
@@ -115,12 +117,16 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
-            if (repository.countSameBarcode(
-                barcode = produit.codeBarre!!,
+            if (!produit.codeBarre.isNullOrBlank() && repository.countSameBarcode(
+                barcode = produit.codeBarre,
                 excludeId = produit.id
             ) > 0)
             {
                // Toast.makeText(context, "Ce code barre existe déjà", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (produit.stock == null) {
+                Log.e("Produit", "Le stock ne peut pas être nul")
                 return@launch
             }
             repository.updateProduit(
@@ -633,7 +639,11 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                         database.venteDao(),
                         database.tableDao(),
                         database.invoiceDao(),
-                        database.infosDao()
+                        database.infosDao(),
+                        database.voitureDao(),
+                        database.recetteDao()
+
+
                     )
                     MenuViewModel(repository)
                 }
@@ -714,5 +724,112 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
         return Result.success(Unit)
     }
+
+    // ---- VOITURES ----
+
+    private val _voitures = MutableStateFlow<List<Voiture>>(emptyList())
+    val voitures: StateFlow<List<Voiture>> = _voitures.asStateFlow()
+
+    init {
+        // ⚡ Charger les tables dès que le ViewModel est instancié
+        loadTables()
+
+        // ✅ Charger les voitures dès que le ViewModel est instancié
+        loadVoitures()
+    }
+
+    fun loadVoitures() {
+        viewModelScope.launch {
+            // Si tu as déjà repository.getAllVoitures() en Flow, on peut faire collect.
+            // Mais comme pour tables tu fais un "once", je garde la même logique.
+            // 👉 Donc il faut ajouter repository.getAllVoituresOnce() OU utiliser collect ici.
+
+            repository.getAllVoitures().collect { list ->
+                _voitures.value = list
+            }
+        }
+    }
+
+    fun addVoiture(name: String) {
+        viewModelScope.launch {
+            val newVoiture = Voiture(
+                name = name.trim()
+            ).copy(updatedAt = now(), isDirty = true)
+
+            repository.addVoiture(newVoiture)
+            // refresh automatique via collect() si loadVoitures() tourne
+        }
+    }
+
+    fun deleteVoiture(voitureId: UUID) {
+        viewModelScope.launch {
+            val v = _voitures.value.find { it.id == voitureId } ?: return@launch
+            // Soft delete comme tu fais pour sync
+            repository.updateVoiture(
+                v.copy(
+                    isDeleted = true,
+                    isDirty = true,
+                    updatedAt = now()
+                )
+            )
+        }
+    }
+
+    fun renameVoiture(id: UUID, newName: String) {
+        viewModelScope.launch {
+            val v = _voitures.value.find { it.id == id } ?: return@launch
+            repository.updateVoiture(
+                v.copy(
+                    name = newName.trim(),
+                    isDirty = true,
+                    updatedAt = now()
+                )
+            )
+        }
+    }
+
+    fun recettesByVoiture(voitureId: UUID): StateFlow<List<Recette>> {
+        return repository.getRecettesByVoiture(voitureId)
+            .map { list -> list.filter { !it.isDeleted }.sortedByDescending { it.date } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
+
+    fun addRecetteForVoiture(
+        voitureId: UUID,
+        name: String,
+        amount: Double,
+        isRecette: Boolean,
+
+    ) {
+        viewModelScope.launch {
+            val recette = Recette(
+                name = name.trim(),
+                voitureId = voitureId,
+                amount = amount,
+                isRecette = isRecette,
+            ).copy(updatedAt = now(), isDirty = true)
+
+            repository.addRecette(recette)
+        }
+    }
+
+    fun deleteRecette(recetteId: UUID) {
+        viewModelScope.launch {
+            val r = repository.getRecetteById(recetteId) ?: return@launch
+            repository.updateRecette(
+                r.copy(
+                    isDeleted = true,
+                    isDirty = true,
+                    updatedAt = now()
+                )
+            )
+        }
+    }
+
+    fun getVoitureById(id: UUID): Voiture? {
+        return _voitures.value.find { it.id == id }
+    }
+
+
 
 }

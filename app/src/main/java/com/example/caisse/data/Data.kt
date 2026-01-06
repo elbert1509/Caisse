@@ -25,6 +25,7 @@ enum class HomeActionButton{
     STOCK,
     GESTION,
     RECHERCHE,
+    VOITURE
     }
 
 @Immutable
@@ -255,6 +256,32 @@ data class TableItem(
     val tableId: UUID,
     val productId: UUID,
     val quantity: Int,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
+)
+
+@Entity(tableName = "Voiture")
+data class Voiture (
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val name: String,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
+)
+
+@Entity(tableName = "Recette",
+    indices = [Index("voitureId")]
+)
+data class Recette (
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val name: String,
+    val date: Long = System.currentTimeMillis(),
+    val voitureId: UUID,
+    val amount: Double,
+    val isRecette: Boolean = false,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,

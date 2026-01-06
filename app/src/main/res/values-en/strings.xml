@@ -11,6 +11,7 @@
     <string name="tile_exporter">Export</string>
     <string name="tile_donnees">Data</string>
     <string name="tile_table">Table</string>
+    <string name="tile_voiture"> Cars </string>
     <string name="tile_gestion">Management</string>
     <string name="tile_recherche">Search</string>
     <string name="tile_parametres">Settings</string>

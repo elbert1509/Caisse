@@ -183,8 +183,17 @@ val sampleProducts = listOf(
     Produit(nom = "PNEUS KINGBOSS 195/70R14", prix = 26000.00, image = R.drawable.photo, categoryId = CAT_NOUVEAU_STOCK_PNEUS_2, stock = 161, description = ""),
     Produit(nom = "PNEUS KINGBOSS 195/65R16", prix = 30000.00, image = R.drawable.photo, categoryId = CAT_NOUVEAU_STOCK_PNEUS_2, stock = 136, description = "")
 
+)
 
-
+val sampleVoitures = listOf(
+    Voiture(name = "LT825AA"),
+    Voiture(name = "LT823AA"),
+    Voiture(name = "LT037AA"),
+    Voiture(name = "LT035AA"),
+    Voiture(name = "LT036AA"),
+    Voiture(name = "LT824AA"),
+    Voiture(name = "LV552AA"),
+    Voiture(name = "LV551AA")
 
 )
 val sampleVendeurs = listOf(

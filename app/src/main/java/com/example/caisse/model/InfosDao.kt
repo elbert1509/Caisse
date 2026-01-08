@@ -19,6 +19,7 @@ interface InfosDao {
     @Query("SELECT * FROM ShopInfos LIMIT 1")
     suspend fun getInfos(): ShopInfos?
 
-
+    @Query("UPDATE ShopInfos SET passwordHash = :passwordHash, passwordSalt = :passwordSalt WHERE id = 1")
+    suspend fun updatePassword(passwordHash: String, passwordSalt: String)
 
 }

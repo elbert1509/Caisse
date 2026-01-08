@@ -50,6 +50,7 @@ import com.example.caisse.ui.theme.Slate100
 import com.example.caisse.ui.theme.Slate500
 import com.example.caisse.ui.theme.Slate700
 import com.example.caisse.ui.theme.Slate900
+import com.example.caisse.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -209,7 +210,7 @@ private fun TotalBar(total: Double,devise : String) {
             Text("Chiffre d'affaires", style = MaterialTheme.typography.labelMedium, color = Slate500)
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "€ ${total.formatMoney()}" + devise,
+                text = formatPrice(total,devise),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = Slate900
             )
@@ -249,7 +250,7 @@ private fun ProductLine(p: ProductReport, devise: String) {
                 Spacer(Modifier.height(2.dp))
                 Text("${p.totalQuantity} vendu(s)", style = MaterialTheme.typography.bodySmall, color = Slate700)
             }
-            Text(" ${p.revenue.formatMoney()}  $devise",Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
+            Text(formatPrice(p.revenue,devise),Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
             Column(Modifier.weight(0.4f)) {
                 Text("Stock", style = MaterialTheme.typography.titleSmall, color = Slate900)
                 Spacer(Modifier.height(2.dp))

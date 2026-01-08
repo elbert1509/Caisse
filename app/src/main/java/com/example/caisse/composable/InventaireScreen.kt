@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
+import com.example.caisse.util.formatPrice
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -156,7 +157,8 @@ fun InventaireScreen(navController: NavController, viewModel: MenuViewModel) {
                                     produit.copy(prix = state.price, stock = state.stock)
                                 ) // persiste via VM
                             }
-                        }
+                        },
+                        devise = viewModel.getInfos()?.devise ?: ""
                     )
                 }
 
@@ -173,6 +175,7 @@ private fun ProduitCard(
     produit: Produit,
     editable: Editable,
     onChange: (Editable) -> Unit,
+    devise: String,
     onReset: () -> Unit,
     onSave: () -> Unit
 ) {
@@ -188,7 +191,7 @@ private fun ProduitCard(
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedNumberField(
-                    label = "Prix (€)",
+                    label = "Prix $devise",
                     value = editable.price.toStringSafe(),
                     onValueChange = { v -> onChange(editable.copy(price = v.toDoubleOrNullSafe(editable.price))) },
                     keyboardType = KeyboardType.Decimal,
@@ -209,7 +212,7 @@ private fun ProduitCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Valeur stock: %.2f €".format(editable.price * editable.stock),
+                    formatPrice(editable.price * editable.stock,devise),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

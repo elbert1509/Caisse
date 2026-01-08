@@ -2,7 +2,9 @@ package com.example.caisse.composable
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
@@ -45,8 +47,10 @@ fun InfosScreen(
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var devise by remember { mutableStateOf("") }
-
-
+    var expanded by remember { mutableStateOf(false) }
+    val listDevise = listOf("FCFA", "€", "£", "US$")
+    var showChangePassword by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -155,101 +159,145 @@ fun InfosScreen(
                     Spacer(Modifier.height(16.dp))
 
                     if (isEdit) {
-                        // ------- Mode édition : formulaire -------
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Nom de la boutique") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = address,
-                            onValueChange = { address = it },
-                            label = { Text("Adresse") },
-                            singleLine = false,
-                            minLines = 2,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it },
-                            label = { Text("Téléphone") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("Email") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = devise,
-                            onValueChange = { devise = it },
-                            label = { Text("devise") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(18.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(1.dp)
+                                .verticalScroll(scrollState),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            Button(
-                                enabled = canSave,
-                                onClick = {
-                                    scope.launch {
-                                        if (existing == null) {
-                                            viewModel.addInfos(
-                                                name = name.trim(),
-                                                address = address.trim(),
-                                                phone = phone.trim(),
-                                                email = email.trim(),
-                                                logo = null,
-                                                devise = devise
-                                            )
-                                        } else {
-                                            viewModel.updateInfos(
-                                                name = name.trim(),
-                                                address = address.trim(),
-                                                phone = phone.trim(),
-                                                email = email.trim(),
-                                                logo = null,
-                                                devise = devise
-                                            )
-                                        }
-                                        navController.popBackStack()
+                            // ------- Mode édition : formulaire -------
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Nom de la boutique") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = address,
+                                onValueChange = { address = it },
+                                label = { Text("Adresse") },
+                                singleLine = false,
+                                minLines = 2,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = phone,
+                                onValueChange = { phone = it },
+                                label = { Text("Téléphone") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text("Email") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(10.dp))
+
+                            ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = !expanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = devise,
+                                    onValueChange = {},            // lecture seule
+                                    readOnly = true,
+                                    label = { Text("Devise") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                    },
+                                    modifier = Modifier
+                                        .menuAnchor()
+                                        .fillMaxWidth()
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false }
+                                ) {
+                                    listDevise.forEach { currency ->
+                                        DropdownMenuItem(
+                                            text = { Text(currency) },
+                                            onClick = {
+                                                devise = currency
+                                                expanded = false
+                                            }
+                                        )
                                     }
                                 }
+                            }
+                            Spacer(Modifier.height(18.dp))
+                            OutlinedButton(onClick = { showChangePassword = true }) {
+                                Text("Changer le mot de passe")
+                            }
+                            Spacer(Modifier.height(18.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Filled.Save, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Enregistrer", fontWeight = FontWeight.SemiBold)
+                                Button(
+                                    enabled = canSave,
+                                    onClick = {
+                                        scope.launch {
+                                            if (existing == null) {
+                                                viewModel.addInfos(
+                                                    name = name.trim(),
+                                                    address = address.trim(),
+                                                    phone = phone.trim(),
+                                                    email = email.trim(),
+                                                    logo = null,
+                                                    devise = devise
+                                                )
+                                            } else {
+                                                viewModel.updateInfos(
+                                                    name = name.trim(),
+                                                    address = address.trim(),
+                                                    phone = phone.trim(),
+                                                    email = email.trim(),
+                                                    logo = null,
+                                                    devise = devise
+                                                )
+                                            }
+                                            navController.popBackStack()
+                                        }
+                                    }
+                                ) {
+                                    Icon(Icons.Filled.Save, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Enregistrer", fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            if (showChangePassword) {
+                                com.example.caisse.util.ChangePasswordDialog(
+                                    viewModel = viewModel,
+                                    onDismiss = { showChangePassword = false }
+                                )
+                            }
+                            if (!canSave) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = "Le nom et l’email sont obligatoires.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Slate700
+                                )
                             }
                         }
 
-                        if (!canSave) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = "Le nom et l’email sont obligatoires.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Slate700
-                            )
-                        }
                     } else {
                         // ------- Mode lecture : afficher la fiche -------
                         if (existing != null) {

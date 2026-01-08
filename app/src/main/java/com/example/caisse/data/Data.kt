@@ -63,7 +63,7 @@ data class Produit(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val nom: String,
     val prix: Double,
-    val image: Int? = null,
+    val image: String? = null,
     val categoryId: UUID,   // 🔗 clé étrangère
     val stock: Int = 0,
     val description: String? = null,
@@ -206,8 +206,13 @@ data class ShopInfos (
     val phone: String,
     val email: String,
     val logo: Int? = null,
-    val password: String? = "1234",
+    val passwordHash: String,
+    val passwordSalt: String,
     val devise : String,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 @Entity(tableName = "app_table")

@@ -1,5 +1,9 @@
 package com.example.caisse.composable
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,20 +15,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.example.caisse.data.Category
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
-import java.util.*
+import com.example.caisse.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductScreen(
     modifier: Modifier = Modifier,
-    navController: NavController,
-    viewModel: MenuViewModel
+    viewModel: MenuViewModel,
+    navController: NavController
 ) {
     val products by viewModel.produits.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -37,8 +43,31 @@ fun ProductScreen(
     var renameText by remember { mutableStateOf(TextFieldValue("")) }
     var renamePrice by remember { mutableStateOf(TextFieldValue("")) }
     var renameCategory by remember { mutableStateOf<Category?>(null) }
+    var renameBarcode by remember { mutableStateOf(TextFieldValue("")) }
 
     var productText by remember { mutableStateOf(TextFieldValue("")) }
+    val context = LocalContext.current
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            if (uri != null) {
+                // ⚠️ persist permission
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                selectedImageUri = uri
+            }
+        }
+
+    var editImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    val editImagePickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            editImageUri = uri
+        }
 
     // Liste filtrée en fonction de la recherche
     val filteredProducts = remember(products, productText.text, selectedCategory) {
@@ -88,15 +117,28 @@ fun ProductScreen(
                 onCategorySelected = { selectedCategory = it }
             )
             Spacer(Modifier.height(16.dp))
+            Button(onClick = { imagePickerLauncher.launch(arrayOf("image/*")) }) {
+                Text(if (selectedImageUri == null) "Choisir une photo" else "Changer la photo")
+            }
+            selectedImageUri?.let { uri ->
+                Spacer(Modifier.height(8.dp))
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "Photo produit",
+                    modifier = Modifier.size(90.dp)
+                )
+            }
+            Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
                     val name = productText.text.trim()
                     val price = newPrice.text.trim().toDoubleOrNull()
                     val category = selectedCategory
                     if (name.isNotEmpty() && price != null && category != null) {
-                        viewModel.addProduit(name, price, category.id)
+                        viewModel.addProduit(name, price, category.id, imageUri = selectedImageUri?.toString())
                         productText = TextFieldValue("")
                         newPrice = TextFieldValue("")
+                        selectedImageUri = null
                         selectedCategory = null
                     }
                 },
@@ -121,8 +163,10 @@ fun ProductScreen(
                             renameText = TextFieldValue(product.nom)
                             renamePrice = TextFieldValue(product.prix.toString())
                             renameCategory = categories.find { it.id == product.categoryId }
+                            editImageUri = product.image?.let { Uri.parse(it) }
                         },
-                        onDelete = { viewModel.deleteProduit(product) }
+                        onDelete = { viewModel.deleteProduit(product) },
+                        devise = viewModel.getInfos()?.devise ?: ""
                     )
                 }
             }
@@ -130,6 +174,7 @@ fun ProductScreen(
 
         // Rename/Edit Dialog
         if (renameTarget != null) {
+
             AlertDialog(
                 onDismissRequest = { renameTarget = null },
                 title = { Text("Modifier le produit") },
@@ -154,6 +199,21 @@ fun ProductScreen(
                             selectedCategory = renameCategory,
                             onCategorySelected = { renameCategory = it }
                         )
+                        Spacer(Modifier.height(8.dp))
+
+                        Button(onClick = { editImagePickerLauncher.launch("image/*") }) {
+                            Text(if (editImageUri == null) "Ajouter/Changer photo" else "Changer photo")
+                        }
+
+                        editImageUri?.let { uri ->
+                            Spacer(Modifier.height(8.dp))
+
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = "Photo produit",
+                                modifier = Modifier.size(90.dp)
+                            )
+                        }
                     }
                 },
                 confirmButton = {
@@ -166,7 +226,8 @@ fun ProductScreen(
                             val updatedProduct = target.copy(
                                 nom = name,
                                 prix = price,
-                                categoryId = category.id
+                                categoryId = category.id,
+                                image = editImageUri?.toString() ?: target.image
                             )
                             viewModel.updateProduit(updatedProduct)
                             renameTarget = null
@@ -226,7 +287,8 @@ private fun ProductRow(
     categoryName: String,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    devise : String
 ) {
     Surface(tonalElevation = 1.dp, shape = MaterialTheme.shapes.medium) {
         Row(
@@ -237,7 +299,7 @@ private fun ProductRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(product.nom, style = MaterialTheme.typography.bodyLarge)
-                Text("${product.prix} € - ($categoryName)", style = MaterialTheme.typography.bodySmall)
+                Text(formatPrice( product.prix,devise)+"($categoryName)", style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onRename) {
                 Icon(Icons.Default.Edit, contentDescription = "Modifier")

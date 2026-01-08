@@ -1,7 +1,7 @@
 package com.example.caisse.composable
 
 import android.view.MotionEvent
-import androidx.compose.foundation.Image
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,23 +49,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import java.util.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.caisse.R
+import coil.compose.AsyncImage
+import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Ticket
+import com.example.caisse.util.drawableUri
+import com.example.caisse.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrendreCommandeScreen(
     navController: NavController,
-    menuViewModel: MenuViewModel
+    menuViewModel: MenuViewModel,
+    bluetoothViewModel: BluetoothViewModel,
 ) {
     val categories by menuViewModel.categories.collectAsState()
     val products by menuViewModel.produits.collectAsState()
@@ -121,7 +123,7 @@ fun PrendreCommandeScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(products.filter { it.categoryId == selectedCategoryId }) { product ->
-                        ProductItem(product = product) {
+                        ProductItem(product = product,devise = shopInfos?.devise ?: "") {
                             menuViewModel.addToCart(product)
                         }
                     }
@@ -151,15 +153,48 @@ fun PrendreCommandeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Total    ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text( String.format(Locale.US, "%,d", totalPrice.toInt()).replace(',', ' ')  + "   ${shopInfos?.devise}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text( formatPrice(totalPrice,shopInfos?.devise), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { if (cart.isNotEmpty()) navController.navigate("panier") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = cart.isNotEmpty()
-                ) {
-                    Text("Valider la commande")
+                Row (modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ){
+                    Button(
+                        onClick = { if (cart.isNotEmpty()) navController.navigate("panier") },
+                        modifier = Modifier.weight(.5f),
+                        enabled = cart.isNotEmpty()
+                    ) {
+                        Text("Valider la commande")
+                    }
+
+                    Button(
+                        modifier = Modifier.weight(.5f),
+                        onClick = {
+
+                            if (!bluetoothViewModel.isConnected.value) {
+                                Toast.makeText(
+                                    navController.context,
+                                    "Pas de device connecté",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@Button
+                            }else{
+                                bluetoothViewModel.printInvoice(cart, totalPrice,shopInfos)
+                                Toast.makeText(
+                                    navController.context,
+                                    "Ticket imprimé",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                navController.popBackStack() // revenir en arrière après validation
+                            }
+                        },
+                        enabled = totalPrice > 0
+                    ) {
+                        Text("Imprimer",maxLines = 1)
+                    }
                 }
             }
         }
@@ -167,7 +202,7 @@ fun PrendreCommandeScreen(
 }
 
 @Composable
-fun ProductItem(product: Produit, onProductClick: () -> Unit) {
+fun ProductItem(product: Produit, devise : String, onProductClick: () -> Unit) {
     var isPressed by remember { mutableStateOf(false) }
 
     Card(
@@ -210,8 +245,8 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
+                AsyncImage(
+                    model = product.image ?: drawableUri("placeholder_image"),
                     contentDescription = product.nom,
                     modifier = Modifier
                         .size(50.dp)
@@ -228,7 +263,7 @@ fun ProductItem(product: Produit, onProductClick: () -> Unit) {
                 maxLines = 2, // Limite à 2 lignes pour éviter que ça déborde
                 lineHeight = 14.sp
             )
-            Text(product.prix.toInt().toString(), fontSize = 12.sp,
+            Text(formatPrice(product.prix,devise), fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.primary, // Couleur pour distinguer le prix
                 fontWeight = FontWeight.Bold)
         }
@@ -262,7 +297,7 @@ fun CartItemRow(
     }
 }
 @Composable
-fun ProductItemHorizontal(product: Produit, onProductClick: () -> Unit) {
+fun ProductItemHorizontal(product: Produit, devise: String,onProductClick: () -> Unit) {
     var isPressed by remember { mutableStateOf(false) }
 
     Card(
@@ -298,8 +333,8 @@ fun ProductItemHorizontal(product: Produit, onProductClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Image à gauche
-            Image(
-                painter = painterResource(id = product.image ?: R.drawable.placeholder_image),
+            AsyncImage(
+                model = product.image ?: drawableUri("placeholder_image"),
                 contentDescription = product.nom,
                 modifier = Modifier
                     .size(48.dp)
@@ -321,7 +356,7 @@ fun ProductItemHorizontal(product: Produit, onProductClick: () -> Unit) {
                     maxLines = 1
                 )
                 Text(
-                    text =  product.prix.toInt().toString(),
+                    text =  formatPrice(product.prix,devise),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )

@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,13 @@ import kotlinx.coroutines.launch
 import java.io.OutputStream
 import java.util.UUID
 import com.example.caisse.data.Ticket
+import com.example.caisse.util.StripAccents
+import com.example.caisse.util.formatPrice
+import com.example.caisse.util.invoiceNoFromId
+import java.nio.charset.Charset
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BluetoothViewModel : ViewModel() {
 
@@ -34,6 +42,13 @@ class BluetoothViewModel : ViewModel() {
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected = _isConnected.asStateFlow()
+    private val ESC = '\u001B'
+
+    // Police très petite (H = 1, W = 1)
+    private val FONT_SMALLEST = "$ESC!1"
+
+    // Police normale (reset si besoin)
+    private val FONT_RESET = "$ESC!0"
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun loadPairedDevices() {
@@ -98,41 +113,70 @@ class BluetoothViewModel : ViewModel() {
             }
         }
     }
+    private fun writeCmd(vararg bytes: Int) {
+        outputStream?.write(bytes.map { it.toByte() }.toByteArray())
+    }
 
-    fun printInvoice(tableItems: List<Ticket>, total: Double, infos: ShopInfos?) {
+    private val CP850: Charset = Charset.forName("CP850")
+    fun printInvoice(tableItems: List<Ticket>, total: Double, infos: ShopInfos?, invoiceId: UUID? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // 1) Reset + taille normale (évite le double-size résiduel)
+                writeCmd(0x1B, 0x40)        // ESC @  (initialize)
+                writeCmd(0x1D, 0x21, 0x01)  // GS ! 0 (taille normale)
+                writeCmd(0x1B, 0x45, 0x00)  // ESC E 0 (pas gras)
+
+                // 2) Sélection police PETITE (Font B)
+                writeCmd(0x1B, 0x4D, 0x01)  // ESC M 1
+
+                // 3) Code page pour accents (CP850)
+                writeCmd(0x1B, 0x74, 0x02)  // ESC t 2  (souvent = CP850)
+
+                val dateHeure = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date())
+                val invoiceNo = invoiceId?.let { invoiceNoFromId(it) }
                 val sb = StringBuilder()
+                sb.append("\r\n")
+                sb.append("*** ${infos?.name ?: ""} ***\r\n")
+                sb.append("Adresse: ${infos?.address ?: ""}\r\n")
+                sb.append("Tel: ${infos?.phone ?: ""}\r\n")
+                sb.append("Date: $dateHeure\r\n")
+                sb.append("--------------------------------\r\n")
+                if (invoiceId != null) sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
+                sb.append("--------------------------------\r\n")
+                sb.append("Article        Qte   Prix    Total\r\n")
+                sb.append("--------------------------------\r\n")
 
-                // --- En-tête ---
-                sb.appendln("\n")
-                sb.appendln("*** ${infos?.name} ***")
-                sb.appendln("Adresse: ${infos?.address}")
-                sb.appendln("Tel: ${infos?.phone}")
-                sb.appendln("--------------------------")
-                sb.appendln("    FACTURE CLIENT   ")
-                sb.appendln("---------------------------")
-                sb.appendln("Article   Qté   PU     Total")
-                sb.appendln("-------------------------")
-
-                // --- Détail des articles ---
+                // Colonnes 58mm -> on serre un peu
                 tableItems.forEach { ticket ->
-                    val name = ticket.produit.nom.padEnd(10 , ' ').take(18)
+
+
+                    val name = ticket.produit.nom
+                        .replace("\n", " ")
+                        .take(17)
+                        .padEnd(17, ' ')
+
                     val qty = ticket.quantity.toString().padStart(3, ' ')
                     val price = String.format("%.2f", ticket.produit.prix).padStart(6, ' ')
-                    val lineTotal = String.format("%.2f", ticket.produit.prix * ticket.quantity).padStart(7, ' ')
-                    sb.appendln("$name $qty  $price  $lineTotal")
+
+                    val lineTotal = formatPrice(
+                        ticket.produit.prix * ticket.quantity,
+                        infos?.devise
+                    )
+                        .take(12)
+                        .padStart(12, ' ')
+
+                    sb.append("$name $qty $price $lineTotal\r\n")
                 }
 
-                sb.appendln("--------------------------------")
-                sb.appendln(String.format("TOTAL:%36.2f",total))
-                sb.appendln("--------------------------------")
-                sb.appendln("      Merci pour votre confiance ")
-                sb.appendln("********************************")
-                sb.appendln("\n\n\n") // Avance papier
+                sb.append("--------------------------------\r\n")
+                sb.append("TOTAL: ${formatPrice(total, infos?.devise)}\r\n")
+                sb.append("--------------------------------\r\n")
+                sb.append("Merci pour votre confiance\r\n")
+                sb.append("\r\n\r\n\r\n")
 
-                val text = sb.toString()
-                outputStream?.write(text.toByteArray(Charsets.UTF_8))
+                // IMPORTANT: encoder le texte avec la même code page
+                val text = StripAccents(sb.toString())
+                outputStream?.write(text.toByteArray(Charsets.US_ASCII))
                 outputStream?.flush()
 
             } catch (e: Exception) {
@@ -140,6 +184,47 @@ class BluetoothViewModel : ViewModel() {
             }
         }
     }
+
+
+
+    fun testPrint(context: Context, menuViewModel: MenuViewModel) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 🔹 Nom de l’imprimante connectée
+                //val printerName = socket?.remoteDevice?.name ?: "Imprimante inconnue"
+                val printerName ="Imprimante inconnue"
+
+                // 🔹 Infos magasin
+                val infos = menuViewModel.getInfos()
+                val shopName = infos?.name ?: "Mon Magasin"
+
+                val sb = StringBuilder()
+
+                sb.append("\n")
+                sb.append("************************\r\n")
+                sb.append("        TEST PRINT       \r\n")
+                sb.append("************************\r\n")
+                sb.append("\r\n")
+                sb.append("Magasin    : $shopName\r\n")
+                sb.append("Imprimante : $printerName\r\n")
+                sb.append("\r\n")
+                sb.append("------------------------\r\n")
+                sb.append("Connexion OK ✅\r\n")
+                sb.append("Bluetooth fonctionnel\r\n")
+                sb.append("------------------------\r\n")
+                sb.append("\r\n")
+                sb.append("Test d'impression réussi 👍\r\n")
+                sb.append("\r\n\r\n\r\n") // Avance papier
+
+                outputStream?.write(sb.toString().toByteArray(Charsets.UTF_8))
+                outputStream?.flush()
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     companion object {
         fun provideFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

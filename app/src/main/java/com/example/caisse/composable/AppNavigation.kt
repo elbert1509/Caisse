@@ -63,7 +63,7 @@ fun AppNavigation() {
         composable("produit") { ProductScreen( navController = navController, modifier = Modifier,
             viewModel = menuViewModel
         ) }
-        composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel) }
+        composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel,bluetoothViewModel = bluetoothViewModel) }
         composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel, authVm = authViewModel) }
         composable("table") { TableScreen(navController = navController, menuViewModel = menuViewModel, authViewModel = authViewModel) }
         composable(

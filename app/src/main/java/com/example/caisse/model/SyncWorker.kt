@@ -197,12 +197,12 @@ class SyncWorker(
         infosDao: com.example.caisse.model.InfosDao
     ){
         val infos = infosDao.getInfos()
-        if (infos != null && infos.password != null) {
+        if (infos != null) {
             cloud.collection("users").document(uid)
                 .collection("infos").document("1")
                 .set(infosToMap(infos))
                 .await()
-            infosDao.updateInfos(infos)
+            infosDao.updateInfos(infos.copy(isDirty = false))
         }
 
 
@@ -473,7 +473,7 @@ class SyncWorker(
         "isDeleted" to ti.isDeleted
     )
     private fun mapToTable(m: Map<String, Any?>) = com.example.caisse.data.AppTable(
-        id = java.util.UUID.fromString(m["id"] as String),
+        id = UUID.fromString(m["id"] as String),
         name = m["name"] as String,
         active = (m["active"] as? Boolean) ?: true,
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
@@ -482,9 +482,9 @@ class SyncWorker(
     )
 
     private fun mapToTableItem(m: Map<String, Any?>) = com.example.caisse.data.TableItem(
-        id = java.util.UUID.fromString(m["id"] as String),
-        tableId = java.util.UUID.fromString(m["tableId"] as String),
-        productId = java.util.UUID.fromString(m["productId"] as String),
+        id = UUID.fromString(m["id"] as String),
+        tableId = UUID.fromString(m["tableId"] as String),
+        productId = UUID.fromString(m["productId"] as String),
         quantity = (m["quantity"] as? Number)?.toInt() ?: 0,
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDirty = false,
@@ -513,14 +513,17 @@ class SyncWorker(
     )
 
     private fun infosToMap(i: com.example.caisse.data.ShopInfos) = mapOf(
-        "id" to i.id.toString(),
+        "id" to i.id,
         "name" to i.name,
         "address" to i.address,
         "phone" to i.phone,
         "email" to i.email,
         "logo" to i.logo,
-        "password" to i.password,
-        "devise" to i.devise
+        "passwordHash" to i.passwordHash,
+        "passwordSalt" to i.passwordSalt,
+        "devise" to i.devise,
+        "updatedAt" to i.updatedAt,
+        "isDeleted" to i.isDeleted
         )
 
     private fun mapToInfos(m: Map<String, Any?>) = com.example.caisse.data.ShopInfos(
@@ -530,8 +533,21 @@ class SyncWorker(
         phone = m["phone"] as String,
         email = m["email"] as String,
         logo = m["logo"] as? Int,
-        password = m["password"] as String,
-        devise = m["devise"] as String
+        passwordHash =
+            (m["passwordHash"] as? String)
+                ?: (m["password"] as? String)      // ancien format cloud
+                ?: "",
+
+        passwordSalt =
+            (m["passwordSalt"] as? String)
+                ?: "",
+
+        devise = m["devise"] as? String ?: "FCFA",
+
+        // si tu as ces champs dans ShopInfos
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
     )
 
 
@@ -552,25 +568,17 @@ class SyncWorker(
 
 
     private fun mapToProduit(m: Map<String, Any?>): Produit {
-        val rawImage: Int? = when (val img = m["image"]) {
-            is Number -> img.toInt()
-            is String -> img.toIntOrNull()
+        val image: String? = when (val img = m["image"]) {
+            is String -> img              // ✅ nouveau format (URI)
+            is Number -> null
             else -> null
         }
-
-        // 🛑 1. Liste complète des IDs systèmes à exclure
-        val isSystemDrawable =
-            rawImage != null &&
-                    rawImage in 1..2000000000 && // range typique des android.R
-                    rawImage !in R.drawable::class.java.fields.mapNotNull { it.getInt(null) }
-
-        val safeImage = if (isSystemDrawable) null else rawImage
 
         return Produit(
             id = UUID.fromString(m["id"] as String),
             nom = m["nom"] as String,
             prix = (m["prix"] as Number).toDouble(),
-            image = safeImage,               // 🔥 on met l’image nettoyée !
+            image = image,               // 🔥 on met l’image nettoyée !
             categoryId = UUID.fromString(m["categoryId"] as String),
             stock = (m["stock"] as Number).toInt(),
             description = m["description"] as String?,

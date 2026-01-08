@@ -36,6 +36,7 @@ import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
 import com.example.caisse.data.VenteWithDetails
+import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -96,13 +97,13 @@ fun HistoriqueScreen(
             if (selectedTab == 0) {
                 LazyColumn {
                     items(invoicesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails, title = "Vente Table")
+                        VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.getInfos()?.devise ?: "")
                     }
                 }
             } else {
                 LazyColumn {
                     items(ventesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails, title = "Vente Panier")
+                        VenteCard(venteDetails, title = "Ventes", devise = menuViewModel.getInfos()?.devise ?: "")
                     }
                 }
             }
@@ -113,7 +114,7 @@ fun HistoriqueScreen(
 
 
 @Composable
-fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente") {
+fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente", devise : String) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -124,17 +125,17 @@ fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente") {
                 .format(Date(venteDetails.vente.date))
             Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Text("Date: $formattedDate", style = MaterialTheme.typography.bodySmall)
-            Text("Total: ${venteDetails.vente.total.toInt()} ",
+            Text("Total: " +  formatPrice(venteDetails.vente.total,devise),
                 fontWeight = FontWeight.Bold,
                 fontSize = MaterialTheme.typography.titleMedium.fontSize
             )
             Spacer(Modifier.height(8.dp))
-            venteDetails.lignes.forEach { ArticleRow(it) }
+            venteDetails.lignes.forEach { ArticleRow(it, devise = devise) }
         }
     }
 }
 @Composable
-fun ArticleRow(ticket: Ticket) {
+fun ArticleRow(ticket: Ticket,devise : String ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -142,7 +143,7 @@ fun ArticleRow(ticket: Ticket) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(ticket.produit.nom, style = MaterialTheme.typography.bodyMedium)
-        Text("x${ticket.quantity} • ${String.format("%.2f €", ticket.produit.prix * ticket.quantity)}",
+        Text("x${ticket.quantity} • ${formatPrice(ticket.produit.prix * ticket.quantity,devise)}",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium
         )

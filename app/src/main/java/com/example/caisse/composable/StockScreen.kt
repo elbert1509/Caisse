@@ -1,12 +1,31 @@
 package com.example.caisse.composable
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -23,6 +42,7 @@ import com.example.caisse.ui.theme.Slate100
 import com.example.caisse.ui.theme.Slate500
 import com.example.caisse.ui.theme.Slate700
 import com.example.caisse.ui.theme.Slate900
+import com.example.caisse.util.formatPrice
 import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +60,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
     val totalUnits = remember(lignes) { lignes.sumOf { it.stock } }
     val totalRevenue = remember(lignes) { lignes.sumOf { it.revenue } }
     val maxRevenue = remember(lignes) { lignes.maxOfOrNull { it.revenue } ?: 0.0 }
+    val shopInfos = viewModel.getInfos()
 
     Scaffold(
         topBar = {
@@ -55,7 +76,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
         },
         containerColor = Slate100,
         bottomBar = {
-            BottomTotalBar(total = totalRevenue)
+            BottomTotalBar(total = totalRevenue, devise = shopInfos?.devise ?: "")
         }
     ) { padding ->
         LazyColumn(
@@ -77,20 +98,23 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
                         value = lignes.size.toDouble(),
                         gradient = Brush.linearGradient(listOf(MintStart, MintEnd)),
                         modifier = Modifier.weight(1f),
-                        isMoney = false
+                        isMoney = false,
+                        devise = shopInfos?.devise ?: ""
                     )
                     KpiCard(
                         title = "Unités en stock",
                         value = totalUnits.toDouble(),
                         gradient = Brush.linearGradient(listOf(Indigo, Color(0xFF2563EB))),
                         modifier = Modifier.weight(1f),
-                        isMoney = false
+                        isMoney = false,
+                        devise = shopInfos?.devise ?: ""
                     )
                     KpiCard(
                         title = "CA potentiel",
                         value = totalRevenue,
                         gradient = Brush.linearGradient(listOf(Slate700, Slate900)),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        devise = shopInfos?.devise ?: ""
                     )
                 }
             }
@@ -130,7 +154,8 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
                                         price = row.price,
                                         stock = row.stock,
                                         revenue = row.revenue,
-                                        ratio = if (maxRevenue > 0.0) (row.revenue / maxRevenue).toFloat() else 0f
+                                        ratio = if (maxRevenue > 0.0) (row.revenue / maxRevenue).toFloat() else 0f,
+                                        devise = shopInfos?.devise ?: ""
                                     )
                                 }
                             }
@@ -147,7 +172,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
 /* ------------------------------ UI components ------------------------------ */
 
 @Composable
-private fun BottomTotalBar(total: Double) {
+private fun BottomTotalBar(total: Double, devise: String ) {
     Surface(
         tonalElevation = 2.dp,
         shadowElevation = 8.dp,
@@ -161,7 +186,7 @@ private fun BottomTotalBar(total: Double) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("Chiffre d'affaires total potentiel", color = Slate500, style = MaterialTheme.typography.bodyMedium)
-            Text("€ ${total.formatMoney()}", color = Slate900, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(formatPrice(total,devise), color = Slate900, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -172,7 +197,8 @@ private fun KpiCard(
     value: Double,
     gradient: Brush,
     modifier: Modifier = Modifier,
-    isMoney: Boolean = true
+    isMoney: Boolean = true,
+    devise: String
 ) {
     Card(
         modifier = modifier.height(110.dp),
@@ -190,7 +216,7 @@ private fun KpiCard(
                 Text(title, style = MaterialTheme.typography.labelMedium, color = Slate500)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = if (isMoney) "€ ${value.formatMoney()}" else value.formatNumber(),
+                    text = if (isMoney) formatPrice( value,devise) else value.formatNumber(),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = Slate900
                 )
@@ -212,7 +238,8 @@ private fun StockRow(
     price: Double,
     stock: Int,
     revenue: Double,
-    ratio: Float
+    ratio: Float,
+    devise: String
 ) {
     Column {
         Row(
@@ -222,9 +249,9 @@ private fun StockRow(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.titleSmall, color = Slate900)
-                Text("€ ${price.formatMoney()} • stock: $stock", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                Text(formatPrice(price, devise = devise) +" • stock: $stock", style = MaterialTheme.typography.bodySmall, color = Slate500)
             }
-            Text("€ ${revenue.formatMoney()}", style = MaterialTheme.typography.titleSmall, color = Slate900)
+            Text( formatPrice(revenue,devise) , style = MaterialTheme.typography.titleSmall, color = Slate900)
         }
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
@@ -253,11 +280,6 @@ private fun Produit.toUiRow(): UiRow =
         revenue = prix * max(0, stock)
     )
 
-private fun Double.formatMoney(): String {
-    val v = this
-    return if (v % 1.0 == 0.0) "%,.0f".format(java.util.Locale.FRANCE, v)
-    else "%,.2f".format(java.util.Locale.FRANCE, v)
-}
 
 private fun Double.formatNumber(): String {
     val v = this

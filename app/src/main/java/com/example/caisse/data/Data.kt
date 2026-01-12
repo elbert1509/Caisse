@@ -76,7 +76,7 @@ data class Produit(
 
 @Entity(tableName = "vendeur")
 data class Vendeur(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
     val nom: String,
     val prenom: String,
     // sync
@@ -93,7 +93,7 @@ data class Vendeur(
 data class Vente(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val date: Long = System.currentTimeMillis(),
-    val vendeurId: Int? = 1,
+    val vendeurId:  UUID? = null,
     val total: Double,
     val tableId: UUID? =  UUID.fromString("22222222-0000-2222-2222-222222222222"),
     // sync
@@ -124,6 +124,7 @@ data class VenteLigne(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val venteId: UUID,
     val produitId: UUID,
+    val vendeurId: UUID,
     val quantity: Int,
     val prixUnitaire: Double,
     val sousTotal: Double,
@@ -220,6 +221,7 @@ data class AppTable(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val name: String,
     var active: Boolean = true,
+    val vendeurId:  UUID? = null, // ✅ NEW
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -256,6 +258,16 @@ data class TableItem(
     val isDeleted: Boolean = false
 )
 
+data class profile (
+    val name: String,
+    val role: UserRole
+)
+
+
+enum class UserRole {
+    GERANT,
+    VENDEUR
+}
 
 data class SalesData(val label: String, val amount: Double)
 data class ProductSale(val productName: String, val totalQuantity: Int)

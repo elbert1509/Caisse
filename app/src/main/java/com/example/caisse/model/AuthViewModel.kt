@@ -3,6 +3,7 @@ package com.example.caisse.model
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.caisse.data.AuthUiState
@@ -55,10 +56,32 @@ class AuthViewModel : ViewModel() {
         _ui.value = _ui.value.copy(isSignedIn = false)
     }
 
-    fun enqueueSync(context: Context, tag: String = "sync") {
+    /*fun enqueueSync(context: Context, tag: String = "sync") {
         val req = OneTimeWorkRequestBuilder<SyncWorker>().addTag(tag).build()
         WorkManager.getInstance(context).enqueue(req)
+    }*/
+
+    fun enqueueSync(context: Context,tag: String = "sync") {
+        val prefs = context.getSharedPreferences(tag, Context.MODE_PRIVATE)
+
+        // 🔥 reset du curseur de sync
+        prefs.edit()
+            .putLong("lastSyncAt", 0L)
+            .apply()
+
+        // lancer le worker de sync
+        val request = OneTimeWorkRequestBuilder<SyncWorker>()
+            .addTag("MANUAL_SYNC")
+            .build()
+
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                "MANUAL_SYNC",
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
     }
+
 
 
 

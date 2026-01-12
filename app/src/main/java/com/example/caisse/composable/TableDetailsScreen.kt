@@ -48,6 +48,7 @@ import androidx.navigation.NavController
 import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
+import com.example.caisse.data.UserRole
 import com.example.caisse.model.AuthViewModel
 import com.example.caisse.util.formatPrice
 import com.google.firebase.auth.auth
@@ -64,7 +65,17 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
     val products by menuViewModel.produits.collectAsState()
     val info = menuViewModel.getInfos()
     var selecredCategoryID by remember { mutableStateOf(categories.firstOrNull()?.id) }
+    val session by menuViewModel.sessionProfile.collectAsState()
+    val vendeurName = menuViewModel.getVendeurNameById(table?.vendeurId)
+    val role = session?.role
 
+    LaunchedEffect(tableUuid) {
+        menuViewModel.setCurrentTable(tableUuid)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { menuViewModel.setCurrentTable(null) }
+    }
     LaunchedEffect(categories) {
         if (selecredCategoryID == null || categories.none { it.id == selecredCategoryID }) {
             selecredCategoryID = categories.firstOrNull()?.id
@@ -74,36 +85,17 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
     val ctx = navController.context
 
-    // Load items when the screen is displayed for the first time
-    LaunchedEffect(tableUuid) {
+    LaunchedEffect(tableUuid, session.role, session.vendeurId) {
         menuViewModel.loadTableItems(tableUuid)
     }
 
-    // Clear items when the user leaves the screen
-    DisposableEffect(tableUuid) {
-        val uid = com.google.firebase.Firebase.auth.currentUser?.uid
-        var reg: com.google.firebase.firestore.ListenerRegistration? = null
-        if (uid != null) {
-            val cloud = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            reg = cloud.collection("users").document(uid)
-                .collection("table_items")
-                .whereEqualTo("tableId", tableUuid.toString())
-                .addSnapshotListener { snap, _ ->
-                    if (snap != null) {
-                        // Recharger depuis Room (pull a déjà upsert) ou reconstruire localement
-                        // Ici on recharge proprement via Room -> VM
-                        menuViewModel.loadTableItems(tableUuid)
-                    }
-                }
-        }
-        onDispose { reg?.remove() }
-    }
+
 
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Table : ${table?.name}") },
+                title = { Text(text = "Table : ${table?.name}   Serveur : $vendeurName") },
                 actions = {
                     IconButton(onClick = { /*TODO*/ }) {
                         Icon(Icons.Filled.Settings, contentDescription = null)
@@ -219,54 +211,57 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                 }
                 Spacer(Modifier.height(16.dp))
 
-                Row (modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ){
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            menuViewModel.payTable(tableUuid)
-                            navController.popBackStack() // revenir en arrière après validation
-                            authVm.enqueueSync(
-                                context = ctx,
-                                tag = "sync"
-                            )
-                        },
-                        enabled = totaltable > 0
-                    ) {
-                        Text("Valider", maxLines = 1)
-                    }
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-
-                            if (!bluetoothViewModel.isConnected.value) {
-                                Toast.makeText(
-                                    navController.context,
-                                    "Pas de device connecté",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }else{
-                                bluetoothViewModel.printInvoice(tableItems, totaltable,info)
-                                Toast.makeText(
-                                    navController.context,
-                                    "Ticket imprimé",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                if (role == UserRole.GERANT){
+                    Row (modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ){
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                menuViewModel.payTable(tableUuid)
                                 navController.popBackStack() // revenir en arrière après validation
-                            }
+                                authVm.enqueueSync(
+                                    context = ctx,
+                                    tag = "sync"
+                                )
+                            },
+                            enabled = totaltable > 0
+                        ) {
+                            Text("Valider", maxLines = 1)
+                        }
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+
+                                if (!bluetoothViewModel.isConnected.value) {
+                                    Toast.makeText(
+                                        navController.context,
+                                        "Pas de device connecté",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@Button
+                                }else{
+                                    bluetoothViewModel.printInvoice(tableItems, totaltable,info)
+                                    Toast.makeText(
+                                        navController.context,
+                                        "Ticket imprimé",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    navController.popBackStack() // revenir en arrière après validation
+                                }
 
 
-                        },
-                        enabled = totaltable > 0
-                    ) {
-                        Text("Imprimer",maxLines = 1)
+                            },
+                            enabled = totaltable > 0
+                        ) {
+                            Text("Imprimer",maxLines = 1)
+                        }
                     }
                 }
+
 
             }
 

@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.caisse.data.Vendeur
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 @Dao
 interface VendeurDao {
@@ -18,11 +19,11 @@ interface VendeurDao {
     @Delete
     suspend fun deleteVendeur(vendeur: Vendeur)
 
-    @Query("SELECT * FROM Vendeur")
+    @Query("SELECT * FROM vendeur")
     fun getAllVendeur(): Flow<List<Vendeur>>
-    @Query("SELECT * FROM Vendeur")
+    @Query("SELECT * FROM vendeur")
     fun getAllVendeursOnce(): List<Vendeur>
 
     @Query("SELECT * FROM vendeur WHERE id = :id")
-    suspend fun getVendeurById(id: Int): Vendeur?
+    suspend fun getVendeurById(id: UUID): Vendeur?
 }

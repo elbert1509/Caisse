@@ -48,6 +48,8 @@ class CaisseRepository(
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()
     suspend fun addVendeur(vendeur: Vendeur) = vendeurDao.insertVendeur(vendeur)
     suspend fun deleteVendeur(vendeur: Vendeur) = vendeurDao.deleteVendeur(vendeur)
+    suspend fun getVendeurById(id: UUID): Vendeur? = vendeurDao.getVendeurById(id)
+
 
     // --- VENTES ---
     fun getAllVentes() = venteDao.getAllVentes()
@@ -81,6 +83,10 @@ class CaisseRepository(
     suspend fun upsertTable(appTable: AppTable) = tableDao.upsertTable(appTable)
     suspend fun upsertTableItem(ti: TableItem) = tableDao.upsertTableItem(ti)
     suspend fun getTableById(id: UUID): AppTable? = tableDao.getTableById(id)
+    fun getActiveTablesFlow(): Flow<List<AppTable>> = tableDao.getActiveTablesFlow()
+    suspend fun deleteTableLocal(tableId: UUID) = tableDao.deleteTableLocal(tableId)
+
+
 
 
     // Invoice methods

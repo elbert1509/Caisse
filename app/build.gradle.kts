@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.foundation.layout)
     implementation(libs.io.coil.kt)
+    implementation(libs.foundation)
+    implementation(libs.identity.jvm)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

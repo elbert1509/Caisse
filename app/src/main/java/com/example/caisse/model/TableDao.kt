@@ -1,6 +1,7 @@
 package com.example.caisse.model
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -8,6 +9,7 @@ import androidx.room.Update
 import com.example.caisse.data.AppTable
 import com.example.caisse.data.Produit
 import com.example.caisse.data.TableItem
+import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
 @Dao
@@ -44,10 +46,18 @@ interface TableDao {
     @Query("DELETE FROM table_item WHERE tableId = :tableId AND productId = :productId")
     suspend fun deleteProductFromTable(tableId: UUID, productId: UUID)
 
+
+
     @Query("SELECT * FROM table_item WHERE tableId = :tableId")
     suspend fun getTableItems(tableId: UUID): List<TableItem>
 
     @Query("SELECT * FROM table_item")
     suspend fun getAllTableItemsOnce(): List<TableItem>
+
+    @Query("SELECT * FROM app_table WHERE active = 1")
+    fun getActiveTablesFlow(): Flow<List<AppTable>>
+
+    @Query("DELETE FROM app_table WHERE id = :tableId")
+    suspend fun deleteTableLocal (tableId: UUID)
 
 }

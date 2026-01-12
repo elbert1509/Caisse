@@ -73,24 +73,11 @@ import androidx.navigation.NavController
 import androidx.work.WorkManager
 import com.example.caisse.R
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.UserRole
 import com.example.caisse.model.AuthViewModel
 import com.google.firebase.auth.auth
 
 
-private fun requiredBtPerms(): Array<String> =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-        arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
-    else
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-
-private fun hasAllBtPermissions(ctx: android.content.Context): Boolean =
-    requiredBtPerms().all {
-        ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-private fun safeRun(action: () -> Unit) {
-    try { action() } catch (_: SecurityException) { /* ignore/log if needed */ }
-}
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,7 +86,8 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val info  = menuViewModel.getInfos()
-
+    val session by menuViewModel.sessionProfile.collectAsState()
+    val role = session.role
     var showLogoutDialog by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -321,11 +309,17 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         ActionButton(Icons.Filled.Sync, stringResource(R.string.text_synch)) {
+
                             authVm.enqueueSync(context = context, tag = "sync")
                         }
-                        ActionButton(Icons.Filled.Info, "Infos") {
-                            navController.navigate("infos")
+                        if (role == UserRole.GERANT)
+                        {
+                            ActionButton(Icons.Filled.Info, "Infos") {
+                                navController.navigate("infos")
+                            }
                         }
+
+
                     }
                 }
             }
@@ -380,6 +374,7 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                                 menuViewModel.clearCart()
                                 menuViewModel.clearTableItems()
                                 menuViewModel.stopRealtimeTables()
+                                menuViewModel.stopRealtimeTableItems()
                                 WorkManager.getInstance(context).cancelAllWorkByTag("sync")
                             } catch (_: Exception) {}
                             if (isConnected) safeRun { viewModel.disconnect() }

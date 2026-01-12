@@ -6,6 +6,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -43,11 +44,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.AppTable
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.UserRole
 import com.example.caisse.model.AuthViewModel
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
@@ -57,9 +61,21 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
     val config = LocalConfiguration.current
     val ctx = navController.context
     val screenWidthDp = config.screenWidthDp
+
+    val session by menuViewModel.sessionProfile.collectAsState()
+    val role = session.role
+    var vid = session.vendeurId
+
+    val infos = menuViewModel.getInfos()
+
+
     var selectedTab by remember { mutableIntStateOf(0) }
     val tables by menuViewModel.tables.collectAsState()
-    val filteredTables = tables.filter { it.active }
+    val filteredTables = remember(tables, role, vid) {
+        tables.filter { t ->
+            t.active && (role != UserRole.VENDEUR || (vid != null && t.vendeurId == vid))
+        }
+    }
     var showDialog by remember { mutableStateOf(false) }
     var tableName by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -90,7 +106,7 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Caisse PoS") },
+                title = { Text(text = "${infos?.name}") },
                 actions = {
                     IconButton(onClick = { /*TODO*/ }) {
                         Icon(Icons.Filled.Settings, contentDescription = null)
@@ -102,7 +118,7 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
         bottomBar = {
             BottomHome(
                 selectedIndex = selectedTab,
-                onTabSelected = { selectedTab = it },
+                onTabSelected = { },
                 navController = navController
             )
         },
@@ -140,7 +156,7 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
                             Button(
                                 onClick = {
                                     if (tableName.isNotBlank()) {
-                                        menuViewModel.addTable(tableName)
+                                        menuViewModel.addTable(tableName,vid)
                                         showDialog = false
                                         tableName = ""
 
@@ -192,14 +208,23 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
                 ) {
                     items(filteredTables) { table ->
                         Log.d("Tables", "taille actiu  : ${table.active}")
+                        val info = menuViewModel.getInfos()
+
+                        val total = menuViewModel.getTableTotal(table.id)
+
                         TableListItem(
                             table = table,
+                            total = total,
+                            devise = info?.devise ?: "",
                             onClick = {
                                 navController.navigate("table_details/${table.id}")
                             },
                             onLongPress = {
-                                tableToDelete = table
-                                showDeleteDialog = true
+                                if (role == UserRole.GERANT){
+                                    tableToDelete = table
+                                    showDeleteDialog = true
+                                }
+
                             }
                         )
                     }
@@ -220,8 +245,14 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TableListItem( table : AppTable, onClick : () -> Unit, onLongPress : () -> Unit) {
-
+fun TableListItem(
+    table : AppTable,
+    total: Double,
+    devise: String,
+    onClick : () -> Unit,
+    onLongPress : () -> Unit
+)
+{
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -239,6 +270,15 @@ fun TableListItem( table : AppTable, onClick : () -> Unit, onLongPress : () -> U
         )
         {
             Text(text = table.name, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.padding(top = 6.dp))
+
+            Text(
+                text = "Total : ${com.example.caisse.util.formatPrice(total, devise)}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+
         }
 
 

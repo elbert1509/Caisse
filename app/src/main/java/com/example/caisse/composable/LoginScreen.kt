@@ -58,7 +58,6 @@ import kotlinx.coroutines.withContext
 fun LoginScreen(
     navController: NavController,
     vm: AuthViewModel,
-    onSignedInNavigateRoute: String = "home", // adapte au nom de ta route Dashboard
     menuViewModel: MenuViewModel
 ) {
     val ui by vm.ui.collectAsState()
@@ -94,11 +93,12 @@ fun LoginScreen(
                 // Démarre la surveillance temps réel des tables
 
                 if (uid != null) {
-                   // menuViewModel.startRealtimeTables(uid)
+                    menuViewModel.startRealtimeTables(uid)
+                    menuViewModel.startRealtimeTableItems(uid)
                 }
 
                 // Puis navigation
-                navController.navigate(onSignedInNavigateRoute) {
+                navController.navigate("profile") {
                     popUpTo("login") { inclusive = true }
                     launchSingleTop = true
                 }

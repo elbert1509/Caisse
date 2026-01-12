@@ -191,8 +191,9 @@ class BluetoothViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 🔹 Nom de l’imprimante connectée
-                //val printerName = socket?.remoteDevice?.name ?: "Imprimante inconnue"
-                val printerName ="Imprimante inconnue"
+                val printerName = socket?.remoteDevice?.name ?: "Imprimante inconnue"
+
+
 
                 // 🔹 Infos magasin
                 val infos = menuViewModel.getInfos()

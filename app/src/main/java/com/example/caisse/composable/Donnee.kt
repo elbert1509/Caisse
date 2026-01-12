@@ -17,7 +17,6 @@ import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.sampleCategories
 import com.example.caisse.data.sampleProducts
-import com.example.caisse.data.sampleVendeurs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,9 +65,5 @@ fun addSampleData(menuViewModel: MenuViewModel) {
         menuViewModel.addProduit(produit.nom, produit.prix, produit.categoryId,produit.stock, produit.image)
     }
 
-    // 3. Ajouter vendeur
-    for (vendeur in sampleVendeurs) {
-        menuViewModel.addVendeur(vendeur)
 
-    }
 }

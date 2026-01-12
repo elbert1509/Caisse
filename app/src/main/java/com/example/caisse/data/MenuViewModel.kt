@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.caisse.util.PasswordHasher
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
@@ -47,6 +51,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
+    private val _currentTableId = MutableStateFlow<UUID?>(null)
+    val currentTableId: StateFlow<UUID?> = _currentTableId.asStateFlow()
+    private var tableItemsListener: ListenerRegistration? = null
+    private fun uidOrNull(): String? = com.google.firebase.Firebase.auth.currentUser?.uid
+
+    fun setCurrentTable(id: UUID?) {
+        _currentTableId.value = id
+    }
     // ---- CATEGORIES ----
     fun addCategory(name: String, description: String? = null, icon: Int? = null) {
         viewModelScope.launch {
@@ -192,7 +204,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
 
-    fun confirmerVente(vendeurId: Int? = 1) {
+    fun confirmerVente(vendeurId:  UUID? = null) {
         viewModelScope.launch {
             val cartItems = cart.value
             if (cartItems.isEmpty()) return@launch
@@ -209,6 +221,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 VenteLigne(
                     id = UUID.randomUUID(),
                     venteId = venteId,
+                    vendeurId = vendeurId?: sentinelPanier,
                     produitId = ticket.produit.id,
                     quantity = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
@@ -324,9 +337,13 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
 
     // ---- TABLES ----
-
-    private val _tables = MutableStateFlow<List<AppTable>>(emptyList())
-    val tables: StateFlow<List<AppTable>> = _tables.asStateFlow()
+    val tables: StateFlow<List<AppTable>> =
+        repository.getActiveTablesFlow()   // ⬅️ Flow Room
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
 
     private val _tableItems = MutableStateFlow<List<Ticket>>(emptyList())
     val tableItems: StateFlow<List<Ticket>> = _tableItems.asStateFlow()
@@ -337,25 +354,24 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         tickets.sumOf { it.produit.prix * it.quantity }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    init {
-        // ⚡ Charger les tables dès que le ViewModel est instancié
-        loadTables()
-    }
-    fun loadTables() {
+
+    fun addTable(name: String, vendeurId: UUID?) {
         viewModelScope.launch {
-            _tables.value = repository.getActiveTables()
+            val t = AppTable(name = name, vendeurId = vendeurId)
+                .copy(updatedAt = now(), isDirty = true)
+
+            repository.addTable(t)
+
+            uidOrNull()?.let { uid ->
+                runCatching {
+                    pushTableNow(uid, t.copy(isDirty = false))
+                    repository.upsertTable(t.copy(isDirty = false)) // nettoie isDirty local
+                }
+            }
+            _tableItems.value = emptyList()
         }
     }
 
-    fun addTable(name: String) {
-        viewModelScope.launch {
-            repository.addTable(
-                AppTable(name = name).copy(updatedAt = now(), isDirty = true)
-            )
-            _tableItems.value = emptyList()
-            loadTables()
-        }
-    }
 
     fun loadTableItems(tableId: UUID) {
         viewModelScope.launch {
@@ -368,75 +384,134 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             _tableItems.value = tickets
         }
     }
+    fun getTableTotal(tableId: UUID): Double {
+        return runBlocking {
+            val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
+            items.sumOf { item ->
+                val p = repository.getProduitById(item.productId)
+                (p?.prix ?: 0.0) * item.quantity
+            }
+        }
+    }
     fun clearTableItems() {
         _tableItems.value = emptyList()
     }
     fun deleteTable(tableId: UUID) {
         viewModelScope.launch {
-            val table = _tables.value.find { it.id == tableId }
-            if (table != null) {
-                repository.updateTable(
-                    table.copy(active = false, updatedAt = now(), isDirty = true)
-                )
-                loadTables()
+            val table = repository.getTableById(tableId) ?: return@launch
+
+            val deleted = table.copy(
+                active = false,
+                isDeleted = true,
+                updatedAt = now(),
+                isDirty = true
+            )
+
+            // 1) Local
+            repository.updateTable(deleted)
+
+            // 2) Push Firestore immédiat (temps réel)
+            uidOrNull()?.let { uid ->
+                runCatching {
+                    pushTableNow(uid, deleted.copy(isDirty = false))
+                    // marquer clean local après push
+                    repository.upsertTable(deleted.copy(isDirty = false))
+                }
             }
         }
     }
     fun addProductToTable(productId: UUID, tableId: UUID) {
         viewModelScope.launch {
             val existingItem = repository.getTableItems(tableId).find { it.productId == productId }
-            if (existingItem != null) {
-                repository.updateProductInTable(
-                    existingItem.copy(quantity = existingItem.quantity + 1, updatedAt = now(), isDirty = true)
-                )
-            } else {
-                repository.addProductToTable(
-                    TableItem(tableId = tableId, productId = productId, quantity = 1).copy(updatedAt = now(), isDirty = true)
-                )
+
+            val updatedItem =
+                existingItem?.copy(quantity = existingItem.quantity + 1, updatedAt = now(), isDirty = true)
+                    ?.also { repository.updateProductInTable(it) }
+                    ?: TableItem(tableId = tableId, productId = productId, quantity = 1)
+                        .copy(updatedAt = now(), isDirty = true)
+                        .also { repository.addProductToTable(it) }
+
+            uidOrNull()?.let { uid ->
+                runCatching {
+                    pushTableItemNow(uid, updatedItem.copy(isDirty = false))
+                    repository.upsertTableItem(updatedItem.copy(isDirty = false))
+                }
             }
+
             loadTableItems(tableId)
         }
     }
+
 
 
 
     fun updateTableItemQuantity(productId: UUID, tableId: UUID, newQuantity: Int) {
         viewModelScope.launch {
-            if (newQuantity > 0) {
-                val item = repository.getTableItems(tableId).find { it.productId == productId }
-                item?.let {
-                    repository.updateProductInTable(it.copy(quantity = newQuantity, updatedAt = now(), isDirty = true))
-                }
+            // 1) récupérer l’item existant
+            val existing = repository.getTableItems(tableId).find { it.productId == productId }
+                ?: return@launch
+
+            // 2) construire la version mise à jour (soft delete si 0)
+            val updatedItem = if (newQuantity > 0) {
+                existing.copy(
+                    quantity = newQuantity,
+                    updatedAt = now(),
+                    isDirty = true,
+                    isDeleted = false
+                )
             } else {
-                val item = repository.getTableItems(tableId).find { it.productId == productId }
-                item?.let {
-                    repository.updateProductInTable(
-                        it.copy(
-                            quantity = 0,
-                            updatedAt = now(),
-                            isDirty = true,
-                            isDeleted = true
-                        )
-                    )
-                }
-               // repository.deleteProductFromTable(tableId, productId)
+                existing.copy(
+                    quantity = 0,
+                    updatedAt = now(),
+                    isDirty = true,
+                    isDeleted = true
+                )
             }
+
+            // 3) update Room
+            repository.updateProductInTable(updatedItem)
+
+            // 4) push Firestore immédiat
+            val uid = Firebase.auth.currentUser?.uid
+            if (uid != null) {
+                runCatching {
+                    val map = mapOf(
+                        "id" to updatedItem.id.toString(),
+                        "tableId" to updatedItem.tableId.toString(),
+                        "productId" to updatedItem.productId.toString(),
+                        "quantity" to updatedItem.quantity,
+                        "updatedAt" to updatedItem.updatedAt,
+                        "isDeleted" to updatedItem.isDeleted
+                    )
+
+                    FirebaseFirestore.getInstance()
+                        .collection("users").document(uid)
+                        .collection("table_items").document(updatedItem.id.toString())
+                        .set(map)
+                        .await()
+
+                    // ✅ optionnel mais conseillé : marquer localement comme clean
+                    repository.upsertTableItem(updatedItem.copy(isDirty = false))
+                }
+            }
+
+            // 5) refresh UI
             loadTableItems(tableId)
         }
     }
 
-    fun getTableById(id: UUID): AppTable? {
-        return _tables.value.find { it.id == id }
+    fun getTableById(id: UUID): AppTable? = runBlocking {
+        repository.getTableById(id)
     }
     fun payTable(tableId: UUID) {
         viewModelScope.launch {
             val itemsToPay = _tableItems.value
             if (itemsToPay.isEmpty()) return@launch
-
+            val vendeurId = getTableById(tableId)?.vendeurId
             val venteId = UUID.randomUUID()
             val vente = Vente(
                 id = venteId,
-                vendeurId = 1,
+                vendeurId = vendeurId,
                 total = itemsToPay.sumOf { it.produit.prix * it.quantity },
                 date = now(),
                 tableId = tableId
@@ -446,6 +521,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 VenteLigne(
                     id = UUID.randomUUID(),
                     venteId = venteId,
+                    vendeurId = vendeurId?: sentinelPanier,
                     produitId = ticket.produit.id,
                     quantity = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
@@ -614,41 +690,79 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         tablesListener = cloud.collection("users").document(uid)
             .collection("tables")
             .addSnapshotListener { snap, _ ->
-                if (snap != null) {
-                    viewModelScope.launch {
-                        val remote = snap.documents.mapNotNull { doc ->
-                            val m = doc.data ?: return@mapNotNull null
-                            AppTable(
-                                id = java.util.UUID.fromString(m["id"] as String),
-                                name = m["name"] as String,
-                                active = (m["active"] as? Boolean) ?: true,
-                                updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                if (snap == null) return@addSnapshotListener
+
+                viewModelScope.launch {
+                    for (change in snap.documentChanges) {
+                        val m = change.document.data
+                        val table = AppTable(
+                            id = UUID.fromString(m["id"] as String),
+                            name = m["name"] as String,
+                            active = (m["active"] as? Boolean) ?: true,
+                            vendeurId = (m["vendeurId"] as? String)?.let { UUID.fromString(it) },
+                            updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: now(),
+                            isDirty = false,
+                            isDeleted = (m["isDeleted"] as? Boolean) ?: false
+                        )
+
+                        when (change.type) {
+                            com.google.firebase.firestore.DocumentChange.Type.ADDED,
+                            com.google.firebase.firestore.DocumentChange.Type.MODIFIED -> {
+                                repository.upsertTable(table)
+                            }
+                            com.google.firebase.firestore.DocumentChange.Type.REMOVED -> {
+                                repository.deleteTableLocal(table.id)
+                            }
+                        }
+                    }
+                }
+            }
+    }
+    fun startRealtimeTableItems(uid: String) {
+        stopRealtimeTableItems()
+        val cloud = FirebaseFirestore.getInstance()
+
+        tableItemsListener = cloud.collection("users").document(uid)
+            .collection("table_items")
+            .addSnapshotListener { snap, _ ->
+                if (snap == null) return@addSnapshotListener
+                viewModelScope.launch {
+                    val remote = snap.documents.mapNotNull { d ->
+                        val m = d.data ?: return@mapNotNull null
+                        try {
+                            TableItem(
+                                id = UUID.fromString(m["id"] as String),
+                                tableId = UUID.fromString(m["tableId"] as String),
+                                productId = UUID.fromString(m["productId"] as String),
+                                quantity = (m["quantity"] as? Number)?.toInt() ?: 0,
+                                updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: now(),
                                 isDirty = false,
                                 isDeleted = (m["isDeleted"] as? Boolean) ?: false
                             )
-                        }
-                        // upsert local (Room) + rafraîchir _tables
-                        remote.forEach { r ->
-                            val local = repository.getTableById(r.id) // ⚠️ pas seulement les actives
-                            val shouldApply =
-                                local == null ||
-                                        r.updatedAt >= local.updatedAt ||           // version plus récente
-                                        r.active != local.active ||                 // état actif changé → applique
-                                        r.isDeleted != local.isDeleted              // statut supprimé changé → applique
+                        } catch (_: Exception) { null }
+                    }
 
-                            if (shouldApply) {
-                                repository.upsertTable(r.copy(isDirty = false))
-                            }
+                    remote.forEach { repository.upsertTableItem(it) }
+
+                    currentTableId.value?.let { opened ->
+                        if (remote.any { it.tableId == opened }) {
+                            loadTableItems(opened)
                         }
-                        loadTables()
                     }
                 }
             }
     }
 
+
+
     fun stopRealtimeTables() {
         tablesListener?.remove()
         tablesListener = null
+    }
+
+    fun stopRealtimeTableItems() {
+        tableItemsListener?.remove()
+        tableItemsListener = null
     }
     fun changePassword(
         oldPassword: String,
@@ -677,4 +791,62 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
         return Result.success(Unit)
     }
+
+    data class SessionProfile(
+        val role: UserRole = UserRole.GERANT,
+        val  vendeurId: UUID? = null,
+        val vendeurName: String? = null
+    )
+
+    private val _sessionProfile = MutableStateFlow(SessionProfile())
+    val sessionProfile: StateFlow<SessionProfile> = _sessionProfile.asStateFlow()
+
+    fun setAdminProfile() {
+        _sessionProfile.value = SessionProfile(role = UserRole.GERANT, vendeurId = null, vendeurName = "Admin")
+    }
+
+    fun setVendeurProfile(v: Vendeur) {
+        _sessionProfile.value = SessionProfile(role = UserRole.VENDEUR, vendeurId = v.id, vendeurName = "${v.prenom} ")
+    }
+
+    fun getVendeurNameById(id: UUID?): String {
+        if (id == null) return "Admin"
+        val vendeur = runBlocking { repository.getVendeurById(id) }
+        return vendeur?.let { "${it.prenom} " } ?: "—"
+    }
+
+    private fun tableToMap(t: AppTable) = mapOf(
+        "id" to t.id.toString(),
+        "name" to t.name,
+        "active" to t.active,
+        "vendeurId" to t.vendeurId?.toString(),
+        "updatedAt" to t.updatedAt,
+        "isDeleted" to t.isDeleted
+    )
+
+    private fun tableItemToMap(ti: TableItem) = mapOf(
+        "id" to ti.id.toString(),
+        "tableId" to ti.tableId.toString(),
+        "productId" to ti.productId.toString(),
+        "quantity" to ti.quantity,
+        "updatedAt" to ti.updatedAt,
+        "isDeleted" to ti.isDeleted
+    )
+
+    private suspend fun pushTableNow(uid: String, table: AppTable) {
+        FirebaseFirestore.getInstance()
+            .collection("users").document(uid)
+            .collection("tables").document(table.id.toString())
+            .set(tableToMap(table.copy(isDirty = false)))
+            .await()
+    }
+
+    private suspend fun pushTableItemNow(uid: String, ti: TableItem) {
+        FirebaseFirestore.getInstance()
+            .collection("users").document(uid)
+            .collection("table_items").document(ti.id.toString())
+            .set(tableItemToMap(ti.copy(isDirty = false)))
+            .await()
+    }
+
 }

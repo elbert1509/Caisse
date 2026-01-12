@@ -36,6 +36,7 @@ import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
 import com.example.caisse.data.VenteWithDetails
+import com.example.caisse.data.UserRole
 import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,10 +48,25 @@ fun HistoriqueScreen(
     navController: NavController,
     menuViewModel: MenuViewModel
 ) {
-    val invoicesWithDetails by menuViewModel.ventesTablesWithDetails.collectAsState()
-    val ventesWithDetails by menuViewModel.ventesWithDetails.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    val session by menuViewModel.sessionProfile.collectAsState()
+    val role = session.role
+    val vid = session.vendeurId
+    val invoicesWithDetailsRaw by menuViewModel.ventesTablesWithDetails.collectAsState()
+    val ventesWithDetailsRaw by menuViewModel.ventesWithDetails.collectAsState()
 
+    val invoicesWithDetails = remember(invoicesWithDetailsRaw, role, vid) {
+        if (role == UserRole.VENDEUR && vid != null)
+            invoicesWithDetailsRaw.filter { it.vente.vendeurId == vid }
+        else invoicesWithDetailsRaw
+    }
+
+    val ventesWithDetails = remember(ventesWithDetailsRaw, role, vid) {
+        if (role == UserRole.VENDEUR && vid != null)
+            ventesWithDetailsRaw.filter { it.vente.vendeurId == vid }
+        else ventesWithDetailsRaw
+    }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var name = ""
     Scaffold(
         topBar = {
             TopAppBar(
@@ -88,7 +104,7 @@ fun HistoriqueScreen(
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Panier") }
+                    text = { Text("Comptoir") }
                 )
             }
 
@@ -97,7 +113,11 @@ fun HistoriqueScreen(
             if (selectedTab == 0) {
                 LazyColumn {
                     items(invoicesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.getInfos()?.devise ?: "")
+                        if(role == UserRole.GERANT)
+                        {
+                            name = menuViewModel.getVendeurNameById(venteDetails.vente.vendeurId) ?: ""
+                        }
+                        VenteCard(venteDetails, title = "Venteh Table  $name",devise = menuViewModel.getInfos()?.devise ?: "")
                     }
                 }
             } else {

@@ -39,7 +39,7 @@ val sampleProducts = listOf(
     Produit(
         nom = "Booster",
         prix = 800.00,
-        image = drawableUri("regab"),
+        image = drawableUri("boostercola"),
         categoryId = CATEGORY_BOISSON_ID,
         stock = 22,
         description = "Milkshake à la vanille"

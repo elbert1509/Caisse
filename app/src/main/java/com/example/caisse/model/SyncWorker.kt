@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.caisse.R
 import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Vente
@@ -45,6 +44,7 @@ class SyncWorker(
         pushDirtyVenteLignes(cloud, uid, venteDao,isInitialSync)
         pushDirtyVendeurs(cloud, uid, vendeurDao)
         pushInfos(cloud, uid, infosDao)
+        pullTablesSince(cloud, uid, since, dbLocal.tableDao(), isInitialSync)
         pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync)
         pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync)
 
@@ -58,9 +58,9 @@ class SyncWorker(
 
         pullCategoriesSince(cloud, uid, since, categorieDao, isInitialSync)
         pullProduitsSince(cloud, uid, since, produitDao, isInitialSync)
-        pullTablesSince(cloud, uid, since, dbLocal.tableDao(), isInitialSync)
+
         pullTableItemsSince(cloud, uid, since, dbLocal.tableDao(), produitDao, isInitialSync)
-        pullVendeursSince(cloud, uid, since, vendeurDao)
+        pullVendeursSince(cloud, uid, since, vendeurDao, isInitialSync)
         pullVentesSince(cloud, uid, since, venteDao, isInitialSync)
         pullVenteLignesSince(cloud, uid, since, venteDao, produitDao, isInitialSync)
         pullInfos(cloud, uid, infosDao)
@@ -84,14 +84,52 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val all = tableDao.getAllTablesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
+
+        val base = cloud.collection("users").document(uid).collection("tables")
+
         for (t in list) {
-            cloud.collection("users").document(uid)
-                .collection("tables").document(t.id.toString())
-                .set(tableToMap(t.copy(isDirty = false))).await()
+
+            // 🔍 récupérer la version distante
+            val remoteDoc = base.document(t.id.toString()).get().await()
+            val remoteUpdatedAt =
+                (remoteDoc.data?.get("updatedAt") as? Number)?.toLong() ?: -1L
+            val remoteActive =
+                remoteDoc.data?.get("active") as? Boolean
+            val remoteDeleted =
+                remoteDoc.data?.get("isDeleted") as? Boolean ?: false
+
+            // ✅ CAS 1 : le cloud est plus récent → on adopte le cloud
+            if (remoteUpdatedAt > t.updatedAt) {
+                if (remoteDoc.data != null) {
+                    val remote = mapToTable(remoteDoc.data!!)
+                    tableDao.upsertTable(remote.copy(isDirty = false))
+                }
+                continue
+            }
+
+            // ✅ CAS 2 : supprimé dans le cloud → on ne republie JAMAIS
+            if (remoteDeleted || remoteActive == false) {
+                tableDao.upsertTable(
+                    t.copy(
+                        active = false,
+                        isDeleted = true,
+                        isDirty = false,
+                        updatedAt = remoteUpdatedAt
+                    )
+                )
+                continue
+            }
+
+            // ✅ CAS 3 : push normal (local gagne)
+            base.document(t.id.toString())
+                .set(tableToMap(t.copy(isDirty = false)))
+                .await()
+
             tableDao.upsertTable(t.copy(isDirty = false))
         }
     }
+
     private suspend fun pushDirtyTableItems(
         cloud: FirebaseFirestore,
         uid: String,
@@ -219,17 +257,24 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val base = cloud.collection("users").document(uid).collection("tables")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+
+        val localCount = tableDao.getAllTablesOnce().size
+
+        val snap = if (isInitialSync || localCount == 0) {
+            base.get().await()
+        } else {
+            base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
+
+        Log.d("SyncWorker", "pullTables localCount=$localCount since=$since remote=${snap.size()}")
+
         for (doc in snap.documents) {
             val m = doc.data ?: continue
             val remote = mapToTable(m)
-            val local = tableDao.getTableById(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                tableDao.upsertTable(remote.copy(isDirty = false))
-            }
+            tableDao.upsertTable(remote.copy(isDirty = false))
         }
     }
+
     private suspend fun pullTableItemsSince(
         cloud: FirebaseFirestore,
         uid: String,
@@ -239,27 +284,33 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val base = cloud.collection("users").document(uid).collection("table_items")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+
+        val localCount = tableDao.getAllTableItemsOnce().size
+
+        val snap = if (isInitialSync || localCount == 0) {
+            base.get().await()
+        } else {
+            base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
+
+        Log.d("SyncWorker", "pullTableItems localCount=$localCount since=$since remote=${snap.size()}")
+
         for (doc in snap.documents) {
             val m = doc.data ?: continue
             val ti = mapToTableItem(m)
 
-            // s'assurer que le produit parent existe localement
+            // si produit parent absent, on le pull (ton code actuel fait déjà ça)
             if (produitDao.getProduitById(ti.productId) == null) {
                 val prodDoc = cloud.collection("users").document(uid)
                     .collection("produits").document(ti.productId.toString()).get().await()
-                if (prodDoc.exists()) {
-                    val p = mapToProduit(prodDoc.data!!)
-                    produitDao.insertProduit(p.copy(isDirty = false))
-                } else {
-                    continue
-                }
+                if (prodDoc.exists()) produitDao.insertProduit(mapToProduit(prodDoc.data!!).copy(isDirty = false))
+                else continue
             }
 
             tableDao.upsertTableItem(ti.copy(isDirty = false))
         }
     }
+
     private suspend fun pullProduitsSince(
         cloud: FirebaseFirestore,
         uid: String,
@@ -438,28 +489,35 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        vendeurDao: com.example.caisse.model.VendeurDao
+        vendeurDao: VendeurDao,
+        isInitialSync: Boolean
     ) {
-        val snap = cloud.collection("users").document(uid)
-            .collection("vendeurs")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+        val base = cloud.collection("users").document(uid).collection("vendeurs")
+
+        val localCount = vendeurDao.getAllVendeursOnce().size
+
+        val snap = if (isInitialSync || localCount == 0) {
+            base.get().await()
+        } else {
+            base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        }
+
+        Log.d("SyncWorker", "pullVendeurs localCount=$localCount since=$since remote=${snap.size()}")
 
         for (doc in snap.documents) {
             val data = doc.data ?: continue
             val remote = mapToVendeur(data)
-            val local = vendeurDao.getVendeurById(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                vendeurDao.updateVendeur(remote.copy(isDirty = false))
-            }
+            vendeurDao.insertVendeur(remote.copy(isDirty = false)) // UPSERT
         }
     }
+
     // --------------- MAPPERS (copiés depuis repo) ---------------
 
     private fun tableToMap(t: com.example.caisse.data.AppTable) = mapOf(
         "id" to t.id.toString(),
         "name" to t.name,
         "active" to t.active,
+        "vendeurId" to t.vendeurId?.toString(),
         "updatedAt" to t.updatedAt,
         "isDeleted" to t.isDeleted
     )
@@ -476,6 +534,7 @@ class SyncWorker(
         id = UUID.fromString(m["id"] as String),
         name = m["name"] as String,
         active = (m["active"] as? Boolean) ?: true,
+        vendeurId = parseUuidOrNull(m["vendeurId"] as? String),
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDirty = false,
         isDeleted = (m["isDeleted"] as? Boolean) ?: false
@@ -592,7 +651,7 @@ class SyncWorker(
     private fun venteToMap(v: Vente) = mapOf(
         "id" to v.id.toString(),
         "date" to v.date,
-        "vendeurId" to v.vendeurId,
+        "vendeurId" to v.vendeurId?.toString(),
         "total" to v.total,
         "tableId" to v.tableId?.toString(),
         "updatedAt" to v.updatedAt,
@@ -605,8 +664,7 @@ class SyncWorker(
         val id = parseUuidOrNull(getString(m, "id"))
             ?: throw IllegalArgumentException("vente.id invalide")
         val date = getNumberAsLong(m, "date") ?: System.currentTimeMillis()
-        val vendeurId = (m["vendeurId"] as? Number)?.toInt()
-            ?: (m["vendeurId"] as? String)?.toIntOrNull()
+        val vendeurId = parseUuidOrNull(m["vendeurId"] as? String)
         val total = getNumberAsDouble(m, "total") ?: 0.0
         val updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis()
         val tableId = parseUuidOrNull(getString(m, "tableId"))
@@ -626,6 +684,7 @@ class SyncWorker(
     private fun venteLigneToMap(vl: VenteLigne) = mapOf(
         "id" to vl.id.toString(),
         "venteId" to vl.venteId.toString(),
+        "vendeurId" to vl.vendeurId.toString(),
         "produitId" to vl.produitId.toString(),
         "quantity" to vl.quantity,
         "prixUnitaire" to vl.prixUnitaire,
@@ -639,6 +698,7 @@ class SyncWorker(
         return VenteLigne(
             id = UUID.fromString(m["id"] as String),
             venteId = UUID.fromString(m["venteId"] as String),
+            vendeurId = UUID.fromString(m["vendeurId"] as String),
             produitId = UUID.fromString(m["produitId"] as String),
             quantity = (m["quantity"] as? Number)?.toInt() ?: 0,
             prixUnitaire = (m["prixUnitaire"] as? Number)?.toDouble() ?: 0.0,
@@ -657,7 +717,7 @@ class SyncWorker(
     )
 
     private fun mapToVendeur(m: Map<String, Any?>) = com.example.caisse.data.Vendeur(
-        id = (m["id"] as? Number)?.toInt() ?: 0,
+        id = UUID.fromString(m["id"] as String),
         nom = m["nom"] as String,
         prenom = m["prenom"] as String,
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),

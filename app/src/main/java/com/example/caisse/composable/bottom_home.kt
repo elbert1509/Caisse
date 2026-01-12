@@ -3,6 +3,7 @@ package com.example.caisse.composable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -50,6 +51,12 @@ fun BottomHome(
             onClick = { navController?.navigate("historique") },
             icon = { Icon(Icons.Filled.History, contentDescription = "Historique") },
             label = { Text("Historique") }
+        )
+        NavigationBarItem(
+            selected = selectedIndex == 3,
+            onClick = { navController?.navigate("profile") },
+            icon = { Icon(Icons.Filled.Person, contentDescription = "Profile") },
+            label = { Text("Profil") }
         )
     }
 }

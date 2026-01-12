@@ -36,27 +36,23 @@ fun AppNavigation() {
 
 
     NavHost(navController,
-        startDestination = if (isSignedIn) "home" else "login"
+        startDestination = if (isSignedIn) "profile" else "login"
     ) {
-        composable("home") { HomeScreen(
-            onAction = { action ->
-                when(action){
-                    HomeActionButton.PRENDRE_COMMANDE -> navController.navigate("prendre_commande")
-                    HomeActionButton.HISTORIQUE_COMMANDES ->  navController.navigate("historique")
-                    HomeActionButton.PARTAGER_BOUTONS ->  println("Partage pas encore implémenté")
-                    HomeActionButton.GERE_CATEGORIE -> navController.navigate("categorie")
-                    HomeActionButton.GERER_INVENTAIRE -> navController.navigate("inventaire")
-                    HomeActionButton.EXPORTER ->  navController.navigate("rapport")
-                    HomeActionButton.GERER_PRODUITS -> navController.navigate("produit")
-                    HomeActionButton.TABLE -> navController.navigate("table")
-                    HomeActionButton.DONNES ->   navController.navigate("donnee")
-                    HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
-                    HomeActionButton.STOCK ->  navController.navigate("stock")
-                    HomeActionButton.GESTION ->  navController.navigate("gestion")
-                }
-            },
-            navController = navController,
-        ) }
+        composable("home") {
+            HomeScreen(
+                onAction = { action ->
+                    when(action){
+                        HomeActionButton.PRENDRE_COMMANDE -> navController.navigate("prendre_commande")
+                        HomeActionButton.HISTORIQUE_COMMANDES -> navController.navigate("historique")
+                        HomeActionButton.TABLE -> navController.navigate("table")
+                        else -> navController.navigate("gestion") // admin only
+                    }
+                },
+                navController = navController,
+                menuViewModel = menuViewModel,
+                authVm = authViewModel
+            )
+        }
         composable("categorie") { CategoriesScreen( navController = navController, modifier = Modifier,
             viewModelcategories = menuViewModel
         ) }
@@ -99,12 +95,13 @@ fun AppNavigation() {
         }
         composable("login") {
             val authVm = remember { AuthViewModel() } // ou via hiltViewModel() si tu utilises Hilt
-            LoginScreen(navController = navController, vm = authVm, onSignedInNavigateRoute = "home", menuViewModel = menuViewModel)
+            LoginScreen(navController = navController, vm = authVm, menuViewModel = menuViewModel)
         }
         composable("infos") { InfosScreen(navController = navController, viewModel = menuViewModel) }
         composable("gestion") { GestionScreen(navController = navController, viewModel = menuViewModel) }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
-
+        composable("profile"){ ProfileScreen(navController = navController, menuViewModel = menuViewModel)}
+        composable("vendeur") { VendeurScreen(navController = navController, menuViewModel = menuViewModel) }
     }
 
 }

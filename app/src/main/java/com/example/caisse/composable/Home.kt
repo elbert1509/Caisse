@@ -5,12 +5,14 @@ import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PointOfSale
@@ -28,11 +30,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.HomeActionButton
 import com.example.caisse.data.HomeTileData
+import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.UserRole
+import com.example.caisse.model.AuthViewModel
 
 /**
  * Écran d’accueil PoS en Jetpack Compose
@@ -59,16 +63,22 @@ import com.example.caisse.data.HomeTileData
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen( onAction: (HomeActionButton) -> Unit,
-                navController: NavController
+                navController: NavController,
+                menuViewModel: MenuViewModel,
+                authVm: AuthViewModel
 
 ) {
 
+    val session by menuViewModel.sessionProfile.collectAsState()
+    val role = session.role
+    val name = menuViewModel.getVendeurNameById(session.vendeurId)
 
+    val items = rememberHomeTiles(role)
     // Détecte l’orientation et la largeur pour fixer dynamiquement le nombre de colonnes
     val config = LocalConfiguration.current
     val orientation = config.orientation
     val screenWidthDp = config.screenWidthDp
-    val items = rememberHomeTiles()
+    //val items = rememberHomeTiles()
     var selectedTab by remember { mutableIntStateOf(0) }
     val columns = when {
         // Très grands écrans ou tablette paysage -> 4 colonnes
@@ -78,10 +88,29 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
         // Portrait -> 2 colonnes
         else -> 2
     }
+
+    val infos = menuViewModel.getInfos()
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Caisse PoS") },
+                title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+
+                            ) {
+                                Text(text = "${infos?.name}" )
+                                Text(text = "Vendeur: " + name, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+
+                        },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigate("profile") }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { navController.navigate("bluetooth") }) {
                         Icon(Icons.Filled.Settings, contentDescription = null)
@@ -107,7 +136,13 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
                 .padding(padding)
         ){
             items(items){tile->
-                ActionButton(data = tile, onClick = {onAction(tile.action)}, modifier = Modifier.padding(8.dp))
+                ActionButton(
+                    data = tile,
+                    onClick = { onAction(tile.action) },
+                    modifier = Modifier.padding(8.dp),
+                    authVm = authVm,
+                    navController = navController
+                )
 
             }
         }
@@ -117,21 +152,32 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
 
 
 @Composable
-fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Modifier)
-{
+fun ActionButton(data: HomeTileData, onClick: () -> Unit, modifier: Modifier = Modifier, authVm: AuthViewModel, navController: NavController) {
 
-    Card(modifier = modifier
-                .clickable { onClick() },
+    Card(
+        modifier = modifier
+            .clickable {
+                onClick()
+                authVm.enqueueSync(
+                    context = navController.context,
+                    tag = "sync"
+                )
+                       },
         colors = CardDefaults.cardColors(containerColor = data.color),
         elevation = cardElevation(6.dp),
-        shape = MaterialTheme.shapes.large)
-    {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth(),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center)
-        {
+            verticalArrangement = Arrangement.Center
+        ) {
             Icon(data.icon, contentDescription = null, tint = White)
-            Text(text = data.title , color = White, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(
+                text = data.title,
+                color = White,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }
@@ -141,35 +187,30 @@ fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Mo
 
 
 
-private fun defaultHomeButton() : List<HomeTileData> = listOf(
-    HomeTileData("Prendre Commande", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
-    HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
-    HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
-    HomeTileData("Table", Icons.Default.TableRestaurant, color = Gray, HomeActionButton.TABLE),
-    //HomeTileData("donnee", Icons.Default.Fastfood, color = Gray, HomeActionButton.DONNES),
-    HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
-)
+private fun defaultHomeButton(role: UserRole): List<HomeTileData> {
+    val vendeurTiles = listOf(
+        HomeTileData("Prendre Commande", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
+        HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
+        HomeTileData("Table", Icons.Default.TableRestaurant, color = Gray, HomeActionButton.TABLE),
+    )
 
+    val adminPlus = listOf(
+        HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
+        HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),
+    )
+
+    return if (role == UserRole.VENDEUR) vendeurTiles else (vendeurTiles + adminPlus)
+}
 
 @Composable
-private fun  rememberHomeTiles() : List<HomeTileData> {
-    return rememberSaveable(saver = HomeTilesSaver) {
-        defaultHomeButton()
-    }
+private fun rememberHomeTiles(role: UserRole): List<HomeTileData> {
+    return remember(role) { defaultHomeButton(role) }
 }
 
 
 
 
-private val HomeTilesSaver: Saver<List<HomeTileData>, Any> = Saver(
-    save = { list -> list.map { it.title } }, // on sauvegarde juste les titres (ordre)
-    restore = { saved ->
-        val order = (saved as List<*>).filterIsInstance<String>()
-        val byTitle = defaultHomeButton().associateBy { it.title }
-// Recompose la liste dans l’ordre sauvegardé, puis ajoute les manquants
-        (order.mapNotNull { byTitle[it] } + defaultHomeButton().filter { it.title !in order })
-    }
-)
+
 @Preview
 @Composable
 fun HomeScreenPreview() {

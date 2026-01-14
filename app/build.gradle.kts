@@ -7,15 +7,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.caisse"
+    namespace = "com.example.piece"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.caisse"
+        applicationId = "com.example.piece"
         minSdk = 23
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1"
         vectorDrawables.useSupportLibrary = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

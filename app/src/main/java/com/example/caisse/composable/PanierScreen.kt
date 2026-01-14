@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,9 +34,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.model.AuthViewModel
-import com.example.caisse.util.formatPrice
+import com.example.piece.data.MenuViewModel
+import com.example.piece.model.AuthViewModel
+import com.example.piece.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

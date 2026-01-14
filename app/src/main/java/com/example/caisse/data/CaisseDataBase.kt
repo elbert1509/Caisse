@@ -1,19 +1,19 @@
-package com.example.caisse.data
+package com.example.piece.data
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.example.caisse.model.CategorieDao
-import com.example.caisse.model.InfosDao
-import com.example.caisse.model.InvoiceDao
-import com.example.caisse.model.ProduitDao
-import com.example.caisse.model.RecetteDao
-import com.example.caisse.model.TableDao
-import com.example.caisse.model.VendeurDao
-import com.example.caisse.model.VenteDao
-import com.example.caisse.model.VoitureDao
+import com.example.piece.model.CategorieDao
+import com.example.piece.model.InfosDao
+import com.example.piece.model.InvoiceDao
+import com.example.piece.model.ProduitDao
+import com.example.piece.model.RecetteDao
+import com.example.piece.model.TableDao
+import com.example.piece.model.VendeurDao
+import com.example.piece.model.VenteDao
+import com.example.piece.model.VoitureDao
 
 @Database(
     entities = [

@@ -1,4 +1,4 @@
-package com.example.caisse.bluetooth
+package com.example.piece.bluetooth
 
 import android.Manifest
 import android.app.LocaleManager
@@ -71,9 +71,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import androidx.navigation.NavController
 import androidx.work.WorkManager
-import com.example.caisse.R
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.model.AuthViewModel
+import com.example.piece.R
+import com.example.piece.data.MenuViewModel
+import com.example.piece.model.AuthViewModel
 import com.google.firebase.auth.auth
 
 

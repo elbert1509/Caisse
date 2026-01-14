@@ -1,16 +1,16 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.caisse.R
-import com.example.caisse.data.CaisseDataBase
-import com.example.caisse.data.Produit
-import com.example.caisse.data.Recette
-import com.example.caisse.data.Vente
-import com.example.caisse.data.VenteLigne
-import com.example.caisse.data.Voiture
+import com.example.piece.R
+import com.example.piece.data.CaisseDataBase
+import com.example.piece.data.Produit
+import com.example.piece.data.Recette
+import com.example.piece.data.Vente
+import com.example.piece.data.VenteLigne
+import com.example.piece.data.Voiture
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -549,14 +549,14 @@ class SyncWorker(
 
     // --------------- MAPPERS (copiés depuis repo) ---------------
 
-    private fun tableToMap(t: com.example.caisse.data.AppTable) = mapOf(
+    private fun tableToMap(t: com.example.piece.data.AppTable) = mapOf(
         "id" to t.id.toString(),
         "name" to t.name,
         "active" to t.active,
         "updatedAt" to t.updatedAt,
         "isDeleted" to t.isDeleted
     )
-    private fun tableItemToMap(ti: com.example.caisse.data.TableItem) = mapOf(
+    private fun tableItemToMap(ti: com.example.piece.data.TableItem) = mapOf(
         "id" to ti.id.toString(),
         "tableId" to ti.tableId.toString(),
         "productId" to ti.productId.toString(),
@@ -565,7 +565,7 @@ class SyncWorker(
         "isDirty" to ti.isDirty,
         "isDeleted" to ti.isDeleted
     )
-    private fun mapToTable(m: Map<String, Any?>) = com.example.caisse.data.AppTable(
+    private fun mapToTable(m: Map<String, Any?>) = com.example.piece.data.AppTable(
         id = UUID.fromString(m["id"] as String),
         name = m["name"] as String,
         active = (m["active"] as? Boolean) ?: true,
@@ -574,7 +574,7 @@ class SyncWorker(
         isDeleted = (m["isDeleted"] as? Boolean) ?: false
     )
 
-    private fun mapToTableItem(m: Map<String, Any?>) = com.example.caisse.data.TableItem(
+    private fun mapToTableItem(m: Map<String, Any?>) = com.example.piece.data.TableItem(
         id = UUID.fromString(m["id"] as String),
         tableId = UUID.fromString(m["tableId"] as String),
         productId = UUID.fromString(m["productId"] as String),
@@ -596,7 +596,7 @@ class SyncWorker(
         "isDeleted" to p.isDeleted
     )
 
-    private fun categorieToMap(c: com.example.caisse.data.Category) = mapOf(
+    private fun categorieToMap(c: com.example.piece.data.Category) = mapOf(
         "id" to c.id.toString(),
         "name" to c.name,
         "description" to c.description,
@@ -605,7 +605,7 @@ class SyncWorker(
         "isDeleted" to c.isDeleted
     )
 
-    private fun infosToMap(i: com.example.caisse.data.ShopInfos) = mapOf(
+    private fun infosToMap(i: com.example.piece.data.ShopInfos) = mapOf(
         "id" to i.id,
         "name" to i.name,
         "address" to i.address,
@@ -619,7 +619,7 @@ class SyncWorker(
         "isDeleted" to i.isDeleted
         )
 
-    private fun mapToInfos(m: Map<String, Any?>) = com.example.caisse.data.ShopInfos(
+    private fun mapToInfos(m: Map<String, Any?>) = com.example.piece.data.ShopInfos(
         id = (m["id"] as? Number)?.toInt() ?: 0,
         name = m["name"] as String,
         address = m["address"] as String,
@@ -646,7 +646,7 @@ class SyncWorker(
 
 
 
-    private fun mapToCategorie(m: Map<String, Any?>) = com.example.caisse.data.Category(
+    private fun mapToCategorie(m: Map<String, Any?>) = com.example.piece.data.Category(
         id = UUID.fromString(m["id"] as String),
         name = m["name"] as String,
         description = m["description"] as String?,
@@ -749,7 +749,7 @@ class SyncWorker(
             isDeleted = m["isDeleted"] as? Boolean ?: false
         )
     }
-    private fun vendeurToMap(v: com.example.caisse.data.Vendeur) = mapOf(
+    private fun vendeurToMap(v: com.example.piece.data.Vendeur) = mapOf(
         "id" to v.id.toString(),
         "nom" to v.nom,
         "prenom" to v.prenom,
@@ -757,7 +757,7 @@ class SyncWorker(
         "isDeleted" to v.isDeleted
     )
 
-    private fun mapToVendeur(m: Map<String, Any?>) = com.example.caisse.data.Vendeur(
+    private fun mapToVendeur(m: Map<String, Any?>) = com.example.piece.data.Vendeur(
         id = (m["id"] as? Number)?.toInt() ?: 0,
         nom = m["nom"] as String,
         prenom = m["prenom"] as String,

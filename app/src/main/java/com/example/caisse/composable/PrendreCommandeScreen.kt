@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import android.view.MotionEvent
 import android.widget.Toast
@@ -56,12 +56,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.caisse.R
-import com.example.caisse.bluetooth.BluetoothViewModel
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Produit
-import com.example.caisse.data.Ticket
-import com.example.caisse.util.formatPrice
+import com.example.piece.R
+import com.example.piece.bluetooth.BluetoothViewModel
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Produit
+import com.example.piece.data.Ticket
+import com.example.piece.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

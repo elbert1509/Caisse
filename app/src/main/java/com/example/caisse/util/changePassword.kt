@@ -1,4 +1,4 @@
-package com.example.caisse.util
+package com.example.piece.util
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.example.caisse.data.MenuViewModel
+import com.example.piece.data.MenuViewModel
 
 @Composable
 fun ChangePasswordDialog(

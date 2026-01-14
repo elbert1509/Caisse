@@ -1,14 +1,13 @@
-package com.example.caisse.data
+package com.example.piece.data
 
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.caisse.util.PasswordHasher
+import com.example.piece.util.PasswordHasher
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -728,7 +727,12 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // ---- VOITURES ----
 
     private val _voitures = MutableStateFlow<List<Voiture>>(emptyList())
-    val voitures: StateFlow<List<Voiture>> = _voitures.asStateFlow()
+    val voitures: StateFlow<List<Voiture>> =
+        repository.getAllVoitures().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     init {
         // ⚡ Charger les tables dès que le ViewModel est instancié
@@ -793,6 +797,13 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             .map { list -> list.filter { !it.isDeleted }.sortedByDescending { it.date } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     }
+    val allRecettes: StateFlow<List<Recette>> =
+        repository.getAllRecettes()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
     fun addRecetteForVoiture(
         voitureId: UUID,

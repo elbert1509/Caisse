@@ -1,9 +1,7 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -16,16 +14,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.Category
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Produit
-import com.example.caisse.data.Voiture
-import com.example.caisse.data.sampleCategories
-import com.example.caisse.data.sampleProducts
-import com.example.caisse.data.sampleVendeurs
-import com.example.caisse.data.sampleVoitures
+import com.example.piece.data.Category
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Produit
+import com.example.piece.data.Voiture
+import com.example.piece.data.sampleCategories
+import com.example.piece.data.sampleProducts
+import com.example.piece.data.sampleVendeurs
+import com.example.piece.data.sampleVoitures
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

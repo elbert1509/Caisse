@@ -1,4 +1,4 @@
-package com.example.caisse.ui.theme
+package com.example.piece.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

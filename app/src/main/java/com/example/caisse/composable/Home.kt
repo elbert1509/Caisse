@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import android.content.res.Configuration
 import androidx.compose.foundation.Image
@@ -15,13 +15,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CarRental
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
@@ -53,11 +51,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.R // Assurez-vous que cet import correspond à votre package
-import com.example.caisse.data.HomeActionButton
-import com.example.caisse.data.HomeTileData
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.model.AuthViewModel
+import com.example.piece.R // Assurez-vous que cet import correspond à votre package
+import com.example.piece.data.HomeActionButton
+import com.example.piece.data.HomeTileData
+import com.example.piece.data.MenuViewModel
+import com.example.piece.model.AuthViewModel
 
 /**
  * Écran d’accueil PoS en Jetpack Compose
@@ -99,7 +97,7 @@ fun HomeScreen(
 
         // 🖼️ Image de fond
         Image(
-            painter = painterResource(id = R.drawable.pieceautos),
+            painter = painterResource(id = R.drawable.cosmoparc),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()

@@ -1,7 +1,7 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import androidx.room.*
-import com.example.caisse.data.Recette
+import com.example.piece.data.Recette
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 

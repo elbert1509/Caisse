@@ -1,11 +1,11 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import com.example.caisse.data.Invoice
-import com.example.caisse.data.InvoiceItem
+import com.example.piece.data.Invoice
+import com.example.piece.data.InvoiceItem
 import java.util.UUID
 
 @Dao

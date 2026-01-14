@@ -1,8 +1,8 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import android.app.Application
 import androidx.room.Room
-import com.example.caisse.data.CaisseDataBase
+import com.example.piece.data.CaisseDataBase
 
 class App : Application()  {
 

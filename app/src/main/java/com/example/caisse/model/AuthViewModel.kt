@@ -1,11 +1,11 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.example.caisse.data.AuthUiState
+import com.example.piece.data.AuthUiState
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import android.content.Context
 import androidx.compose.foundation.background
@@ -39,15 +39,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.CaisseDataBase
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.model.AuthViewModel
-import com.example.caisse.ui.theme.MintEnd
-import com.example.caisse.ui.theme.MintStart
-import com.example.caisse.ui.theme.Slate100
-import com.example.caisse.ui.theme.Slate500
-import com.example.caisse.ui.theme.Slate700
-import com.example.caisse.ui.theme.Slate900
+import com.example.piece.data.CaisseDataBase
+import com.example.piece.data.MenuViewModel
+import com.example.piece.model.AuthViewModel
+import com.example.piece.ui.theme.MintEnd
+import com.example.piece.ui.theme.MintStart
+import com.example.piece.ui.theme.Slate100
+import com.example.piece.ui.theme.Slate500
+import com.example.piece.ui.theme.Slate700
+import com.example.piece.ui.theme.Slate900
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers

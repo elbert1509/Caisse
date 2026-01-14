@@ -1,4 +1,4 @@
-package com.example.caisse.bluetooth
+package com.example.piece.bluetooth
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -13,18 +13,18 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.ShopInfos
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.ShopInfos
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.OutputStream
 import java.util.UUID
-import com.example.caisse.data.Ticket
-import com.example.caisse.util.StripAccents
-import com.example.caisse.util.formatPrice
-import com.example.caisse.util.invoiceNoFromId
+import com.example.piece.data.Ticket
+import com.example.piece.util.StripAccents
+import com.example.piece.util.formatPrice
+import com.example.piece.util.invoiceNoFromId
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Date

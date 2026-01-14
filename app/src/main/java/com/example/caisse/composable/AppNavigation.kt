@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -10,12 +10,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.caisse.bluetooth.BluetoothViewModel
-import com.example.caisse.bluetooth.ParametreBluetooothScreen
-import com.example.caisse.data.DashboardViewModel
-import com.example.caisse.data.HomeActionButton
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.model.AuthViewModel
+import com.example.piece.bluetooth.BluetoothViewModel
+import com.example.piece.bluetooth.ParametreBluetooothScreen
+import com.example.piece.data.DashboardViewModel
+import com.example.piece.data.HomeActionButton
+import com.example.piece.data.MenuViewModel
+import com.example.piece.model.AuthViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -54,7 +54,7 @@ fun AppNavigation() {
                     HomeActionButton.STOCK ->  navController.navigate("stock")
                     HomeActionButton.GESTION ->  navController.navigate("gestion")
                     HomeActionButton.RECHERCHE ->  navController.navigate("recherche")
-                    HomeActionButton.VOITURE ->  navController.navigate("voiture")
+                    HomeActionButton.VOITURE ->  navController.navigate("voiture_detail")
 
                 }
             },
@@ -112,16 +112,7 @@ fun AppNavigation() {
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
         composable("recherche") { RechercheScreen( viewModel = menuViewModel) }
         composable("voiture") { VoitureHomeScreen( viewModel = menuViewModel, navController = navController) }
-        composable(
-            "voiture_details/{voitureId}",
-            arguments = listOf(navArgument("voitureId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            VoitureDetailScreen(
-                navController = navController,
-                menuViewModel = menuViewModel,
-                voitureId = backStackEntry.arguments?.getString("voitureId") ?: ""
-            )
-        }
+        composable("voiture_detail") { VoitureDetailScreen( menuViewModel = menuViewModel, navController = navController) }
 
 
     }

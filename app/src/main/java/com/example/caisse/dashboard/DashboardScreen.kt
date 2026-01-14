@@ -1,9 +1,7 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
-import android.R.attr.onClick
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -18,18 +16,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.DashboardViewModel
+import com.example.piece.data.DashboardViewModel
 import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.charts.PieChart
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.caisse.ui.theme.Indigo
-import com.example.caisse.ui.theme.MintEnd
-import com.example.caisse.ui.theme.MintStart
-import com.example.caisse.ui.theme.Slate100
-import com.example.caisse.ui.theme.Slate500
-import com.example.caisse.ui.theme.Slate700
-import com.example.caisse.ui.theme.Slate900
+import com.example.piece.ui.theme.Indigo
+import com.example.piece.ui.theme.MintEnd
+import com.example.piece.ui.theme.MintStart
+import com.example.piece.ui.theme.Slate100
+import com.example.piece.ui.theme.Slate500
+import com.example.piece.ui.theme.Slate700
+import com.example.piece.ui.theme.Slate900
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import androidx.core.graphics.toColorInt

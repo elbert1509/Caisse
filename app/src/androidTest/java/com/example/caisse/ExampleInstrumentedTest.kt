@@ -1,4 +1,4 @@
-package com.example.caisse
+package com.example.piece
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

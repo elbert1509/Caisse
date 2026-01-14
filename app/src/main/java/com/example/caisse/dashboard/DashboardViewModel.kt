@@ -1,4 +1,4 @@
-package com.example.caisse.data
+package com.example.piece.data
 
 import android.content.Context
 import android.content.Intent
@@ -10,12 +10,11 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.caisse.model.VenteDao
+import com.example.piece.model.VenteDao
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import java.util.Calendar
-import kotlinx.coroutines.flow.map
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat

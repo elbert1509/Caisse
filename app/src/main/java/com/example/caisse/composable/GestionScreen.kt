@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import android.content.Context
 import androidx.compose.foundation.clickable
@@ -52,8 +52,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.ShopInfos
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.ShopInfos
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,7 +263,7 @@ private fun PasswordGate(
 
 private fun checkPwd(pwd: String, infos: ShopInfos?): Boolean {
     if (infos == null) return false
-    return com.example.caisse.util.PasswordHasher.verify(
+    return com.example.piece.util.PasswordHasher.verify(
         inputPassword = pwd,
         storedHash = infos.passwordHash,
         storedSalt = infos.passwordSalt

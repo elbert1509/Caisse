@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,9 +26,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Produit
-import com.example.caisse.util.formatPrice
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Produit
+import com.example.piece.util.formatPrice
 
 @Composable
 fun RechercheScreen(

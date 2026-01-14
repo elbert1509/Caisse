@@ -1,4 +1,4 @@
-package com.example.caisse
+package com.example.piece
 
 import org.junit.Test
 

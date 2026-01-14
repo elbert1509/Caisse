@@ -1,11 +1,11 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import androidx.room.*
-import com.example.caisse.data.ProductReport
-import com.example.caisse.data.ProductSale
-import com.example.caisse.data.SalesData
-import com.example.caisse.data.Vente
-import com.example.caisse.data.VenteLigne
+import com.example.piece.data.ProductReport
+import com.example.piece.data.ProductSale
+import com.example.piece.data.SalesData
+import com.example.piece.data.Vente
+import com.example.piece.data.VenteLigne
 import kotlinx.coroutines.flow.Flow
 import java.util.*
 

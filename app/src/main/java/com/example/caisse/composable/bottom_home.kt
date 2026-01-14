@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History

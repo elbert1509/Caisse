@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 
 
@@ -42,8 +42,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.Category
-import com.example.caisse.data.MenuViewModel
+import com.example.piece.data.Category
+import com.example.piece.data.MenuViewModel
 
 /**
  * Écran simple pour gérer une liste de catégories : ajouter, renommer, supprimer.

@@ -1,13 +1,12 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.example.caisse.data.AppTable
-import com.example.caisse.data.Produit
-import com.example.caisse.data.TableItem
+import com.example.piece.data.AppTable
+import com.example.piece.data.TableItem
 import java.util.UUID
 
 @Dao

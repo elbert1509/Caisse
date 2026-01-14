@@ -1,27 +1,38 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -35,229 +46,281 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Recette
-import com.example.caisse.util.formatPrice
+import com.example.piece.R
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Recette
+import com.example.piece.data.Voiture
+import com.example.piece.util.PdfUtil
+import com.example.piece.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoitureDetailScreen(
     navController: NavController,
-    menuViewModel: MenuViewModel,
-    voitureId: String
+    menuViewModel: MenuViewModel
 ) {
-    val vid = runCatching { UUID.fromString(voitureId) }.getOrNull()
-    if (vid == null) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Text("ID voiture invalide")
-        }
-        return
-    }
+    // 1. Récupérer toutes les données globales
+    val recettesList by menuViewModel.allRecettes.collectAsState()
+    val voituresList by menuViewModel.voitures.collectAsState()
 
-    val voitureName = menuViewModel.getVoitureById(vid)?.name ?: "Nom inconnu"
+    // 2. Calculer les statistiques globales
+    val totalRecettes = recettesList.filter { it.isRecette }.sumOf { it.amount }
+    val totalDepenses = recettesList.filter { !it.isRecette }.sumOf { it.amount }
+    val soldeGlobal = totalRecettes - totalDepenses
 
+    // State pour le formulaire d'ajout
+    var name by remember { mutableStateOf("Recette diverse") }
+    var amountText by remember { mutableStateOf("") }
+    var isRecette by remember { mutableStateOf(true) } // true = Recette, false = Dépense
 
+    // Dropdown state
+    var expanded by remember { mutableStateOf(false) }
+    var selectedVoiture by remember { mutableStateOf<Voiture?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var recetteToDelete by remember { mutableStateOf<Recette?>(null) }
-    // ✅ Flow -> mise à jour dynamique
-    val recettesFlow = remember(vid) { menuViewModel.recettesByVoiture(vid) }
-    val recettes by recettesFlow.collectAsState()
-
-    var name by remember { mutableStateOf("Recette de la semaine ") }
-    var amountText by remember { mutableStateOf("150000") }
-
-    // true = RECETTE, false = DEPENSE
-    var isRecette by remember { mutableStateOf(true) }
-
-    val totalRecettes = recettes.filter { it.isRecette }.sumOf { it.amount }
-    val totalDepenses = recettes.filter { !it.isRecette }.sumOf { it.amount }
-    val solde = totalRecettes - totalDepenses
-    val devises = menuViewModel.getInfos()?.devise ?: "F"
-
+    val devise = menuViewModel.getInfos()?.devise ?: "F"
 
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("$voitureName  Détails") },
+                title = { Text("Gestion Parc Auto") }, // Titre générique
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = null)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            if (recettesList.isNotEmpty()) {
+                                PdfUtil.generateAndShareWeeklyReport(
+                                    context = navController.context,
+                                    recettes = recettesList,
+                                    voitures = voituresList,
+                                    devise = devise
+                                )
+                            }
+
+                        }
+                    )
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = stringResource(id = R.string.settings_description)
+                        )
                     }
                 }
             )
         }
     ) { padding ->
-
         Row(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(padding)
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxSize()
+                .background(Color(0xFFF5F5F5))
         ) {
-
-            // -------------------- GAUCHE: AJOUT --------------------
-            Card(
+            // -------------------- COLONNE GAUCHE (1/3) : STATS & AJOUT --------------------
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
+                    .padding(16.dp)
+                    .verticalScroll(
+                        rememberScrollState()
+                    )
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text("Ajouter une opération", style = MaterialTheme.typography.titleLarge)
+                // CARTE STATISTIQUES GLOBALES
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Bilan Global", style = MaterialTheme.typography.titleLarge)
+                        Divider(Modifier.padding(vertical = 8.dp))
 
-                    // Toggle type : RECETTE / DEPENSE
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-
-                        if (isRecette) {
-                            // 🔵 RECETTE sélectionnée
-                            androidx.compose.material3.Button(
-                                onClick = { isRecette = true },
-                                modifier = Modifier.weight(1f),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Text("RECETTE", fontWeight = FontWeight.Bold)
-                            }
-
-                            OutlinedButton(
-                                onClick = { isRecette = false },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("DEPENSE")
-                            }
-
-                        } else {
-                            // 🔴 DEPENSE sélectionnée
-                            OutlinedButton(
-                                onClick = { isRecette = true },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("RECETTE")
-                            }
-
-                            androidx.compose.material3.Button(
-                                onClick = { isRecette = false },
-                                modifier = Modifier.weight(1f),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("DEPENSE", fontWeight = FontWeight.Bold)
-                            }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Recettes:")
+                            Text("+ ${formatPrice(totalRecettes, devise)}", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Dépenses:")
+                            Text("- ${formatPrice(totalDepenses, devise = devise)}", color = Color(0xFFE91E63), fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SOLDE GLOBAL:", fontWeight = FontWeight.Bold)
+                            Text(formatPrice(soldeGlobal,devise), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
+                }
 
+                // CARTE AJOUT OPERATION
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Ajouter une opération", style = MaterialTheme.typography.titleMedium)
 
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Nom") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                        // Choix Type (Recette / Dépense) - Code simplifié pour l'exemple
+                        Row(Modifier.fillMaxWidth()) {
+                            FilterChip(
+                                selected = isRecette,
+                                onClick = { isRecette = true },
+                                label = { Text("Recette") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            FilterChip(
+                                selected = !isRecette,
+                                onClick = { isRecette = false },
+                                label = { Text("Dépense") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
 
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it.filter(Char::isDigit) },
-                        label = { Text("Montant (F)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedButton(
-                        onClick = {
-                            val amt = amountText.toDoubleOrNull() ?: 0.0
-                            if (name.isNotBlank() && amt > 0) {
-                                menuViewModel.addRecetteForVoiture(
-                                    voitureId = vid,
-                                    name = name,
-                                    amount = amt,
-                                    isRecette = isRecette
-                                )
-
-                                // Reset pratique
-                                amountText = if (isRecette) "150000" else ""
-                                name = if (isRecette) "Recette de la semaine " else "Dépense"
+                        // LISTE DÉROULANTE VOITURES (Obligatoire)
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = !expanded },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = selectedVoiture?.name ?: "Choisir une voiture",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Voiture") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                voituresList.forEach { voiture ->
+                                    DropdownMenuItem(
+                                        text = { Text(voiture.name) },
+                                        onClick = {
+                                            selectedVoiture = voiture
+                                            expanded = false
+                                        }
+                                    )
+                                }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Ajouter")
+                        }
+
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("Libellé") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = amountText,
+                            onValueChange = { amountText = it },
+                            label = { Text("Montant") }, // KeyboardType.Number
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Button(
+                            onClick = {
+                                val amount = amountText.toDoubleOrNull()
+                                if (amount != null && selectedVoiture != null) {
+                                    menuViewModel.addRecetteForVoiture(
+                                        voitureId = selectedVoiture!!.id,
+                                        name = name,
+                                        amount = amount,
+                                        isRecette = isRecette
+                                    )
+                                    // Reset simple
+                                    amountText = ""
+                                    name = "Opération diverse"
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = selectedVoiture != null && amountText.isNotEmpty()
+                        ) {
+                            Text("ENREGISTRER")
+                        }
                     }
-
-                    Divider(Modifier.padding(vertical = 6.dp))
-
-                    Text("Résumé", style = MaterialTheme.typography.titleMedium)
-                    Text("Total recettes :"+ formatPrice(totalRecettes,devises))
-                    Text("Total dépenses : "+ formatPrice(totalDepenses,devises))
-                    Text("Solde : "+ formatPrice(solde,devises), fontWeight = FontWeight.Bold)
                 }
             }
 
-            // -------------------- DROITE: LISTE --------------------
+            // -------------------- COLONNE DROITE (2/3) : HISTORIQUE COMPLET --------------------
             Card(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(2f)
+                    .padding(16.dp)
                     .fillMaxHeight()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Historique", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.padding(6.dp))
+                    Text("Historique Complet", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    if (showDeleteDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showDeleteDialog = false },
-                            title = { Text("Supprimer l’opération ?") },
-                            text = { Text("Cette opération sera supprimée et synchronisée.") },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    recetteToDelete?.let { menuViewModel.deleteRecette(it.id) }
-                                    recetteToDelete = null
-                                    showDeleteDialog = false
-                                }) { Text("Supprimer") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = {
-                                    recetteToDelete = null
-                                    showDeleteDialog = false
-                                }) { Text("Annuler") }
-                            }
-                        )
-                    }
-
-                    if (recettes.isEmpty()) {
-                        Text("Aucune opération pour l’instant.")
+                    if (recettesList.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Aucune opération enregistrée.")
+                        }
                     } else {
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize()
+                            contentPadding = PaddingValues(bottom = 80.dp)
                         ) {
-                            items(recettes) { r ->
+                            items(recettesList) { recette ->
+                                // Astuce: Afficher le nom de la voiture si possible.
+                                // Pour cela, il faudrait croiser l'ID avec la liste voituresList ou enrichir l'objet Recette.
+                                // Ici, on affiche l'opération standard.
                                 RecetteRowBoolean(
-                                    r,
-                                    devises,
-                                    onLongPress = {
-                                        recetteToDelete = r
-                                        showDeleteDialog = true
-                                    }
+                                    r = recette,
+                                    onLongPress = {recetteToDelete = recette
+                                        showDeleteDialog = true },
+                                    devise = devise
                                 )
                             }
                         }
                     }
                 }
+            }
+            if (showDeleteDialog && recetteToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showDeleteDialog = false
+                        recetteToDelete = null
+                    },
+                    title = { Text(text = "Supprimer l'opération ?") },
+                    text = {
+                        Text("Voulez-vous vraiment supprimer l'opération '${recetteToDelete?.name} ?")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                // Action de suppression confirmée
+                                recetteToDelete?.let { menuViewModel.deleteRecette(it.id) }
+                                showDeleteDialog = false
+                                recetteToDelete = null
+                            }
+                        ) {
+                            Text("Supprimer", color = Color.Red)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteDialog = false
+                                recetteToDelete = null
+                            }
+                        ) {
+                            Text("Annuler")
+                        }
+                    }
+                )
             }
         }
     }

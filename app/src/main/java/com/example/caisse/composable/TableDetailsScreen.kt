@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -45,11 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.bluetooth.BluetoothViewModel
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Ticket
-import com.example.caisse.model.AuthViewModel
-import com.example.caisse.util.formatPrice
+import com.example.piece.bluetooth.BluetoothViewModel
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Ticket
+import com.example.piece.model.AuthViewModel
+import com.example.piece.util.formatPrice
 import com.google.firebase.auth.auth
 import java.util.UUID
 

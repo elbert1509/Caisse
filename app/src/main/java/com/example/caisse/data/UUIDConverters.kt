@@ -1,4 +1,4 @@
-package com.example.caisse.data
+package com.example.piece.data
 
 import androidx.room.TypeConverter
 import java.util.UUID

@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -38,9 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Voiture
-import java.util.UUID
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Voiture
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

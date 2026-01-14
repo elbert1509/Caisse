@@ -1,11 +1,11 @@
-package com.example.caisse.model
+package com.example.piece.model
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.example.caisse.data.ShopInfos
+import com.example.piece.data.ShopInfos
 
 @Dao
 interface InfosDao {

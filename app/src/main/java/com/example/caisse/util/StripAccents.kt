@@ -1,4 +1,4 @@
-package com.example.caisse.util
+package com.example.piece.util
 
 import java.text.Normalizer
 import java.util.UUID

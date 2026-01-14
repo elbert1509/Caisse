@@ -1,4 +1,4 @@
-package com.example.caisse.composable
+package com.example.piece.composable
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,10 +31,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.Ticket
-import com.example.caisse.data.VenteWithDetails
-import com.example.caisse.util.formatPrice
+import com.example.piece.data.MenuViewModel
+import com.example.piece.data.Ticket
+import com.example.piece.data.VenteWithDetails
+import com.example.piece.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

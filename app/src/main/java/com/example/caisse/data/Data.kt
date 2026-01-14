@@ -1,4 +1,4 @@
-package com.example.caisse.data
+package com.example.piece.data
 
 
 import androidx.compose.runtime.Immutable

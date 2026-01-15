@@ -79,10 +79,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
     // ---- PRODUITS ----
-    fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12, photo : Int? = null) {
-        val randomBarcode = UUID.randomUUID().toString().substring(0, 8)
+    fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12, photo : Int? = null,barcode : String? = null) {
+
         viewModelScope.launch {
-            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,codeBarre = randomBarcode,image = photo).copy(updatedAt = now(), isDirty = true)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,codeBarre = barcode,image = photo).copy(updatedAt = now(), isDirty = true)
             repository.insertProduit(newProduit)
         }
     }

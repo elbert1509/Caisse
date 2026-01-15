@@ -26,7 +26,7 @@ import com.example.piece.data.sampleVoitures
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
+fun Donnee ( menuViewModel: MenuViewModel)
 {
 
     Scaffold(

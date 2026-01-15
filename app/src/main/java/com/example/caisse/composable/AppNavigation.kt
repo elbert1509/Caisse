@@ -85,7 +85,7 @@ fun AppNavigation() {
             )
         }
         composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel) }
-        composable("donnee") { Donnee(navController = navController, menuViewModel = menuViewModel) }
+        composable("donnee") { Donnee( menuViewModel = menuViewModel) }
         composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel) }
         composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel) }
         composable("stock") { StockScreen(navController = navController, viewModel = menuViewModel) }

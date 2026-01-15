@@ -4,6 +4,7 @@ import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +48,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -62,6 +70,9 @@ import com.example.piece.data.MenuViewModel
 import com.example.piece.data.Produit
 import com.example.piece.data.Ticket
 import com.example.piece.util.formatPrice
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,8 +86,15 @@ fun PrendreCommandeScreen(
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
     val shopInfos = menuViewModel.getInfos()
+    val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+    var scanBuffer by remember { mutableStateOf("") } // Stocke les chiffres scannés
+    var scanJob by remember { mutableStateOf<Job?>(null) }
 
-
+    // Force le focus sur l'écran dès qu'il s'ouvre pour capter le scan
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id) }
 
     // Update selected category if the initial one is removed or not available
@@ -87,6 +105,54 @@ fun PrendreCommandeScreen(
     }
 
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    val char = event.nativeKeyEvent.unicodeChar.toChar()
+
+                    // On accepte les chiffres et les lettres (au cas où le code barre contient des lettres)
+                    if (char.isLetterOrDigit()) {
+
+                        // 3. À chaque touche, on annule le précédent timer
+                        scanJob?.cancel()
+
+                        // On ajoute le caractère au buffer
+                        scanBuffer += char
+
+                        // 4. On lance un nouveau timer
+                        scanJob = scope.launch {
+                            // On attend un court instant (ex: 400ms) pour voir si d'autres chiffres arrivent
+                            delay(400)
+
+                            // --- FIN DU SCAN DÉTECTÉE (SILENCE) ---
+                            if (scanBuffer.isNotEmpty()) {
+                                val codeScanned = scanBuffer
+
+                                // Recherche du produit
+                                val productFound = products.find { it.codeBarre == codeScanned }
+
+                                if (productFound != null) {
+                                    menuViewModel.addToCart(productFound)
+                                    Toast.makeText(navController.context, "Ajouté : ${productFound.nom}", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(navController.context, "Inconnu : $codeScanned", Toast.LENGTH_SHORT).show()
+                                }
+
+                                // Reset du buffer pour le prochain scan
+                                scanBuffer = ""
+                            }
+                        }
+                        true // On a traité l'événement
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            },
         topBar = {
             TopAppBar(
                 title = { Text("Prendre une commande") },

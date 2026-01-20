@@ -210,7 +210,8 @@ fun PrendreCommandeScreen(
                         CartItemRow(
                             ticket = ticket,
                             onIncrease = { menuViewModel.increaseQuantity(ticket.produit.id) },
-                            onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) }
+                            onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) },
+                            devise = shopInfos?.devise ?: ""
                         )
                     }
                 }
@@ -341,7 +342,8 @@ fun ProductItem(product: Produit, devise : String, onProductClick: () -> Unit) {
 fun CartItemRow(
     ticket: Ticket,
     onIncrease: () -> Unit,
-    onDecrease: () -> Unit
+    onDecrease: () -> Unit,
+    devise: String
 ) {
     Row(
         modifier = Modifier
@@ -350,10 +352,25 @@ fun CartItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = "${ticket.produit.nom} (x${ticket.quantity})",
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.weight(1f)
         )
+        {
+            Text(
+                text = "${ticket.produit.nom}  "
+            )
+            Text(
+                text = formatPrice(ticket.produit.prix, devise)
+            )
+            Text(
+                text = " X ${ticket.quantity}   "
+            )
+
+            Text(
+                text = formatPrice(ticket.produit.prix * ticket.quantity, devise)
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onDecrease, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.Remove, "Diminuer")

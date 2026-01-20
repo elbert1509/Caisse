@@ -14,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavController
 import com.example.piece.data.Category
 import com.example.piece.data.MenuViewModel
 import com.example.piece.data.Produit
@@ -26,7 +25,7 @@ import com.example.piece.data.sampleVoitures
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
+fun Donnee ( menuViewModel: MenuViewModel)
 {
 
     Scaffold(

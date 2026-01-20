@@ -44,11 +44,7 @@ class BluetoothViewModel : ViewModel() {
     val isConnected = _isConnected.asStateFlow()
     private val ESC = '\u001B'
 
-    // Police très petite (H = 1, W = 1)
-    private val FONT_SMALLEST = "$ESC!1"
 
-    // Police normale (reset si besoin)
-    private val FONT_RESET = "$ESC!0"
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun loadPairedDevices() {

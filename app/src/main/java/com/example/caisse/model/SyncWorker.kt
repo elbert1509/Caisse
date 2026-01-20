@@ -29,7 +29,6 @@ class SyncWorker(
         val dbLocal = CaisseDataBase.getDatabase(applicationContext)
         val produitDao = dbLocal.produitDao()
         val venteDao = dbLocal.venteDao()
-        val venteLigneDao = dbLocal.venteDao()
         val categorieDao = dbLocal.categorieDao()
         val vendeurDao = dbLocal.vendeurDao()
         val infosDao = dbLocal.infosDao()
@@ -589,6 +588,7 @@ class SyncWorker(
         "prix" to p.prix,
         "image" to p.image,
         "categoryId" to p.categoryId.toString(),
+        "codeBarre" to p.codeBarre,
         "stock" to p.stock,
         "description" to p.description,
         "isActive" to p.isActive,
@@ -681,6 +681,7 @@ class SyncWorker(
             prix = (m["prix"] as Number).toDouble(),
             image = safeImage,               // 🔥 on met l’image nettoyée !
             categoryId = UUID.fromString(m["categoryId"] as String),
+            codeBarre = m["codeBarre"] as String?,
             stock = (m["stock"] as Number).toInt(),
             description = m["description"] as String?,
             isActive = m["isActive"] as? Boolean ?: true,

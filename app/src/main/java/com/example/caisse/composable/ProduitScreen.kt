@@ -56,6 +56,7 @@ fun ProductScreen(
     val categories by viewModel.categories.collectAsState()
 
     var newPrice by remember { mutableStateOf(TextFieldValue("")) }
+    var newBarcode by remember { mutableStateOf(TextFieldValue("")) }
     var selectedCategory by remember { mutableStateOf<Category?>(null) }
 
     var renameTarget by remember { mutableStateOf<Produit?>(null) }
@@ -64,6 +65,7 @@ fun ProductScreen(
     var renameCategory by remember { mutableStateOf<Category?>(null) }
     var renameBarcode by remember { mutableStateOf(TextFieldValue("")) }
 
+
     var productText by remember { mutableStateOf(TextFieldValue("")) }
 
     // Liste filtrée en fonction de la recherche
@@ -71,7 +73,9 @@ fun ProductScreen(
         products.filter { produit ->
             val matchesText =
                 productText.text.isBlank() ||
-                        produit.nom.contains(productText.text, ignoreCase = true)
+                        produit.nom.contains(productText.text, ignoreCase = true) ||
+                        // On cherche aussi dans le code barre
+                        produit.codeBarre?.contains(productText.text) == true
 
             val matchesCategory =
                 selectedCategory == null || produit.categoryId == selectedCategory!!.id
@@ -101,6 +105,25 @@ fun ProductScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
+
+            // AJOUT DU CHAMP CODE BARRE POUR LA CRÉATION
+            OutlinedTextField(
+                value = newBarcode,
+                onValueChange = { newBarcode = it },
+                label = { Text("Nouveau Code-barres (Optionnel)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true, // Important pour le scanner
+                trailingIcon = {
+                    // Petit bouton pour effacer si erreur de scan
+                    if (newBarcode.text.isNotEmpty()) {
+                        IconButton(onClick = { newBarcode = TextFieldValue("") }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Clear")
+                        }
+                    }
+                }
+            )
+
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = newPrice,
                 onValueChange = { newPrice = it },
@@ -119,11 +142,14 @@ fun ProductScreen(
                     val name = productText.text.trim()
                     val price = newPrice.text.trim().toDoubleOrNull()
                     val category = selectedCategory
+                    val barcode = newBarcode.text.trim().ifBlank { null }
+
                     if (name.isNotEmpty() && price != null && category != null) {
-                        viewModel.addProduit(name, price, category.id)
+                        viewModel.addProduit(name, price, category.id,barcode = barcode)
                         productText = TextFieldValue("")
                         newPrice = TextFieldValue("")
                         selectedCategory = null
+                        newBarcode = TextFieldValue("")
                     }
                 },
                 modifier = Modifier.align(Alignment.End)

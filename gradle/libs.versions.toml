@@ -40,6 +40,7 @@ uiTextVersion = "1.9.5"
 appcompat = "1.7.1"
 foundationLayoutVersion = "1.10.0"
 coil-kt = "2.6.0"
+runtimeVersion = "1.10.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -89,6 +90,7 @@ androidx-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.re
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayoutVersion" }
 io-coil-kt = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil-kt" }
+androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "runtimeVersion" }
 
 
 [plugins]

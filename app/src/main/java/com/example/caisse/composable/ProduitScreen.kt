@@ -25,6 +25,7 @@ import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
 import com.example.caisse.util.formatPrice
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductScreen(

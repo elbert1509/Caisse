@@ -140,37 +140,50 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("Adresse: ${infos?.address ?: ""}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
                 sb.append("Date: $dateHeure\r\n")
-                sb.append("--------------------------------\r\n")
-                if (invoiceId != null) sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
-                sb.append("--------------------------------\r\n")
-                sb.append("Article        Qte   Prix    Total\r\n")
-                sb.append("--------------------------------\r\n")
+                sb.append("-------------------------------------------\r\n")
+                if (invoiceId != null){
+                    sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
+                    sb.append("-------------------------------------------\r\n")
+                }else {
+                    sb.append("FACTURE CLIENT \r\n")
+                    sb.append("-------------------------------------------\r\n")
+                }
+
+                sb.append(
+                    formatLine(
+                        article = "Article",
+                        qty = "Qte",
+                        price = "Prix",
+                        total = "Total"
+                    )
+                )
+                sb.append("-------------------------------------------\r\n")
 
                 // Colonnes 58mm -> on serre un peu
                 tableItems.forEach { ticket ->
 
-
-                    val name = ticket.produit.nom
-                        .replace("\n", " ")
-                        .take(17)
-                        .padEnd(17, ' ')
-
-                    val qty = ticket.quantity.toString().padStart(3, ' ')
-                    val price = String.format("%.2f", ticket.produit.prix).padStart(6, ' ')
-
-                    val lineTotal = formatPrice(
+                    val article = ticket.produit.nom.replace("\n", " ")
+                    val qty = ticket.quantity.toString()
+                    val price = String.format(Locale.US, "%.2f", ticket.produit.prix)
+                    val totalLine = formatPrice(
                         ticket.produit.prix * ticket.quantity,
                         infos?.devise
-                    )
-                        .take(12)
-                        .padStart(12, ' ')
+                    ).replace(" ", "")
 
-                    sb.append("$name $qty $price $lineTotal\r\n")
+                    sb.append(
+                        formatLine(
+                            article = article,
+                            qty = qty,
+                            price = price,
+                            total = totalLine
+                        )
+                    )
                 }
 
-                sb.append("--------------------------------\r\n")
+
+                sb.append("-------------------------------------------\r\n")
                 sb.append("TOTAL: ${formatPrice(total, infos?.devise)}\r\n")
-                sb.append("--------------------------------\r\n")
+                sb.append("-------------------------------------------\r\n")
                 sb.append("Merci pour votre confiance\r\n")
                 sb.append("\r\n\r\n\r\n")
 
@@ -186,6 +199,18 @@ class BluetoothViewModel : ViewModel() {
     }
 
 
+    private fun formatLine(
+        article: String,
+        qty: String,
+        price: String,
+        total: String
+    ): String {
+        val a = article.take(10).padEnd(10, ' ')
+        val q = qty.padStart(4, ' ')
+        val p = price.padStart(14, ' ')
+        val t = total.padStart(11, ' ')
+        return "$a$q$p$t\r\n"
+    }
 
     fun testPrint(context: Context, menuViewModel: MenuViewModel) {
         viewModelScope.launch(Dispatchers.IO) {

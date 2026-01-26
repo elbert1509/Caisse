@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,9 +58,9 @@ import com.example.piece.data.ShopInfos
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
+fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHome: Boolean){
     val context = LocalContext.current
-    var unlocked by remember { mutableStateOf(false) }
+    var unlocked by rememberSaveable  { mutableStateOf(!fromHome) }
     val infos = viewModel.getInfos()
 
 

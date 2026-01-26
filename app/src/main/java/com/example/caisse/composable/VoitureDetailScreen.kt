@@ -218,7 +218,7 @@ fun VoitureDetailScreen(
                         OutlinedTextField(
                             value = name,
                             onValueChange = { name = it },
-                            label = { Text("Libellé") },
+                            label = { Text("Description") },
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -241,7 +241,7 @@ fun VoitureDetailScreen(
                                     )
                                     // Reset simple
                                     amountText = ""
-                                    name = "Opération diverse"
+                                    name = ""
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),

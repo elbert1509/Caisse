@@ -1,5 +1,4 @@
 package com.example.piece.composable
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,7 +48,9 @@ import androidx.navigation.NavController
 import com.example.piece.data.MenuViewModel
 import com.example.piece.data.Produit
 import com.example.piece.util.formatPrice
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,7 +59,8 @@ fun InventaireScreen(navController: NavController, viewModel: MenuViewModel) {
     val categories by viewModel.categories.collectAsState()            // onglets
     val produits by viewModel.produits.collectAsState()                // données
     val scope = rememberCoroutineScope()
-
+    var searchQuery by remember { mutableStateOf("") }      // ce que l’utilisateur tape
+    var debouncedQuery by remember { mutableStateOf("") }   // ce qu’on utilise pour filtrer
     // Onglet sélectionné
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -69,7 +71,10 @@ fun InventaireScreen(navController: NavController, viewModel: MenuViewModel) {
     LaunchedEffect(categories.size) {
         selectedTab = if (categories.isEmpty()) 0 else selectedTab.coerceIn(0, categories.lastIndex)
     }
-
+    LaunchedEffect(searchQuery) {
+        delay(300) // debounce
+        debouncedQuery = searchQuery.trim()
+    }
 
     Scaffold(
         topBar = {
@@ -133,26 +138,44 @@ fun InventaireScreen(navController: NavController, viewModel: MenuViewModel) {
                     subtitle = "Crée une catégorie pour commencer, ou ajoute des produits."
                 )
             } else {
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTab,
-                    edgePadding = 12.dp,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary
-                ) {
-                    categories.forEachIndexed { index, c ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(c.name) }
-                        )
+                Column {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Rechercher un article") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    )
+
+                    ScrollableTabRow(
+                        selectedTabIndex = selectedTab,
+                        edgePadding = 12.dp,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        categories.forEachIndexed { index, c ->
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                text = { Text(c.name) }
+                            )
+                        }
                     }
                 }
+
             }
 
-            val currentProducts = remember(categories, selectedTab, produits) {
+            val currentProducts = remember(categories, selectedTab, produits, debouncedQuery) {
                 categories.getOrNull(selectedTab)?.let { cat ->
-                    produits.filter { it.categoryId == cat.id && it.isActive }
+                    val q = debouncedQuery
+                    produits
+                        .asSequence()
+                        .filter { it.categoryId == cat.id && it.isActive }
+                        .filter { q.isBlank() || it.nom.contains(q, ignoreCase = true) }
                         .sortedBy { it.nom.lowercase() }
+                        .toList()
                 } ?: emptyList()
             }
 

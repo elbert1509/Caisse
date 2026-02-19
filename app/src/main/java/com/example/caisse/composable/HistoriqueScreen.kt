@@ -88,7 +88,7 @@ fun HistoriqueScreen(
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Panier") }
+                    text = { Text("Comptoir") }
                 )
             }
 

@@ -52,7 +52,7 @@ fun AppNavigation() {
                     HomeActionButton.DONNES ->   navController.navigate("donnee")
                     HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
                     HomeActionButton.STOCK ->  navController.navigate("stock")
-                    HomeActionButton.GESTION ->  navController.navigate("gestion")
+                    HomeActionButton.GESTION ->  navController.navigate("gestion?fromHome=true")
                 }
             },
             navController = navController,
@@ -81,7 +81,7 @@ fun AppNavigation() {
         composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel) }
         composable("donnee") { Donnee(navController = navController, menuViewModel = menuViewModel) }
         composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel) }
-        composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel) }
+        composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel, menuViewModel = menuViewModel) }
         composable("stock") { StockScreen(navController = navController, viewModel = menuViewModel) }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
         composable("rapport") { RapportData(navController = navController, viewModel = menuViewModel, dashboardViewModel = dashboardViewModel)}
@@ -102,7 +102,24 @@ fun AppNavigation() {
             LoginScreen(navController = navController, vm = authVm, onSignedInNavigateRoute = "home", menuViewModel = menuViewModel)
         }
         composable("infos") { InfosScreen(navController = navController, viewModel = menuViewModel) }
-        composable("gestion") { GestionScreen(navController = navController, viewModel = menuViewModel) }
+        composable("infosStart") { InfosScreenStart(navController = navController, viewModel = menuViewModel) }
+        composable(
+            route = "gestion?fromHome={fromHome}",
+            arguments = listOf(
+                navArgument("fromHome") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            )
+        ) { backStackEntry ->
+            val fromHome = backStackEntry.arguments?.getBoolean("fromHome") ?: false
+
+            GestionScreen(
+                navController = navController,
+                viewModel = menuViewModel,
+                fromHome = fromHome
+            )
+        }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
 
     }

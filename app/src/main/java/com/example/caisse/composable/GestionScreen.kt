@@ -1,7 +1,9 @@
 package com.example.caisse.composable
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,8 +41,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,12 +61,16 @@ import com.example.caisse.data.ShopInfos
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
+fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHome: Boolean){
     val context = LocalContext.current
-    var unlocked by remember { mutableStateOf(false) }
+    var unlocked by rememberSaveable  { mutableStateOf(!fromHome) }
     val infos = viewModel.getInfos()
+    var secretClickCount by remember { mutableIntStateOf(0) }
 
-
+    if (secretClickCount >= 7 && !viewModel.isAdminMode) {
+        viewModel.unlockAdmin()
+        secretClickCount = 0 // On remet le compteur à 0 pour la prochaine fois
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -128,18 +136,26 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
                     screenWidthDp >= 900 -> 4
                     else -> 2
                 }
-                val tiles = remember {
-                    listOf(
+                val tiles = remember(viewModel.isAdminMode) {
+                    val list = mutableListOf(
                         GestionTile("Inventaire", Icons.Default.Liquor) { navController.navigate("inventaire") },
                         GestionTile("Produits", Icons.Default.Inventory) { navController.navigate("produit") },
-                        GestionTile("Catégories", Icons.Default.Category) { navController.navigate("categorie") },
-                        GestionTile("Donnée", Icons.Default.DataExploration) { navController.navigate("donnee") },
+                        GestionTile("Catégories", Icons.Default.Category) { navController.navigate("categorie") }
+                    )
+
+                    // Condition d'affichage : Seulement si cliqué 7 fois ou plus
+                    if (viewModel.isAdminMode) {
+                        list.add(GestionTile("Donnée", Icons.Default.DataExploration) { navController.navigate("donnee") })
+                    }
+
+                    list.addAll(listOf(
                         GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock") },
                         GestionTile("Dashboard", Icons.Default.Warehouse) { navController.navigate("Dashboard") },
                         GestionTile("Vente", Icons.Default.PointOfSale) { navController.navigate("vente") },
-                        GestionTile("infos", Icons.Default.Info) { navController.navigate("infos") },
+                        GestionTile("infos", Icons.Default.Info) { navController.navigate("infos") }
+                    ))
 
-                    )
+                    list // Retourne la liste finale
                 }
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -152,7 +168,23 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
                         Text(
                             "Sections",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null // null retire l'effet visuel de clic (ripple)
+                            ) {
+
+                                if (secretClickCount < 7) {
+                                    secretClickCount++
+                                    if (secretClickCount == 7) {
+                                        Toast.makeText(context, "Affichage des données", Toast.LENGTH_SHORT).show()
+                                    }
+                                    if (secretClickCount == 5) {
+                                        Toast.makeText(context, " Plus que 2 clics pour afficher les données", Toast.LENGTH_SHORT).show()
+
+                                    }
+                                }
+                            }
                         )
                         Spacer(Modifier.height(8.dp))
 

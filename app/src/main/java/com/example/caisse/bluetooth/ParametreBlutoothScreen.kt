@@ -323,8 +323,9 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         ActionButton(Icons.Filled.Sync, stringResource(R.string.text_synch)) {
                             authVm.enqueueSync(context = context, tag = "sync")
                         }
+
                         ActionButton(Icons.Filled.Info, "Infos") {
-                            navController.navigate("infos")
+                            navController.navigate("infosStart")
                         }
                     }
                 }

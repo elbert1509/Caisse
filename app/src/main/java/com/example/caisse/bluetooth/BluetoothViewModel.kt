@@ -25,6 +25,9 @@ import com.example.caisse.data.Ticket
 import com.example.caisse.util.StripAccents
 import com.example.caisse.util.formatPrice
 import com.example.caisse.util.invoiceNoFromId
+import com.example.caisse.util.printBitmapEscPos
+import com.example.caisse.util.textToBitmap58mm
+import kotlinx.coroutines.delay
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -140,38 +143,35 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("Adresse: ${infos?.address ?: ""}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
                 sb.append("Date: $dateHeure\r\n")
-                sb.append("-------------------------------------------\r\n")
+                sb.append(sepLine())
                 if (invoiceId != null){
                     sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
-                    sb.append("-------------------------------------------\r\n")
+                    sb.append(sepLine())
                 }else {
                     sb.append("FACTURE CLIENT \r\n")
-                    sb.append("-------------------------------------------\r\n")
+                    sb.append(sepLine())
                 }
 
                 sb.append(
-                    formatLine(
+                    formatLine58(
                         article = "Article",
                         qty = "Qte",
                         price = "Prix",
                         total = "Total"
                     )
                 )
-                sb.append("-------------------------------------------\r\n")
+                sb.append(sepLine())
 
                 // Colonnes 58mm -> on serre un peu
                 tableItems.forEach { ticket ->
 
                     val article = ticket.produit.nom.replace("\n", " ")
                     val qty = ticket.quantity.toString()
-                    val price = String.format(Locale.US, "%.2f", ticket.produit.prix)
-                    val totalLine = formatPrice(
-                        ticket.produit.prix * ticket.quantity,
-                        infos?.devise
-                    ).replace(" ", "")
+                    val price = ticket.produit.prix.toInt().toString()
+                    val totalLine = (ticket.produit.prix * ticket.quantity).toInt().toString().replace(" ", "")
 
                     sb.append(
-                        formatLine(
+                        formatLine58(
                             article = article,
                             qty = qty,
                             price = price,
@@ -181,16 +181,21 @@ class BluetoothViewModel : ViewModel() {
                 }
 
 
-                sb.append("-------------------------------------------\r\n")
+                sb.append(sepLine())
                 sb.append("TOTAL: ${formatPrice(total, infos?.devise)}\r\n")
-                sb.append("-------------------------------------------\r\n")
+                sb.append(sepLine())
                 sb.append("Merci pour votre confiance\r\n")
                 sb.append("\r\n\r\n\r\n")
 
                 // IMPORTANT: encoder le texte avec la même code page
-                val text = StripAccents(sb.toString())
-                outputStream?.write(text.toByteArray(Charsets.US_ASCII))
-                outputStream?.flush()
+               val text = StripAccents(sb.toString())
+                val bmp = textToBitmap58mm(text) // largeur 58mm
+                printBitmapEscPos(bmp, outputStream)
+
+
+                /*
+                   outputStream?.write(text.toByteArray(Charsets.US_ASCII))
+                   outputStream?.flush()*/
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -211,6 +216,25 @@ class BluetoothViewModel : ViewModel() {
         val t = total.padStart(11, ' ')
         return "$a$q$p$t\r\n"
     }
+
+    private val LINE_CHARS_58 = 32
+    private fun sepLine(): String = "-".repeat(LINE_CHARS_58) + "\n"
+    private fun formatLine58(article: String, qty: String, price: String, total: String): String {
+        val aW = 13
+        val qW = 4
+        val pW = 6
+        val tW = 6
+
+        fun cut(s: String, w: Int) = if (s.length <= w) s else s.take(w)
+
+        val a = cut(article, aW).padEnd(aW, ' ')
+        val q = cut(qty, qW).padStart(qW, ' ')
+        val p = cut(price, pW).padStart(pW, ' ')
+        val t = cut(total, tW).padStart(tW, ' ')
+
+        return "$a $q $p $t\n" // 13+1+4+1+6+1+6 = 32
+    }
+
 
     fun testPrint(context: Context, menuViewModel: MenuViewModel) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -249,7 +273,16 @@ class BluetoothViewModel : ViewModel() {
             }
         }
     }
-
+    private fun writeChunked(bytes: ByteArray, chunkSize: Int = 256) {
+        var i = 0
+        while (i < bytes.size) {
+            val end = minOf(i + chunkSize, bytes.size)
+            outputStream?.write(bytes, i, end - i)
+            outputStream?.flush()
+            Thread.sleep(10) // petit souffle pour les imprimantes fragiles
+            i = end
+        }
+    }
     companion object {
         fun provideFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

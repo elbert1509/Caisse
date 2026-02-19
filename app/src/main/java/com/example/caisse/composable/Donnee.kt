@@ -29,7 +29,11 @@ fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
             TopAppBar(
                 title = { Text("Catégories", style = MaterialTheme.typography.headlineSmall) },
                 actions = {
-                    IconButton(onClick = { /*TODO*/ }) {
+                    IconButton(onClick =
+                        {
+                            menuViewModel.lockAdmin() // On reverrouille
+                            navController.popBackStack()
+                        }) {
                         Icon(Icons.Filled.Settings, contentDescription = null)
                     }
                 }

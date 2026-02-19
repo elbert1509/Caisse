@@ -1,6 +1,9 @@
 package com.example.caisse.data
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -676,5 +679,16 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         )
 
         return Result.success(Unit)
+    }
+
+    var isAdminMode by mutableStateOf(false)
+        private set
+
+    fun unlockAdmin() {
+        isAdminMode = true
+    }
+
+    fun lockAdmin() {
+        isAdminMode = false
     }
 }

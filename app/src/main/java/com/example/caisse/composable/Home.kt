@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -143,7 +144,8 @@ fun ActionButton(data: HomeTileData, onClick: () -> Unit,modifier: Modifier = Mo
 private fun defaultHomeButton() : List<HomeTileData> = listOf(
     HomeTileData("Prendre Commande", Icons.Default.PointOfSale, color = Gray, HomeActionButton.PRENDRE_COMMANDE),
     HomeTileData("Historique", Icons.Default.History, color = Gray, HomeActionButton.HISTORIQUE_COMMANDES),
-    HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
+    HomeTileData("Entree", Icons.Default.People, color = Gray, HomeActionButton.ENTREE),
+    //HomeTileData("Exporter", Icons.Default.Share, color = Gray, HomeActionButton.EXPORTER),
     HomeTileData("Table", Icons.Default.TableRestaurant, color = Gray, HomeActionButton.TABLE),
     //HomeTileData("donnee", Icons.Default.Fastfood, color = Gray, HomeActionButton.DONNES),
     HomeTileData("Gestion", Icons.Default.Edit, color = Blue, HomeActionButton.GESTION),

@@ -15,11 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.sampleCategoriesCeny
-import com.example.caisse.data.sampleProducts
-import com.example.caisse.data.sampleProductsCeny
-import com.example.caisse.data.sampleVendeurs
-import com.example.caisse.data.sampleVendeursCeny
+import com.example.caisse.data.sampleCategoriesMaquis
+import com.example.caisse.data.sampleProductsMaquis
+import com.example.caisse.data.sampleVendeursMaquis
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,18 +60,18 @@ fun Donnee (navController: NavController, menuViewModel: MenuViewModel)
 
 fun addSampleData(menuViewModel: MenuViewModel) {
     // 1. Ajouter les catégories
-    for (category in sampleCategoriesCeny) {
+    for (category in sampleCategoriesMaquis) {
         menuViewModel.addCategorySample(category)
     }
 
 
     // 2. Ajouter les produits
-   for (produit in sampleProductsCeny) {
+   for (produit in sampleProductsMaquis) {
         menuViewModel.addProduit(produit.nom, produit.prix, produit.categoryId,produit.stock, produit.image)
     }
 
     // 3. Ajouter vendeur
-    for (vendeur in sampleVendeursCeny) {
+    for (vendeur in sampleVendeursMaquis) {
         menuViewModel.addVendeur(vendeur)
 
     }

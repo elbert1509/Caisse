@@ -24,6 +24,7 @@ enum class HomeActionButton{
     DASHBOARD,
     STOCK,
     GESTION,
+    ENTREE,
     }
 
 @Immutable

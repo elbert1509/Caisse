@@ -53,6 +53,7 @@ fun AppNavigation() {
                     HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
                     HomeActionButton.STOCK ->  navController.navigate("stock")
                     HomeActionButton.GESTION ->  navController.navigate("gestion?fromHome=true")
+                    HomeActionButton.ENTREE -> navController.navigate("entree")
                 }
             },
             navController = navController,
@@ -121,6 +122,7 @@ fun AppNavigation() {
             )
         }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
+        composable("entree") { Entree(navController = navController, menuViewModel = menuViewModel, bluetoothViewModel = bluetoothViewModel) }
 
     }
 

@@ -60,7 +60,6 @@ import com.example.caisse.data.HomeTileData
 @Composable
 fun HomeScreen( onAction: (HomeActionButton) -> Unit,
                 navController: NavController
-
 ) {
 
 

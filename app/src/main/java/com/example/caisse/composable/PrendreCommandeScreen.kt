@@ -61,6 +61,12 @@ import com.example.caisse.data.Produit
 import com.example.caisse.data.Ticket
 import com.example.caisse.util.drawableUri
 import com.example.caisse.util.formatPrice
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Badge
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,108 +103,222 @@ fun PrendreCommandeScreen(
             )
         }
     ) { padding ->
-        Row(
+
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Product Selection Area
-            Column(modifier = Modifier.weight(0.6f)) {
-                if (categories.isNotEmpty()) {
-                    val selectedIndex = categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
-                    ScrollableTabRow(selectedTabIndex = selectedIndex) {
-                        categories.forEach { category ->
-                            Tab(
-                                selected = category.id == selectedCategoryId,
-                                onClick = { selectedCategoryId = category.id },
-                                text = { Text(category.name) }
-                            )
+            val isCompact = maxWidth < 600.dp   // seuil simple, efficace
+            var showCart by remember { mutableStateOf(false) }
+
+            // ====== COMPACT (petits écrans) : Produits plein écran + Panier en bottom sheet ======
+            if (isCompact) {
+
+                // Panier en BottomSheet
+                if (showCart) {
+                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                    ModalBottomSheet(
+                        onDismissRequest = { showCart = false },
+                        sheetState = sheetState
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Panier", style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(8.dp))
+
+                            LazyColumn {
+                                items(cart, key = { it.produit.id }) { ticket ->
+                                    CartItemRow(
+                                        ticket = ticket,
+                                        onIncrease = { menuViewModel.increaseQuantity(ticket.produit.id) },
+                                        onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) }
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Text(formatPrice(totalPrice, shopInfos?.devise), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { if (cart.isNotEmpty()) navController.navigate("panier") },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = cart.isNotEmpty()
+                                ) { Text("Valider") }
+
+                                Button(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (!bluetoothViewModel.isConnected.value) {
+                                            Toast.makeText(navController.context, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        } else {
+                                            bluetoothViewModel.printInvoice(cart, totalPrice, shopInfos)
+                                            Toast.makeText(navController.context, "Ticket imprimé", Toast.LENGTH_SHORT).show()
+                                            navController.popBackStack()
+                                        }
+                                    },
+                                    enabled = totalPrice > 0
+                                ) { Text("Imprimer", maxLines = 1) }
+                            }
+
+                            Spacer(Modifier.height(12.dp))
                         }
                     }
                 }
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 128.dp),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(products.filter { it.categoryId == selectedCategoryId }) { product ->
-                        ProductItem(product = product,devise = shopInfos?.devise ?: "") {
-                            menuViewModel.addToCart(product)
+
+                // Produits plein écran
+                Column(modifier = Modifier.fillMaxSize()) {
+
+                    if (categories.isNotEmpty()) {
+                        val selectedIndex = categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+                        ScrollableTabRow(selectedTabIndex = selectedIndex) {
+                            categories.forEach { category ->
+                                Tab(
+                                    selected = category.id == selectedCategoryId,
+                                    onClick = { selectedCategoryId = category.id },
+                                    text = { Text(category.name) }
+                                )
+                            }
+                        }
+                    }
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 110.dp), // un peu plus compact
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(products.filter { it.categoryId == selectedCategoryId }) { product ->
+                            ProductItem(product = product, devise = shopInfos?.devise ?: "") {
+                                menuViewModel.addToCart(product)
+                            }
+                        }
+                    }
+                }
+
+                // Bouton panier flottant (avec badge)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    FloatingActionButton(
+                        onClick = { showCart = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (cart.isNotEmpty()) Badge { Text(cart.sumOf { it.quantity }.toString()) }
+                            }
+                        ) {
+                            Text("Panier")
                         }
                     }
                 }
             }
 
-            // Cart Area
-            Column(
-                modifier = Modifier
-                    .weight(0.4f)
-                    .padding(16.dp)
-            ) {
-                Text("Panier", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(cart, key = { it.produit.id }) { ticket ->
-                        CartItemRow(
-                            ticket = ticket,
-                            onIncrease = { menuViewModel.increaseQuantity(ticket.produit.id) },
-                            onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Total    ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text( formatPrice(totalPrice,shopInfos?.devise), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row (modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ){
-                    Button(
-                        onClick = { if (cart.isNotEmpty()) navController.navigate("panier") },
-                        modifier = Modifier.weight(.5f),
-                        enabled = cart.isNotEmpty()
-                    ) {
-                        Text("Valider la commande")
-                    }
+            // ====== LARGE (tablettes / grands écrans) : ton layout actuel inchangé ======
+            else {
+                Row(modifier = Modifier.fillMaxSize()) {
 
-                    Button(
-                        modifier = Modifier.weight(.5f),
-                        onClick = {
-
-                            if (!bluetoothViewModel.isConnected.value) {
-                                Toast.makeText(
-                                    navController.context,
-                                    "Pas de device connecté",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }else{
-                                bluetoothViewModel.printInvoice(cart, totalPrice,shopInfos)
-                                Toast.makeText(
-                                    navController.context,
-                                    "Ticket imprimé",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                navController.popBackStack() // revenir en arrière après validation
+                    // Product Selection Area
+                    Column(modifier = Modifier.weight(0.6f)) {
+                        if (categories.isNotEmpty()) {
+                            val selectedIndex = categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+                            ScrollableTabRow(selectedTabIndex = selectedIndex) {
+                                categories.forEach { category ->
+                                    Tab(
+                                        selected = category.id == selectedCategoryId,
+                                        onClick = { selectedCategoryId = category.id },
+                                        text = { Text(category.name) }
+                                    )
+                                }
                             }
-                        },
-                        enabled = totalPrice > 0
+                        }
+
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 128.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(products.filter { it.categoryId == selectedCategoryId }) { product ->
+                                ProductItem(product = product, devise = shopInfos?.devise ?: "") {
+                                    menuViewModel.addToCart(product)
+                                }
+                            }
+                        }
+                    }
+
+                    // Cart Area (comme avant)
+                    Column(
+                        modifier = Modifier
+                            .weight(0.4f)
+                            .padding(16.dp)
                     ) {
-                        Text("Imprimer",maxLines = 1)
+                        Text("Panier", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(8.dp))
+                        LazyColumn(modifier = Modifier.weight(1f)) {
+                            items(cart, key = { it.produit.id }) { ticket ->
+                                CartItemRow(
+                                    ticket = ticket,
+                                    onIncrease = { menuViewModel.increaseQuantity(ticket.produit.id) },
+                                    onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(formatPrice(totalPrice, shopInfos?.devise), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .padding(bottom = 8.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = { if (cart.isNotEmpty()) navController.navigate("panier") },
+                                modifier = Modifier.weight(.5f),
+                                enabled = cart.isNotEmpty()
+                            ) { Text("Valider la commande") }
+
+                            Button(
+                                modifier = Modifier.weight(.5f),
+                                onClick = {
+                                    if (!bluetoothViewModel.isConnected.value) {
+                                        Toast.makeText(navController.context, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    } else {
+                                        bluetoothViewModel.printInvoice(cart, totalPrice, shopInfos)
+                                        Toast.makeText(navController.context, "Ticket imprimé", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                                },
+                                enabled = totalPrice > 0
+                            ) { Text("Imprimer", maxLines = 1) }
+                        }
                     }
                 }
             }
         }
     }
+
 }
 
 @Composable

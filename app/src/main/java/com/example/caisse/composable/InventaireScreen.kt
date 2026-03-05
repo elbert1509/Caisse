@@ -216,7 +216,7 @@ fun InventaireScreen(navController: NavController, viewModel: MenuViewModel) {
                     )
                 }
 
-                item { Spacer(Modifier.height(72.dp)) } // pour ne pas masquer par la bottomBar
+                                item { Spacer(Modifier.height(72.dp)) } // pour ne pas masquer par la bottomBar
             }
         }
     }
@@ -262,15 +262,14 @@ private fun ProduitCard(
             Spacer(Modifier.height(10.dp))
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     formatPrice(editable.price * editable.stock,devise),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.weight(1f))
                 TextButton(onClick = onReset) { Text("Réinitialiser") }
                 Button(
                     enabled = (editable.price != produit.prix) || (editable.stock != produit.stock),
@@ -332,9 +331,9 @@ private fun StepperField(
         Row(
             Modifier.padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            //Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
             FilledTonalButton(onClick = { onValueChange((value - 1).coerceAtLeast(0)) }) { Text("-") }
             Text(value.toString(), style = MaterialTheme.typography.titleSmall)
             FilledTonalButton(onClick = { onValueChange(value + 1) }) { Text("+") }

@@ -2,6 +2,7 @@ package com.example.caisse.composable
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -43,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.bluetooth.BluetoothViewModel
@@ -52,6 +55,13 @@ import com.example.caisse.model.AuthViewModel
 import com.example.caisse.util.formatPrice
 import com.google.firebase.auth.auth
 import java.util.UUID
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Badge
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.rememberModalBottomSheetState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,7 +119,6 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         Icon(Icons.Filled.Settings, contentDescription = null)
                     }
                 }
-
             )
         },
         bottomBar = {
@@ -121,161 +130,317 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
         }
     ) { padding ->
 
-        Row(
+        // ✅ Total déjà dispo (pour l’afficher partout)
+        val totaltable by menuViewModel.totalAmount.collectAsState()
+
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(    modifier = Modifier
-                .fillMaxHeight()
-                .weight(0.65f)
-                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
-            ) {
+            val isCompact = maxWidth < 600.dp
+            var showBill by remember { mutableStateOf(false) }
 
-                TabRow(
-                    selectedTabIndex = categories.indexOfFirst { it.id == selecredCategoryID }
-                        .coerceAtLeast(0)
-                ) {
-                    categories.forEach { category ->
-                        Tab(
-                            selected = category.id == selecredCategoryID,
-                            onClick = { selecredCategoryID = category.id },
-                            text = { Text(category.name) }
-                        )
-                    }
+            // =======================
+            // COMPACT: Produits plein écran + Facture en BottomSheet
+            // =======================
+            if (isCompact) {
 
-                }
+                // ---- BottomSheet Facture
+                if (showBill) {
+                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                    ModalBottomSheet(
+                        onDismissRequest = { showBill = false },
+                        sheetState = sheetState
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
 
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 128.dp),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(products.filter { it.categoryId == selecredCategoryID }) { product ->
-                        ProductItemHorizontal(product = product,devise = info?.devise ?: "") {
-                            menuViewModel.addProductToTable(product.id, tableUuid)
+                            // ✅ Total en haut du sheet
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Facture", style = MaterialTheme.typography.headlineSmall)
+                                Text(
+                                    text = formatPrice(totaltable, info?.devise),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LazyColumn {
+                                itemsIndexed(
+                                    tableItems,
+                                    key = { index, ticket -> "${ticket.produit.id}@$index" }
+                                ) { _, ticket ->
+                                    TableItemRow(
+                                        ticket = ticket,
+                                        onIncrease = {
+                                            menuViewModel.updateTableItemQuantity(
+                                                ticket.produit.id, tableUuid, ticket.quantity + 1
+                                            )
+                                        },
+                                        onDecrease = {
+                                            menuViewModel.updateTableItemQuantity(
+                                                ticket.produit.id, tableUuid, ticket.quantity - 1
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        menuViewModel.payTable(tableUuid)
+                                        navController.popBackStack()
+                                        authVm.enqueueSync(context = ctx, tag = "sync")
+                                    },
+                                    enabled = totaltable > 0
+                                ) { Text("Valider", maxLines = 1) }
+
+                                Button(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (!bluetoothViewModel.isConnected.value) {
+                                            Toast.makeText(ctx, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        } else {
+                                            bluetoothViewModel.printInvoice(tableItems, totaltable, info)
+                                            Toast.makeText(ctx, "Ticket imprimé", Toast.LENGTH_SHORT).show()
+                                            navController.popBackStack()
+                                        }
+                                    },
+                                    enabled = totaltable > 0
+                                ) { Text("Imprimer", maxLines = 1) }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
                 }
 
-            }
-            Column(modifier = Modifier
-                .fillMaxHeight()
-                .weight(0.35f)
-                .padding(16.dp)
-            )
-            {
-                Text(
-                    text = "Facture",
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                //Spacer(modifier = Modifier.height(16.dp))
+                // ---- Produits plein écran (colonne gauche seulement)
+                Column(modifier = Modifier.fillMaxSize()) {
 
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    itemsIndexed(tableItems, key ={ index, ticket -> "${ticket.produit.id}@$index" }) {  _,ticket ->
-                        TableItemRow(
-                            ticket = ticket,
-                            onIncrease = {
-                                menuViewModel.updateTableItemQuantity(
-                                ticket.produit.id,
-                                tableUuid,
-                                ticket.quantity + 1
-                                ) },
-                            onDecrease = {
-                                menuViewModel.updateTableItemQuantity(
-                                    ticket.produit.id,
-                                    tableUuid,
-                                    ticket.quantity - 1
+                    if (categories.isNotEmpty()) {
 
+                        // s’assurer que l’ID sélectionné est valide
+                        if (selecredCategoryID == null || categories.none { it.id == selecredCategoryID }) {
+                            selecredCategoryID = categories.first().id
+                        }
+
+                        val selectedIndex =
+                            categories.indexOfFirst { it.id == selecredCategoryID }
+                                .coerceAtLeast(0)
+                                .coerceAtMost(categories.lastIndex)
+
+                        ScrollableTabRow(
+                            selectedTabIndex = selectedIndex,
+                            edgePadding = 12.dp
+                        ) {
+                            categories.forEach { category ->
+                                Tab(
+                                    selected = category.id == selecredCategoryID,
+                                    onClick = { selecredCategoryID = category.id },
+                                    text = {
+                                        Text(
+                                            text = category.name,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 )
                             }
+                        }
+                    } else {
+                        // optionnel : un placeholder pendant le chargement
+                        Text(
+                            text = "Chargement...",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
                         )
-
                     }
-                }
 
 
-                val totaltable  by menuViewModel.totalAmount.collectAsState()
-                Spacer(Modifier.height(8.dp))
 
-                Row (
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-
-                ){
-                    Text(text = "Total", style = MaterialTheme.typography.headlineSmall)
-                    Text(text = formatPrice(totaltable,info?.devise),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-
-                Row (modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ){
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            menuViewModel.payTable(tableUuid)
-                            navController.popBackStack() // revenir en arrière après validation
-                            authVm.enqueueSync(
-                                context = ctx,
-                                tag = "sync"
-                            )
-                        },
-                        enabled = totaltable > 0
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 110.dp),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("Valider", maxLines = 1)
-                    }
-                    Button(
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-
-                            if (!bluetoothViewModel.isConnected.value) {
-                                Toast.makeText(
-                                    navController.context,
-                                    "Pas de device connecté",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }else{
-                                bluetoothViewModel.printInvoice(tableItems, totaltable,info)
-                                Toast.makeText(
-                                    navController.context,
-                                    "Ticket imprimé",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                navController.popBackStack() // revenir en arrière après validation
+                        items(products.filter { it.categoryId == selecredCategoryID }) { product ->
+                            ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
+                                menuViewModel.addProductToTable(product.id, tableUuid)
                             }
-
-
-                        },
-                        enabled = totaltable > 0
-                    ) {
-                        Text("Imprimer",maxLines = 1)
+                        }
                     }
                 }
 
+                // ---- Bouton flottant "Facture" (badge = nb articles)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    FloatingActionButton(
+                        onClick = { showBill = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                val qty = tableItems.sumOf { it.quantity }
+                                if (qty > 0) Badge { Text(qty.toString()) }
+                            }
+                        ) {
+                            Text("Facture")
+                        }
+                    }
+                }
             }
 
+            // =======================
+            // LARGE: ton affichage actuel 2 colonnes (quasi inchangé)
+            // =======================
+            else {
+                Row(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Gauche: produits
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(0.65f)
+                            .padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
+                    ) {
+                        TabRow(
+                            selectedTabIndex = categories.indexOfFirst { it.id == selecredCategoryID }
+                                .coerceAtLeast(0)
+                        ) {
+                            categories.forEach { category ->
+                                Tab(
+                                    selected = category.id == selecredCategoryID,
+                                    onClick = { selecredCategoryID = category.id },
+                                    text = { Text(category.name) }
+                                )
+                            }
+                        }
 
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 128.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(products.filter { it.categoryId == selecredCategoryID }) { product ->
+                                ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
+                                    menuViewModel.addProductToTable(product.id, tableUuid)
+                                }
+                            }
+                        }
+                    }
+
+                    // Droite: facture (comme avant, avec total en bas)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(0.35f)
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Facture",
+                            style = MaterialTheme.typography.headlineMedium,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            itemsIndexed(tableItems, key = { index, ticket -> "${ticket.produit.id}@$index" }) { _, ticket ->
+                                TableItemRow(
+                                    ticket = ticket,
+                                    onIncrease = {
+                                        menuViewModel.updateTableItemQuantity(
+                                            ticket.produit.id, tableUuid, ticket.quantity + 1
+                                        )
+                                    },
+                                    onDecrease = {
+                                        menuViewModel.updateTableItemQuantity(
+                                            ticket.produit.id, tableUuid, ticket.quantity - 1
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total", style = MaterialTheme.typography.headlineSmall)
+                            Text(
+                                formatPrice(totaltable, info?.devise),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .padding(bottom = 8.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    menuViewModel.payTable(tableUuid)
+                                    navController.popBackStack()
+                                    authVm.enqueueSync(context = ctx, tag = "sync")
+                                },
+                                enabled = totaltable > 0
+                            ) { Text("Valider", maxLines = 1) }
+
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    if (!bluetoothViewModel.isConnected.value) {
+                                        Toast.makeText(ctx, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    } else {
+                                        bluetoothViewModel.printInvoice(tableItems, totaltable, info)
+                                        Toast.makeText(ctx, "Ticket imprimé", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                                },
+                                enabled = totaltable > 0
+                            ) { Text("Imprimer", maxLines = 1) }
+                        }
+                    }
+                }
+            }
         }
-
-
-
     }
+
 
 }
 

@@ -122,7 +122,7 @@ fun AppNavigation() {
             )
         }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
-        composable("entree") { Entree(navController = navController, menuViewModel = menuViewModel, bluetoothViewModel = bluetoothViewModel) }
+        composable("entree") { Entree(navController = navController, menuViewModel = menuViewModel, bluetoothViewModel = bluetoothViewModel, authVm = authViewModel) }
 
     }
 

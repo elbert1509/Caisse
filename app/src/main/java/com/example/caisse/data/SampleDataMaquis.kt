@@ -9,6 +9,7 @@ private fun drawableUri(name: String) =
 val CATEGORY_POT_ID = UUID.fromString("22222222-2222-2222-1234-222222222222")
 val CATEGORY_WHISKY_ID = UUID.fromString("22222222-2222-2222-1235-222222222222")
 val CATEGORY_BECTO_ID = UUID.fromString("22222222-2222-2222-4544-222222222222")
+val CATEGORY_ENTREE_ID = UUID.fromString("22222222-2222-2222-4545-222222222222")
 
 val sampleCategoriesMaquis = listOf(
     Category(
@@ -24,6 +25,11 @@ val sampleCategoriesMaquis = listOf(
     Category(
         id = CATEGORY_WHISKY_ID,
         name = "Whisky",
+        description = "Boissons"
+    ),
+    Category(
+        id = CATEGORY_ENTREE_ID,
+        name = "Entree",
         description = "Boissons"
     )
 )
@@ -150,7 +156,32 @@ val sampleProductsMaquis = listOf(
         description = "Bière blonde"
     ),
 
+    Produit(
+        nom = "Entrée Solo",
+        prix = 20.00,
+        image = drawableUri("persone"),
+        categoryId = CATEGORY_ENTREE_ID,
+        stock = 35,
+        description = "Bière blonde"
+    ),
 
+    Produit(
+        nom = "Pack Maquisard",
+        prix = 200.00,
+        image = drawableUri("maquis"),
+        categoryId = CATEGORY_ENTREE_ID,
+        stock = 35,
+        description = "Bière blonde"
+    ),
+
+    Produit(
+        nom = "Pack VIP Maquisard",
+        prix = 500.00,
+        image = drawableUri("vip"),
+        categoryId = CATEGORY_ENTREE_ID,
+        stock = 35,
+        description = "Bière blonde"
+    ),
 )
 
 

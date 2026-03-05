@@ -6,13 +6,19 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.os.Build
 import android.util.Log
+import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresPermission
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.caisse.R
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +44,8 @@ class BluetoothViewModel : ViewModel() {
     private val bluetoothAdapter  : BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket : BluetoothSocket? = null
     private var outputStream : OutputStream? = null
+
+
 
 
     private val _pairedDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
@@ -234,7 +242,86 @@ class BluetoothViewModel : ViewModel() {
 
         return "$a $q $p $t\n" // 13+1+4+1+6+1+6 = 32
     }
+    fun printEntree(
+        context: Context,
+        tableItems: List<Ticket>,
+        total: Double,
+        infos: ShopInfos?,
+        invoiceId: UUID? = null
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1) Reset + état clean
+                writeCmd(0x1B, 0x40)        // ESC @
+                writeCmd(0x1D, 0x21, 0x01)  // GS ! 0
+                writeCmd(0x1B, 0x45, 0x00)  // ESC E 0
+                writeCmd(0x1B, 0x4D, 0x01)  // Font B (petite)
+                writeCmd(0x1B, 0x74, 0x02)  // CP850
 
+                // --------- Contenu ticket (texte) ----------
+                val datePrint = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date())
+                val ticketNo = invoiceId?.let { invoiceNoFromId(it) } ?: invoiceNoFromId(UUID.randomUUID())
+
+                val eventDate = "06/03/2026"
+                val eventTime = "22h00 \u2192 06h00"
+                val theme = "La rentrée des immatures"
+                val guest = "Fetty Ndoss"
+
+                val packName = tableItems
+                    .firstOrNull()
+                    ?.produit
+                    ?.nom
+                    ?.replace("\n", " ")
+                    ?: "ENTRÉE"
+
+                val qty = tableItems.sumOf { it.quantity }.coerceAtLeast(1)
+
+                val sb = StringBuilder()
+                sb.append("\r\n")
+                sb.append(center58("TICKET D'ENTRÉE"))
+                sb.append("\r\n")
+                sb.append(sepLine())
+                sb.append("ÉVÉNEMENT : $eventDate\r\n")
+                sb.append("HORAIRE  : $eventTime\r\n")
+                sb.append("THÈME    : $theme\r\n")
+                sb.append("INVITÉ   : $guest\r\n")
+                sb.append(sepLine())
+
+                sb.append("TYPE     : $packName\r\n")
+                sb.append("QTÉ      : $qty\r\n")
+                sb.append("MONTANT  : ${formatPrice(total, infos?.devise)}\r\n")
+                sb.append(sepLine())
+
+                sb.append("N° TICKET : $ticketNo\r\n")
+                sb.append("Imprimé le: $datePrint\r\n")
+                sb.append(sepLine())
+                sb.append(center58("Présentez ce ticket au Bar"))
+                sb.append("\r\n")
+                sb.append(center58("Merci et bonne soirée !"))
+                sb.append("\r\n\r\n")
+
+                // --------- Logo + texte en bitmap 58mm ----------
+                val text = StripAccents(sb.toString())
+                val textBmp = textToBitmap58mm(text)
+
+                // Charge le logo drawable "imaquis"
+                val logoBmp = decodeDrawableBitmap58mm(R.drawable.imaquis, context=context)
+
+                // Compose final bitmap : logo centré + espace + texte
+                val finalBmp = mergeTopImageWithText58mm(
+                    top = logoBmp,
+                    textBmp = textBmp,
+                    topMarginPx = 10,
+                    betweenPx = 8
+                )
+
+                printBitmapEscPos(finalBmp, outputStream)
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     fun testPrint(context: Context, menuViewModel: MenuViewModel) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -282,6 +369,41 @@ class BluetoothViewModel : ViewModel() {
             Thread.sleep(10) // petit souffle pour les imprimantes fragiles
             i = end
         }
+    }
+
+    private fun decodeDrawableBitmap58mm(@DrawableRes resId: Int, targetWidth: Int = 384, context: Context ): Bitmap {
+        val raw = BitmapFactory.decodeResource(context.resources, resId)
+        val ratio = raw.height.toFloat() / raw.width.toFloat()
+        val targetHeight = (targetWidth * ratio).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(raw, targetWidth, targetHeight, true)
+    }
+
+    private fun mergeTopImageWithText58mm(
+        top: Bitmap,
+        textBmp: Bitmap,
+        topMarginPx: Int = 0,
+        betweenPx: Int = 0
+    ): Bitmap {
+        val width = maxOf(top.width, textBmp.width)
+        val height = topMarginPx + top.height + betweenPx + textBmp.height
+
+        val out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        canvas.drawColor(android.graphics.Color.WHITE)
+
+        val leftTop = (width - top.width) / 2
+        canvas.drawBitmap(top, leftTop.toFloat(), topMarginPx.toFloat(), null)
+
+        val leftText = (width - textBmp.width) / 2
+        canvas.drawBitmap(textBmp, leftText.toFloat(), (topMarginPx + top.height + betweenPx).toFloat(), null)
+
+        return out
+    }
+    private fun center58(s: String, width: Int = 42): String {
+        val text = s.trim()
+        if (text.length >= width) return text.take(width)
+        val pad = (width - text.length) / 2
+        return " ".repeat(pad) + text
     }
     companion object {
         fun provideFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {

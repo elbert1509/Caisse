@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.caisse.util.PasswordHasher
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -352,14 +353,19 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun addTable(name: String) {
         viewModelScope.launch {
-            repository.addTable(
+            repository.upsertTable(
                 AppTable(name = name).copy(updatedAt = now(), isDirty = true)
             )
             _tableItems.value = emptyList()
             loadTables()
         }
     }
-
+    fun clearVirtualTable(tableId: UUID) {
+        viewModelScope.launch {
+            repository.clearTableItems(tableId)
+            loadTableItems(tableId) // refresh UI + total = 0
+        }
+    }
     fun loadTableItems(tableId: UUID) {
         viewModelScope.launch {
             val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
@@ -399,6 +405,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
             loadTableItems(tableId)
         }
+    }
+
+    suspend fun getTableByName(name: String): AppTable? {
+        return repository.getTableByName(name)
     }
 
 

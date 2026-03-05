@@ -81,6 +81,9 @@ class CaisseRepository(
     suspend fun upsertTable(appTable: AppTable) = tableDao.upsertTable(appTable)
     suspend fun upsertTableItem(ti: TableItem) = tableDao.upsertTableItem(ti)
     suspend fun getTableById(id: UUID): AppTable? = tableDao.getTableById(id)
+    suspend fun getTableByName(name: String): AppTable? = tableDao.getTableByName(name)
+    suspend fun clearTableItems(tableId: UUID) = tableDao.clearTableItems(tableId)
+
 
 
     // Invoice methods

@@ -27,8 +27,10 @@ import com.example.caisse.model.VenteDao
         InvoiceItem::class,
         ShopInfos::class,
         LogTechnique::class,
+        Cloture::class,
+        EtatCaisse::class
                ],
-    version = 9
+    version = 10
     ,
     exportSchema = false
 )

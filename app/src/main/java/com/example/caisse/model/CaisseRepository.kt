@@ -10,7 +10,10 @@ import com.example.caisse.model.ProduitDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
+import com.example.caisse.util.FiscalHashUtils.calculateClotureHash
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -117,6 +120,126 @@ class CaisseRepository(
     }
 
     fun getAllLogs(): Flow<List<LogTechnique>> = logDao.getAllLogs()
+
+    suspend fun genererClotureJournaliere(): Cloture {
+        val dateAujourdhui = LocalDate.now().toString()
+        val today = LocalDate.now()
+        val zone = java.time.ZoneId.systemDefault()
+
+
+        val startOfDay = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+
+
+        val clotureExistante = venteDao.getClotureByDateAndType(
+            dateCloture = dateAujourdhui,
+            type = "JOURNALIERE"
+        )
+
+        if (clotureExistante != null) {
+            throw IllegalStateException("La clôture journalière du $dateAujourdhui existe déjà.")
+
+        }
+        // 1. Calculer les totaux des ventes non clôturées
+        val ventesDuJour =venteDao.getVentesByPeriod(startOfDay, endOfDay)
+        val totalJour = ventesDuJour.sumOf { it.total }
+
+        // 2. Récupérer la dernière clôture pour le cumul perpétuel
+        val derniereCloture = venteDao.getLastCloture()
+        val nouveauGrandTotal = (derniereCloture?.grandTotalCumule ?: 0.0) + totalJour
+        val previousHash = derniereCloture?.hash ?: "0000000000000000" // Valeur par défaut pour la toute première clôture
+
+        // 3. Créer l'objet temporaire pour le calcul
+        val clotureTemp = Cloture(
+            dateCloture = dateAujourdhui,
+            type = "JOURNALIERE",
+            chiffreAffaireBrut = totalJour,
+            totalTVA = totalJour * 0.20, // À adapter selon vos taux
+            compteurVentes = ventesDuJour.size,
+            grandTotalCumule = nouveauGrandTotal,
+            hash = "" // Calculer le hash comme dans l'Axe B
+        )
+
+        // 4. Calculer le Hash NF525
+        val finalHash = calculateClotureHash(clotureTemp, previousHash)
+
+        // 5. Créer la clôture finale signée
+        val cloture = clotureTemp.copy(hash = finalHash)
+
+        // 6. Enregistrer en base
+        venteDao.insertCloture(cloture)
+
+        return cloture
+    }
+
+    suspend fun ouvrirCaisse(vendeurId: UUID) {
+        val date = LocalDateTime.now().toString()
+
+        // 1. Mettre à jour l'état local
+        venteDao.updateEtatCaisse(
+            EtatCaisse(isOuverte = true, dateOuverture = date, idVendeurOuverture = vendeurId)
+        )
+
+        // 2. Inscrire l'événement dans le journal (IMPORTANT NF525)
+        loggerEvenement(
+            type = "OUVERTURE_SESSION",
+            description = "Ouverture de caisse par le vendeur $vendeurId",
+            vendeurId = vendeurId
+        )
+    }
+
+    suspend fun estCaisseOuverte(): Boolean {
+        return venteDao.getEtatCaisse()?.isOuverte ?: false
+    }
+
+
+    suspend fun fermerCaisse() {
+        val date = LocalDateTime.now().toString()
+        // 1. Mettre à jour l'état à "fermé"
+        venteDao.updateEtatCaisse(
+            EtatCaisse(id = 1, isOuverte = false, dateOuverture = null, idVendeurOuverture = null)
+        )
+        // 2. Log technique de l'événement
+        loggerEvenement(
+            type = "FERMETURE_SESSION",
+            description = "Fermeture de session de caisse",
+            vendeurId = null // Optionnel : passer l'ID du vendeur actuel
+        )
+    }
+    fun observeEtatCaisse(): Flow<Boolean> {
+        return venteDao.observeEtatCaisse().map { it?.isOuverte ?: false }
+    }
+
+    /**
+     * Mutualisation de la clôture comptable (Z) et de la fermeture technique.
+     * NF525 : Garantit que l'état de la caisse passe à "Fermé" dès que le rapport est scellé.
+     */
+    suspend fun executerClotureGlobale(): Cloture {
+        // 1. Générer le rapport Z (Calcul, Signature/Hash, Insertion)
+        val clotureResult = genererClotureJournaliere()
+
+        // 2. Fermer techniquement la caisse
+        val dateHeure = LocalDateTime.now().toString()
+
+        // Mise à jour de l'état (ID 1 est fixe pour l'état unique)
+        venteDao.updateEtatCaisse(
+            EtatCaisse(
+                id = 1,
+                isOuverte = false,
+                dateOuverture = null,
+                idVendeurOuverture = null
+            )
+        )
+
+        // 3. Loguer la fermeture dans le JET (Journal des Événements Techniques)
+        loggerEvenement(
+            type = "CLOTURE_ET_FERMETURE",
+            description = "Clôture Z n°${clotureResult.idCloture} générée et session fermée.",
+            vendeurId = null
+        )
+
+        return clotureResult
+    }
 
 
 }

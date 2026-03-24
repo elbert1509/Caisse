@@ -161,6 +161,7 @@ fun PrendreCommandeScreen(
                                     onClick = {
                                         if (!bluetoothViewModel.isConnected.value) {
                                             Toast.makeText(navController.context, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                            menuViewModel.loggerEvenement("Impression Annulée", "Impression annulée car pas de device connecté")
                                             return@Button
                                         } else {
                                             bluetoothViewModel.printInvoice(cart, totalPrice, shopInfos)
@@ -303,6 +304,7 @@ fun PrendreCommandeScreen(
                                 onClick = {
                                     if (!bluetoothViewModel.isConnected.value) {
                                         Toast.makeText(navController.context, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                        menuViewModel.loggerEvenement("Impression Annulée", "Impression annulée car pas de device connecté")
                                         return@Button
                                     } else {
                                         bluetoothViewModel.printInvoice(cart, totalPrice, shopInfos)

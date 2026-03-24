@@ -265,7 +265,11 @@ data class LogTechnique(
     val typeEvenement: String, // ex: "OUVERTURE_SESSION", "ERREUR_SYSTEME", "MODIF_PRIX"
     val description: String,
     val idVendeur: UUID?,
-    val empreinte: String // Hash pour prouver que le log n'a pas été modifié
+    val empreinte: String, // Hash pour prouver que le log n'a pas été modifié
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
 )
 enum class TypeEvenement {
     OUVERTURE_SESSION,
@@ -273,6 +277,37 @@ enum class TypeEvenement {
     MODIF_PRIX
 }
 
+@Entity(tableName = "clotures",
+        indices = [Index(value = ["dateCloture", "type"], unique = true)]
+)
+data class Cloture(
+    @PrimaryKey val idCloture: UUID = UUID.randomUUID(),
+    val dateCloture: String, // Date du jour
+    val type: String, // "JOURNALIERE", "MENSUELLE"
+    val chiffreAffaireBrut: Double,
+    val totalTVA: Double,
+    val compteurVentes: Int, // Nombre de tickets
+    val grandTotalCumule: Double, // Somme ininterrompue depuis le début de l'app
+    val hash: String, // Signature de la clôture
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = false,
+    val isDeleted: Boolean = false
+)
+object AppConfig {
+    const val VERSION_LOGICIEL = "1.2.4-NF" // À incrémenter à chaque build
+    const val NOM_LOGICIEL = "MaCaissePro"
+    const val EDITEUR = "Ogooué Infos"
+    const val NUM_CERTIFICAT = "NF525-XXXX-YYYY" // Fourni lors de la certification
+}
+
+@Entity(tableName = "etat_caisse")
+data class EtatCaisse(
+    @PrimaryKey val id: Int = 1, // Une seule ligne possible
+    val isOuverte: Boolean = false,
+    val dateOuverture: String? = null,
+    val idVendeurOuverture: UUID? = null
+)
 
 data class SalesData(val label: String, val amount: Double)
 data class ProductSale(val productName: String, val totalQuantity: Int)

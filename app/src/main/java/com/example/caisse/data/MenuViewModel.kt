@@ -537,6 +537,58 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun getLogs() = repository.getAllLogs()
 
+    fun clotureJournaliere(
+        onSuccess: (Cloture) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val cloture = repository.genererClotureJournaliere()
+
+                // 👉 Log enrichi (beaucoup mieux)
+                loggerEvenement(
+                    type = "CLOTURE",
+                    description = "Clôture ${cloture.dateCloture} | CA=${cloture.chiffreAffaireBrut} | ventes=${cloture.compteurVentes}"
+                )
+
+                onSuccess(cloture)
+
+            } catch (e: Exception) {
+
+                loggerEvenement(
+                    type = "ERREUR_CLOTURE",
+                    description = e.message ?: "Erreur inconnue"
+                )
+
+                onError(e.message ?: "Erreur inconnue")
+            }
+        }
+    }
+
+
+
+    // On observe l'état de la caisse en temps réel
+    val caisseOuverte: StateFlow<Boolean> = repository.observeEtatCaisse()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    // Fonction pour ouvrir la caisse (déjà discutée, à ajouter si absente)
+    fun ouvrirLaCaisse(vendeurId: UUID) {
+        viewModelScope.launch {
+            repository.ouvrirCaisse(vendeurId)
+        }
+    }
+
+    // Fonction pour fermer la caisse
+    fun fermerCaisse() {
+        viewModelScope.launch {
+            repository.fermerCaisse()
+        }
+    }
+
 
 
 

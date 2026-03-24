@@ -216,6 +216,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                     onClick = {
                                         if (!bluetoothViewModel.isConnected.value) {
                                             Toast.makeText(ctx, "Pas de device connecté", Toast.LENGTH_SHORT).show()
+                                            menuViewModel.loggerEvenement("Erreur d'impression", "Pas de device connecté")
                                             return@Button
                                         } else {
                                             bluetoothViewModel.printInvoice(tableItems, totaltable, info)

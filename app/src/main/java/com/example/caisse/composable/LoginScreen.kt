@@ -93,6 +93,10 @@ fun LoginScreen(
 
                 // Lance la sync APRES le wipe
                 vm.enqueueSync(context = ctx, tag = "sync")
+                menuViewModel.loggerEvenement(
+                    type = "Connexion",
+                    description = "UID=$uid"
+                )
 
                 // Démarre la surveillance temps réel des tables
 

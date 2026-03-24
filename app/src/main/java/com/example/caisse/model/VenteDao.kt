@@ -1,6 +1,8 @@
 package com.example.caisse.model
 
 import androidx.room.*
+import com.example.caisse.data.Cloture
+import com.example.caisse.data.EtatCaisse
 import com.example.caisse.data.ProductReport
 import com.example.caisse.data.ProductSale
 import com.example.caisse.data.SalesData
@@ -161,5 +163,57 @@ interface VenteDao {
     @Query("SELECT * FROM vente ORDER BY date DESC LIMIT 1")
     suspend fun getLastVente(): Vente?
 
+    /**
+     * Récupère toutes les ventes d'une journée spécifique pour le calcul du Z de caisse.
+     * NF525 : Nécessaire pour l'intégrité des calculs de clôture.
+     */
+    @Query("SELECT * FROM vente WHERE date LIKE :date || '%' AND isDeleted = 0")
+    suspend fun getVentesByDate(date: String): List<Vente>
+
+    /**
+     * Récupère la dernière clôture effectuée.
+     * NF525 : Utilisé pour récupérer le 'Grand Total Cumulé' précédent et assurer la continuité.
+     */
+    @Query("SELECT * FROM clotures ORDER BY dateCloture DESC LIMIT 1")
+    suspend fun getLastCloture(): Cloture?
+
+    /**
+     * Insère une nouvelle clôture (Z de caisse).
+     * NF525 : Une fois insérée, cette donnée est inaltérable.
+     */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCloture(cloture: Cloture)
+
+    @Query("""
+    SELECT * FROM Vente
+    WHERE date >= :startOfDay
+      AND date < :endOfDay
+      AND isDeleted = 0
+""")
+    suspend fun getVentesByPeriod(startOfDay: Long, endOfDay: Long): List<Vente>
+
+    @Query("""
+    SELECT * FROM clotures
+    WHERE dateCloture = :dateCloture AND type = :type
+    LIMIT 1
+""")
+    suspend fun getClotureByDateAndType(dateCloture: String, type: String): Cloture?
+
+    @Query("SELECT * FROM clotures")
+    suspend fun getAllCloturesOnce(): List<Cloture>
+
+    @Query("SELECT * FROM clotures WHERE idCloture = :id LIMIT 1")
+    suspend fun getClotureById(id: UUID): Cloture?
+
+    @Update
+    suspend fun updateCloture(cloture: Cloture)
+
+    @Query("SELECT * FROM etat_caisse WHERE id = 1")
+    suspend fun getEtatCaisse(): EtatCaisse?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateEtatCaisse(etat: EtatCaisse)
+    @Query("SELECT * FROM etat_caisse WHERE id = 1")
+    fun observeEtatCaisse(): Flow<EtatCaisse?>
 
 }

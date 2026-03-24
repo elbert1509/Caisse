@@ -52,10 +52,14 @@ fun AppNavigation() {
                     HomeActionButton.DONNES ->   navController.navigate("donnee")
                     HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
                     HomeActionButton.STOCK ->  navController.navigate("stock")
-                    HomeActionButton.GESTION ->  navController.navigate("gestion?fromHome=true")
+                    HomeActionButton.GESTION ->  {
+                        navController.navigate("gestion?fromHome=true")
+                        menuViewModel.loggerEvenement("Entrée dans Gestion ", "Gestion depuis l'accueil")
+                    }
                 }
             },
             navController = navController,
+            viewModel = menuViewModel
         ) }
         composable("categorie") { CategoriesScreen( navController = navController, modifier = Modifier,
             viewModelcategories = menuViewModel
@@ -125,6 +129,16 @@ fun AppNavigation() {
             LogScreen(
                 viewModel = menuViewModel,
                 onBack = { navController.popBackStack() })
+        }
+
+        composable("cloture") {
+            ClotureScreen(
+                viewModel = menuViewModel,
+                onBack = { navController.popBackStack() })
+        }
+
+        composable("legaleInfos"){
+            InfosLegalesScreen()
         }
 
     }

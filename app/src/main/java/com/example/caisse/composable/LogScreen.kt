@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Divider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.caisse.data.LogTechnique
 import com.example.caisse.data.MenuViewModel
 
@@ -47,7 +45,7 @@ fun LogScreen(
                 title = { Text("Journal des Événements (JET)") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
                 actions = {
@@ -88,7 +86,7 @@ fun LogItem(log: LogTechnique) {
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 color = when(log.typeEvenement) {
-                    "ERREUR" -> Color.Red
+                    "Erreur" -> Color.Red
                     "OUVERTURE_SESSION" -> Color(0xFF388E3C)
                     else -> Color.Black
                 }
@@ -103,7 +101,7 @@ fun LogItem(log: LogTechnique) {
             text = log.description,
             style = MaterialTheme.typography.bodySmall
         )
-        if (!log.empreinte.isNullOrEmpty()) {
+        if (log.empreinte.isNotEmpty()) {
             Text(
                 text = "Signature: ${log.empreinte.take(8)}...",
                 style = MaterialTheme.typography.bodySmall,

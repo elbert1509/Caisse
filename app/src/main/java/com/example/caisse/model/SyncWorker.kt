@@ -31,6 +31,7 @@ class SyncWorker(
         val categorieDao = dbLocal.categorieDao()
         val vendeurDao = dbLocal.vendeurDao()
         val infosDao = dbLocal.infosDao()
+        val logDao = dbLocal.logDao()
         val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
         val since = prefs.getLong("lastSyncAt", 0L)
         val isInitialSync = since == 0L
@@ -47,11 +48,8 @@ class SyncWorker(
         pushInfos(cloud, uid, infosDao)
         pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync)
         pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync)
-
-
-
-
-
+        pushDirtyClotures(cloud, uid, venteDao, isInitialSync)
+        pushDirtyLogs(cloud, uid, logDao, isInitialSync)
 
         // 2) PULL : récupérer ce qui a changé depuis lastSyncAt
 
@@ -64,6 +62,8 @@ class SyncWorker(
         pullVentesSince(cloud, uid, since, venteDao, isInitialSync)
         pullVenteLignesSince(cloud, uid, since, venteDao, produitDao, isInitialSync)
         pullInfos(cloud, uid, infosDao)
+        pullCloturesSince(cloud, uid, since, venteDao, isInitialSync)
+        pullLogsSince(cloud, uid, since, logDao, isInitialSync)
 
 
         Log.d("SyncWorker", "Sync terminé")
@@ -206,6 +206,45 @@ class SyncWorker(
         }
 
 
+    }
+
+    private suspend fun pushDirtyClotures(
+        cloud: FirebaseFirestore,
+        uid: String,
+        venteDao: VenteDao,
+        isInitialSync: Boolean
+    ) {
+        val all = venteDao.getAllCloturesOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
+
+        for (c in list) {
+            cloud.collection("users").document(uid)
+                .collection("clotures").document(c.idCloture.toString())
+                .set(clotureToMap(c.copy(isDirty = false)))
+                .await()
+
+            venteDao.updateCloture(c.copy(isDirty = false))
+        }
+    }
+
+
+    private suspend fun pushDirtyLogs(
+        cloud: FirebaseFirestore,
+        uid: String,
+        logDao: LogDao,
+        isInitialSync: Boolean
+    ) {
+        val all = logDao.getAllLogsOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
+
+        for (log in list) {
+            cloud.collection("users").document(uid)
+                .collection("logs_techniques").document(log.id.toString())
+                .set(logToMap(log.copy(isDirty = false)))
+                .await()
+
+            logDao.updateLog(log.copy(isDirty = false))
+        }
     }
 
 
@@ -454,6 +493,65 @@ class SyncWorker(
             }
         }
     }
+
+    private suspend fun pullCloturesSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        venteDao: VenteDao,
+        isInitialSync: Boolean
+    ) {
+        val base = cloud.collection("users").document(uid).collection("clotures")
+        val snap = if (isInitialSync) base.get().await()
+        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            try {
+                val remote = mapToCloture(data)
+                val local = venteDao.getClotureById(remote.idCloture)
+
+                if (local == null) {
+                    venteDao.insertCloture(remote.copy(isDirty = false))
+                } else if (remote.updatedAt >= local.updatedAt) {
+                    venteDao.updateCloture(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Cloture invalide doc=${doc.id}: ${e.message}")
+            }
+        }
+    }
+
+
+    private suspend fun pullLogsSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        since: Long,
+        logDao: LogDao,
+        isInitialSync: Boolean
+    ) {
+        val base = cloud.collection("users").document(uid).collection("logs_techniques")
+        val snap = if (isInitialSync) base.get().await()
+        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+
+        for (doc in snap.documents) {
+            val data = doc.data ?: continue
+            try {
+                val remote = mapToLog(data)
+                val local = logDao.getLogById(remote.id)
+
+                if (local == null) {
+                    logDao.insertLog(remote.copy(isDirty = false))
+                } else if (remote.updatedAt >= local.updatedAt) {
+                    logDao.updateLog(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Log invalide doc=${doc.id}: ${e.message}")
+            }
+        }
+    }
+
+
     // --------------- MAPPERS (copiés depuis repo) ---------------
 
     private fun tableToMap(t: com.example.caisse.data.AppTable) = mapOf(
@@ -668,6 +766,59 @@ class SyncWorker(
         isDeleted = m["isDeleted"] as? Boolean ?: false,
         isDirty = false
     )
+
+    private fun clotureToMap(c: com.example.caisse.data.Cloture) = mapOf(
+        "idCloture" to c.idCloture.toString(),
+        "dateCloture" to c.dateCloture,
+        "type" to c.type,
+        "chiffreAffaireBrut" to c.chiffreAffaireBrut,
+        "totalTVA" to c.totalTVA,
+        "compteurVentes" to c.compteurVentes,
+        "grandTotalCumule" to c.grandTotalCumule,
+        "hash" to c.hash,
+        "updatedAt" to c.updatedAt,
+        "isDirty" to c.isDirty,
+        "isDeleted" to c.isDeleted
+    )
+
+    private fun mapToCloture(m: Map<String, Any?>) = com.example.caisse.data.Cloture(
+        idCloture = UUID.fromString(m["idCloture"] as String),
+        dateCloture = m["dateCloture"] as String,
+        type = m["type"] as String,
+        chiffreAffaireBrut = (m["chiffreAffaireBrut"] as? Number)?.toDouble() ?: 0.0,
+        totalTVA = (m["totalTVA"] as? Number)?.toDouble() ?: 0.0,
+        compteurVentes = (m["compteurVentes"] as? Number)?.toInt() ?: 0,
+        grandTotalCumule = (m["grandTotalCumule"] as? Number)?.toDouble() ?: 0.0,
+        hash = m["hash"] as? String ?: "",
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
+
+    private fun logToMap(log: com.example.caisse.data.LogTechnique) = mapOf(
+        "id" to log.id,
+        "date" to log.date,
+        "typeEvenement" to log.typeEvenement,
+        "description" to log.description,
+        "idVendeur" to log.idVendeur?.toString(),
+        "empreinte" to log.empreinte,
+        "updatedAt" to log.updatedAt,
+        "isDirty" to log.isDirty,
+        "isDeleted" to log.isDeleted
+    )
+
+    private fun mapToLog(m: Map<String, Any?>) = com.example.caisse.data.LogTechnique(
+        id = (m["id"] as? Number)?.toLong() ?: 0L,
+        date = m["date"] as? String ?: "",
+        typeEvenement = m["typeEvenement"] as? String ?: "",
+        description = m["description"] as? String ?: "",
+        idVendeur = parseUuidOrNull(m["idVendeur"] as? String),
+        empreinte = m["empreinte"] as? String ?: "",
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
+
     private fun getString(map: Map<String, Any?>, key: String): String? =
         (map[key] as? String)?.takeIf { it.isNotBlank() }
 

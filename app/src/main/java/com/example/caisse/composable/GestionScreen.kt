@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DataExploration
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
@@ -153,8 +155,11 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHo
                         GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock") },
                         GestionTile("Dashboard", Icons.Default.Warehouse) { navController.navigate("Dashboard") },
                         GestionTile("Vente", Icons.Default.PointOfSale) { navController.navigate("vente") },
-                        GestionTile("infos", Icons.Default.Info) { navController.navigate("infos") },
-                        GestionTile("Log", Icons.Default.LogoDev) { navController.navigate("log") }
+                        GestionTile("Entreprise", Icons.Default.AlternateEmail) { navController.navigate("infos") },
+                        GestionTile("Cloture", Icons.Default.Close) { navController.navigate("cloture") },
+                        GestionTile("Log", Icons.Default.LogoDev) { navController.navigate("log") },
+                        GestionTile("Infos", Icons.Default.Info) { navController.navigate("legaleInfos") }
+
 
                     ))
 

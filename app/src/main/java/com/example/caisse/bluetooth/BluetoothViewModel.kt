@@ -15,23 +15,22 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import java.io.OutputStream
-import java.util.UUID
 import com.example.caisse.data.Ticket
 import com.example.caisse.util.StripAccents
 import com.example.caisse.util.formatPrice
 import com.example.caisse.util.invoiceNoFromId
 import com.example.caisse.util.printBitmapEscPos
 import com.example.caisse.util.textToBitmap58mm
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.io.OutputStream
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 class BluetoothViewModel : ViewModel() {
 

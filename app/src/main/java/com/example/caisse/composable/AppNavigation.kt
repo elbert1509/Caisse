@@ -121,6 +121,11 @@ fun AppNavigation() {
             )
         }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
+        composable("log") {
+            LogScreen(
+                viewModel = menuViewModel,
+                onBack = { navController.popBackStack() })
+        }
 
     }
 

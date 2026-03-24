@@ -49,7 +49,7 @@ fun PanierScreen(
     val totalPrice by menuViewModel.totalPrice.collectAsState()
     val ctx = navController.context
 
-    var paiement : Double by remember { mutableStateOf(0.0) }
+    var paiementText by remember { mutableStateOf("") }
     val shopInfos = menuViewModel.getInfos()
 
 
@@ -87,21 +87,19 @@ fun PanierScreen(
             }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
-                value = if (paiement == 0.0) "" else formatPrice(paiement, shopInfos?.devise),  // Affiche une chaîne vide quand le paiement est 0.0
+                value = paiementText,
                 onValueChange = { newValue ->
-                    // Essaye de convertir la nouvelle valeur en Double
-                    try {
-                        paiement = newValue.toDouble()
-                    } catch (e: NumberFormatException) {
-                        // Si la conversion échoue (par exemple, l'utilisateur entre une lettre), on laisse la valeur actuelle
-                        paiement = 0.0
+                    // Autorise uniquement chiffres et point
+                    if (newValue.matches(Regex("^\\d*\\.?\\d*\$"))) {
+                        paiementText = newValue
                     }
                 },
-                label = { Text(" Paiement") },
+                label = { Text("Paiement") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
+            val paiement = paiementText.toDoubleOrNull() ?: 0.0
             Divider()
             Spacer(Modifier.height(16.dp))
             Row(

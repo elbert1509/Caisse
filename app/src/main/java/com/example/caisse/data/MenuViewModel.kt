@@ -1,6 +1,8 @@
 package com.example.caisse.data
 
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.caisse.util.PasswordHasher
+import com.example.caisse.util.SecurityUtils
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -220,7 +223,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
 
             // ❌ plus de repository.insertVente(vente) ici
-            repository.insertVenteWithLignes(vente, lignes) // ✅ une seule transaction
+            insertVenteSecurisee(vente, lignes) // ✅ une seule transaction
 
             decrementStocks(cartItems)
             clearCart()
@@ -455,7 +458,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                     sousTotal = ticket.produit.prix * ticket.quantity
                 ).copy(updatedAt = now(), isDirty = true)
             }
-            repository.insertVenteWithLignes(vente, lignes)
+            insertVenteSecurisee(vente, lignes)
 
             val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
             val invoice = Invoice(tableId = tableId, totalAmount = total)
@@ -483,6 +486,22 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>) {
+        // 1. Récupérer la dernière vente pour avoir son hash
+        val lastVente = repository.getLastVente() // Il faudra ajouter cette méthode dans le DAO
+        val prevHash = lastVente?.hash ?: "0000000000000000"
+
+        // 2. Créer la vente avec le lien vers la précédente
+        val venteAvecLien = vente.copy(previousHash = prevHash)
+
+        // 3. Calculer le hash de la vente actuelle
+        val finalHash = SecurityUtils.calculateHash(venteAvecLien, lignes)
+        val venteSignee = venteAvecLien.copy(hash = finalHash)
+
+        // 4. Enregistrer en base
+        repository.insertVenteWithLignes(venteSignee, lignes)
+    }
+
 
     private val _invoicesWithDetails = MutableStateFlow<List<InvoiceWithDetails>>(emptyList())
     val invoicesWithDetails: StateFlow<List<InvoiceWithDetails>> = _invoicesWithDetails.asStateFlow()
@@ -508,6 +527,18 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             _invoicesWithDetails.value = details
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun loggerEvenement(type: String, description: String, vendeurId: UUID? = null) {
+        viewModelScope.launch {
+            repository.loggerEvenement(type, description, vendeurId)
+        }
+    }
+
+    fun getLogs() = repository.getAllLogs()
+
+
+
 
 
     private val _ventesWithDetails = MutableStateFlow<List<VenteWithDetails>>(emptyList())
@@ -600,7 +631,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                         database.venteDao(),
                         database.tableDao(),
                         database.invoiceDao(),
-                        database.infosDao()
+                        database.infosDao(),
+                        database.logDao()
                     )
                     MenuViewModel(repository)
                 }

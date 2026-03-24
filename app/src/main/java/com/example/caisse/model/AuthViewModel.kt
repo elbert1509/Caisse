@@ -32,6 +32,7 @@ class AuthViewModel : ViewModel() {
             _ui.value = _ui.value.copy(isLoading = true, error = null)
             auth.signInWithEmailAndPassword(email, pwd).await()
             _ui.value = _ui.value.copy(isLoading = false, isSignedIn = true)
+
         } catch (e: Exception) {
             _ui.value = _ui.value.copy(isLoading = false, error = e.message ?: "Connexion échouée")
         }

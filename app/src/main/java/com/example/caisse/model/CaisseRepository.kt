@@ -1,13 +1,17 @@
 package com.example.caisse.data
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.example.caisse.model.CategorieDao
 import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
+import com.example.caisse.model.LogDao
 import com.example.caisse.model.ProduitDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDateTime
 import java.util.UUID
 
 class CaisseRepository(
@@ -17,7 +21,8 @@ class CaisseRepository(
      val venteDao: VenteDao,
     private val tableDao: TableDao,
     private val invoiceDao: InvoiceDao,
-    private val infosDao: InfosDao
+    private val infosDao: InfosDao,
+    private val logDao: LogDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -56,7 +61,6 @@ class CaisseRepository(
     suspend fun insertVente(vente: Vente) = venteDao.insertVente(vente)
     suspend fun insertLigne(ligne: VenteLigne) = venteDao.insertLigne(ligne)
     suspend fun deleteVente(vente: Vente) = venteDao.deleteVente(vente)
-    suspend fun deleteLigne(ligne: VenteLigne) = venteDao.deleteLigne(ligne)
     suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) =
         venteDao.insertVenteWithLignes(vente, lignes)
     fun getProductReportBetween(start: Long, end: Long) =
@@ -64,6 +68,8 @@ class CaisseRepository(
 
     fun getTotalRevenueBetween(start: Long, end: Long) =
         venteDao.getTotalRevenueBetween(start, end)
+
+    suspend fun getLastVente () = venteDao.getLastVente()
 
 
 
@@ -94,6 +100,23 @@ class CaisseRepository(
     suspend fun updateInfos(infos: ShopInfos) = infosDao.updateInfos(infos)
     suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
     suspend fun updatePassword(passwordHash: String, passwordSalt: String) = infosDao.updatePassword(passwordHash, passwordSalt)
+
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    suspend fun loggerEvenement(type: String, description: String, vendeurId: UUID? = null) {
+        val date = LocalDateTime.now().toString()
+        // On peut aussi hasher le log pour plus de sécurité (similaire à l'axe B)
+        val log = LogTechnique(
+            date = date,
+            typeEvenement = type,
+            description = description,
+            idVendeur = vendeurId,
+            empreinte = "" // Optionnel: calcul du hash ici
+        )
+        logDao.insertLog(log)
+    }
+
+    fun getAllLogs(): Flow<List<LogTechnique>> = logDao.getAllLogs()
 
 
 }

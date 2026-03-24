@@ -158,5 +158,8 @@ interface VenteDao {
     @Query("SELECT * FROM VenteLigne WHERE id = :id")
     suspend fun getVenteLigneById(id: UUID): VenteLigne?
 
+    @Query("SELECT * FROM vente ORDER BY date DESC LIMIT 1")
+    suspend fun getLastVente(): Vente?
+
 
 }

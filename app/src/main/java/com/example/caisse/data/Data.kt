@@ -99,7 +99,9 @@ data class Vente(
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+    val hash: String = "",
+    val previousHash: String = ""
 )
 
 @Entity(
@@ -255,6 +257,21 @@ data class TableItem(
     val isDirty: Boolean = false,
     val isDeleted: Boolean = false
 )
+
+@Entity(tableName = "logs_techniques")
+data class LogTechnique(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val date: String, // Format ISO8601
+    val typeEvenement: String, // ex: "OUVERTURE_SESSION", "ERREUR_SYSTEME", "MODIF_PRIX"
+    val description: String,
+    val idVendeur: UUID?,
+    val empreinte: String // Hash pour prouver que le log n'a pas été modifié
+)
+enum class TypeEvenement {
+    OUVERTURE_SESSION,
+    ERREUR_SYSTEME,
+    MODIF_PRIX
+}
 
 
 data class SalesData(val label: String, val amount: Double)

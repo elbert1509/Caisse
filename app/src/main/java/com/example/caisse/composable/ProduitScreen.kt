@@ -2,8 +2,10 @@ package com.example.caisse.composable
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +28,7 @@ import com.example.caisse.data.Produit
 import com.example.caisse.util.formatPrice
 
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductScreen(
@@ -231,6 +234,7 @@ fun ProductScreen(
                                 image = editImageUri?.toString() ?: target.image
                             )
                             viewModel.updateProduit(updatedProduct)
+                            viewModel.loggerEvenement("Produit modifié", name )
                             renameTarget = null
                         }
                     }) { Text("Enregistrer") }

@@ -1,6 +1,8 @@
 package com.example.caisse.composable
 
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -53,6 +55,7 @@ import com.google.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
@@ -172,6 +175,7 @@ fun LoginScreen(
                 if (ui.error != null) {
                     Spacer(Modifier.height(8.dp))
                     Text(ui.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    menuViewModel.loggerEvenement("Erreur", ui.error!!)
                 }
 
                 Spacer(Modifier.height(16.dp))

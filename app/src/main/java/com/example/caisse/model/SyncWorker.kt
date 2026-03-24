@@ -84,7 +84,7 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val all = tableDao.getAllTablesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
         for (t in list) {
             cloud.collection("users").document(uid)
                 .collection("tables").document(t.id.toString())
@@ -114,7 +114,7 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val all = produitDao.getAllProduitsOnce() // existe déjà :contentReference[oaicite:2]{index=2}
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty  }
         for (p in list) {
             cloud.collection("users").document(uid)
                 .collection("produits").document(p.id.toString())
@@ -127,9 +127,9 @@ class SyncWorker(
     private suspend fun pushDirtyVentes(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: com.example.caisse.model.VenteDao
+        venteDao: VenteDao
     ) {
-        val list = venteDao.getAllVentesOnce().filter { it.isDirty && !it.isDeleted }
+        val list = venteDao.getAllVentesOnce().filter { it.isDirty  }
         for (v in list) {
             cloud.collection("users").document(uid)
                 .collection("ventes").document(v.id.toString())
@@ -147,7 +147,7 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val all = venteDao.getAllVenteLignesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
         for (vl in list) {
             cloud.collection("users").document(uid)
                 .collection("venteLignes").document(vl.id.toString())
@@ -164,7 +164,7 @@ class SyncWorker(
         isInitialSync: Boolean
     ){
         val all = categorieDao.getAllCategoryOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty}
         for (c in list){
             cloud.collection("users").document(uid)
                 .collection("categories").document(c.id.toString())
@@ -597,7 +597,9 @@ class SyncWorker(
         "tableId" to v.tableId?.toString(),
         "updatedAt" to v.updatedAt,
         "isDirty" to v.isDirty,
-        "isDeleted" to v.isDeleted
+        "isDeleted" to v.isDeleted,
+        "hash" to v.hash,
+        "previousHash" to v.previousHash,
     )
 
     private fun mapToVente(m: Map<String, Any?>): Vente {
@@ -619,7 +621,9 @@ class SyncWorker(
             updatedAt = updatedAt,
             tableId = tableId,
             isDirty = (m["isDirty"] as? Boolean) ?: false,
-            isDeleted = (m["isDeleted"] as? Boolean) ?: false
+            isDeleted = (m["isDeleted"] as? Boolean) ?: false,
+            hash = getString(m, "hash") ?: "",
+            previousHash = getString(m, "previousHash") ?: ""
         )
     }
 

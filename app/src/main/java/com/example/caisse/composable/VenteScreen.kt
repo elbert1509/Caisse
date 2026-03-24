@@ -1,5 +1,7 @@
 package com.example.caisse.composable
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +20,7 @@ import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.*
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VenteScreen(
@@ -49,17 +52,17 @@ fun VenteScreen(
                 .padding(16.dp)
                 .fillMaxSize()
         ) {
-            if (visibleVentes.isEmpty()) {
+            if (ventes.isEmpty()) {
                 Text("Aucune vente.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(visibleVentes, key = { it.id }) { v ->
+                    items(ventes, key = { it.id }) { v ->
                         VenteRow(
                             vente = v,
-                            onDelete = { toDelete = v },
+                            onDelete = { toDelete = v; viewModel.loggerEvenement("Vente Annulée", v.hash + " \n montant "+v.total.toString()) },
                             devise = viewModel.getInfos()?.devise ?: ""
                         )
                     }
@@ -90,6 +93,11 @@ private fun VenteRow(vente: Vente, devise: String, onDelete: () -> Unit) {
             Text("Total :" + formatPrice(vente.total,devise), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text("Date : ${df.format(Date(vente.date))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            if(vente.isDeleted)
+            {
+                Text("Vente annulée", color = MaterialTheme.colorScheme.error)
+            }
 
             val isTable = vente.tableId != null && vente.tableId != UUID.fromString("22222222-0000-2222-2222-222222222222")
             val label = if (isTable) "Type : Table" else "Type : Panier"
@@ -99,11 +107,12 @@ private fun VenteRow(vente: Vente, devise: String, onDelete: () -> Unit) {
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = onDelete,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    enabled = !vente.isDeleted
                 ) {
                     Icon(Icons.Filled.Delete, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Supprimer")
+                    Text("Annuler")
                 }
             }
         }
@@ -115,12 +124,12 @@ private fun ConfirmDeleteDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Supprimer") }
+            TextButton(onClick = onConfirm) { Text("Annuler") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler") }
+            TextButton(onClick = onDismiss) { Text("Retour") }
         },
         title = { Text("Supprimer la vente ?") },
-        text = { Text("La vente sera marquée supprimée et le stock des produits sera rétabli.") }
+        text = { Text("La vente sera marquée annulée et le stock des produits sera rétabli.") }
     )
 }

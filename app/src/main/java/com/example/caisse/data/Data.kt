@@ -4,10 +4,12 @@ package com.example.caisse.data
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.Relation
 import java.util.UUID
 
 
@@ -140,9 +142,25 @@ data class Ticket(
     val produit: Produit,
     var quantity: Int
 )
+data class VenteLigneWithProduit(
+    @Embedded val ligne: VenteLigne,
+
+    @Relation(
+        parentColumn = "produitId",
+        entityColumn = "id"
+    )
+    val produit: Produit
+)
+
 data class VenteWithDetails(
-    val vente: Vente,
-    val lignes: List<Ticket>
+    @Embedded val vente: Vente,
+
+    @Relation(
+        entity = VenteLigne::class,
+        parentColumn = "id",
+        entityColumn = "venteId"
+    )
+    val lignes: List<VenteLigneWithProduit>
 )
 
 data class AuthUiState(
@@ -207,6 +225,7 @@ data class ShopInfos (
     val address: String,
     val phone: String,
     val email: String,
+    val siret: String,
     val logo: Int? = null,
     val passwordHash: String,
     val passwordSalt: String,

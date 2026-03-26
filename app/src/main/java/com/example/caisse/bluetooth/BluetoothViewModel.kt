@@ -16,6 +16,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
 import com.example.caisse.data.Ticket
+import com.example.caisse.data.Vente
 import com.example.caisse.util.StripAccents
 import com.example.caisse.util.formatPrice
 import com.example.caisse.util.invoiceNoFromId
@@ -37,6 +38,8 @@ class BluetoothViewModel : ViewModel() {
     private val bluetoothAdapter  : BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket : BluetoothSocket? = null
     private var outputStream : OutputStream? = null
+    private val _isPrinting = MutableStateFlow(false)
+    val isPrinting = _isPrinting.asStateFlow()
 
 
     private val _pairedDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
@@ -120,7 +123,7 @@ class BluetoothViewModel : ViewModel() {
     }
 
     private val CP850: Charset = Charset.forName("CP850")
-    fun printInvoice(tableItems: List<Ticket>, total: Double, infos: ShopInfos?, invoiceId: UUID? = null) {
+    fun printProforma(tableItems: List<Ticket>, total: Double, infos: ShopInfos?, invoiceId: UUID? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 1) Reset + taille normale (évite le double-size résiduel)
@@ -142,6 +145,10 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("Adresse: ${infos?.address ?: ""}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
                 sb.append("Date: $dateHeure\r\n")
+                sb.append("------------------------------\r\n")
+                sb.append("       NOTE PROVISOIRE        \r\n")
+                sb.append("    (Ceci n'est pas un ticket)\r\n")
+                sb.append("------------------------------\r\n")
                 sb.append(sepLine())
                 if (invoiceId != null){
                     sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
@@ -200,6 +207,85 @@ class BluetoothViewModel : ViewModel() {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun printInvoice(
+        tableItems: List<Ticket>,
+        total: Double,
+        infos: ShopInfos?,
+        invoiceId: UUID,
+        signatureHash: String? = null,
+        onError: ((Throwable) -> Unit)? = null,
+        onSuccess: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (outputStream == null) {
+                    throw IllegalStateException("OutputStream Bluetooth nul")
+                }
+
+                writeCmd(0x1B, 0x40)
+                writeCmd(0x1D, 0x21, 0x00)
+                writeCmd(0x1B, 0x4D, 0x01)
+
+                val dateHeure = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.FRANCE).format(Date())
+                val invoiceNo = invoiceNoFromId(invoiceId)
+
+                val montantHT = total / 1.20
+                val montantTVA = total - montantHT
+
+                val sb = StringBuilder()
+                sb.append("${infos?.name ?: "NOM BOUTIQUE"}\r\n")
+                sb.append("${infos?.address ?: ""}\r\n")
+                sb.append("SIRET: ${infos?.siret ?: "000 000 000"}\r\n")
+                sb.append("Tel: ${infos?.phone ?: ""}\r\n")
+                sb.append(sepLine())
+                sb.append("TICKET N°: $invoiceNo\r\n")
+                sb.append("Date: $dateHeure\r\n")
+                sb.append(sepLine())
+                sb.append(formatLine58("Article", "Qté", "P.U", "Total"))
+                sb.append(sepLine())
+
+                tableItems.forEach { ticket ->
+                    val art = ticket.produit.nom.take(12)
+                    val qty = ticket.quantity.toString()
+                    val price = formatPriceShort(ticket.produit.prix)
+                    val totalL = formatPriceShort(ticket.produit.prix * ticket.quantity)
+                    sb.append(formatLine58(art, qty, price, totalL))
+                }
+
+                sb.append(sepLine())
+                sb.append("TOTAL TTC: ${formatPrice(total, infos?.devise)}\r\n")
+                sb.append("Dont TVA (20%): ${formatPrice(montantTVA, infos?.devise)}\r\n")
+                sb.append("Total HT: ${formatPrice(montantHT, infos?.devise)}\r\n")
+                sb.append(sepLine())
+
+                if (signatureHash != null) {
+                    val displayHash = if (signatureHash.length > 8) signatureHash.takeLast(8) else signatureHash
+                    sb.append("Signature: $displayHash\n")
+                }
+
+                sb.append("Logiciel: Caisse App v1.0\r\n")
+                sb.append("Certifié NF525\r\n")
+                sb.append(sepLine())
+                sb.append("Merci de votre visite !\r\n\n\n\n")
+
+                val text = StripAccents(sb.toString())
+                val bmp = textToBitmap58mm(text)
+
+                printBitmapEscPos(bmp, outputStream)
+
+                onSuccess?.invoke()
+            } catch (e: Exception) {
+                Log.e("BluetoothPrint", "Erreur impression", e)
+                onError?.invoke(e)
+            }
+        }
+    }
+
+    // Fonction utilitaire pour gagner de la place sur 58mm
+    private fun formatPriceShort(amount: Double): String {
+        return String.format(Locale.FRANCE, "%.2f", amount)
     }
 
 

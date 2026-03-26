@@ -60,6 +60,8 @@ class CaisseRepository(
     // --- VENTES ---
     fun getAllVentes() = venteDao.getAllVentes()
     fun getLignesForVente(venteId: UUID) = venteDao.getLignesForVente(venteId)
+    suspend fun getVenteWithDetailsById(id: UUID): VenteWithDetails? =
+        venteDao.getVenteWithDetailsById(id)
     suspend fun updateVente(vente: Vente) = venteDao.updateVente(vente)
     suspend fun insertVente(vente: Vente) = venteDao.insertVente(vente)
     suspend fun insertLigne(ligne: VenteLigne) = venteDao.insertLigne(ligne)

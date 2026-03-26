@@ -48,6 +48,7 @@ fun InfosScreenStart(
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var devise by remember { mutableStateOf("") }
+    var siret by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val listDevise = listOf("FCFA", "€", "£", "US$")
     var showChangePassword by remember { mutableStateOf(false) }
@@ -108,6 +109,7 @@ fun InfosScreenStart(
                                         address = address.trim(),
                                         phone = phone.trim(),
                                         email = email.trim(),
+                                        siret = siret,
                                         logo = null,
                                         devise = devise
                                     )
@@ -117,6 +119,7 @@ fun InfosScreenStart(
                                         address = address.trim(),
                                         phone = phone.trim(),
                                         email = email.trim(),
+                                        siret = siret,
                                         logo = null,
                                         devise = devise
                                     )
@@ -173,6 +176,14 @@ fun InfosScreenStart(
                                 value = name,
                                 onValueChange = { name = it },
                                 label = { Text("Nom de la boutique") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = siret,
+                                onValueChange = { siret = it },
+                                label = { Text("SIRET") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -258,6 +269,7 @@ fun InfosScreenStart(
                                                     phone = phone.trim(),
                                                     email = email.trim(),
                                                     logo = null,
+                                                    siret = siret.trim(),
                                                     devise = devise
                                                 )
                                             } else {
@@ -267,6 +279,7 @@ fun InfosScreenStart(
                                                     phone = phone.trim(),
                                                     email = email.trim(),
                                                     logo = null,
+                                                    siret = siret.trim(),
                                                     devise = devise
                                                 )
                                             }

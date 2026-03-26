@@ -616,6 +616,7 @@ class SyncWorker(
         "address" to i.address,
         "phone" to i.phone,
         "email" to i.email,
+        "siret" to i.siret,
         "logo" to i.logo,
         "passwordHash" to i.passwordHash,
         "passwordSalt" to i.passwordSalt,
@@ -630,6 +631,7 @@ class SyncWorker(
         address = m["address"] as String,
         phone = m["phone"] as String,
         email = m["email"] as String,
+        siret = m["siret"] as String,
         logo = m["logo"] as? Int,
         passwordHash =
             (m["passwordHash"] as? String)

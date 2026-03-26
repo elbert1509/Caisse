@@ -8,6 +8,7 @@ import com.example.caisse.data.ProductSale
 import com.example.caisse.data.SalesData
 import com.example.caisse.data.Vente
 import com.example.caisse.data.VenteLigne
+import com.example.caisse.data.VenteWithDetails
 import kotlinx.coroutines.flow.Flow
 import java.util.*
 
@@ -146,7 +147,9 @@ interface VenteDao {
     @Update
     suspend fun updateVente(vente: Vente)
 
-
+    @Transaction
+    @Query("SELECT * FROM Vente WHERE id = :id LIMIT 1")
+    suspend fun getVenteWithDetailsById(id: UUID): VenteWithDetails?
 
     @Query("SELECT * FROM Vente")
     suspend fun getAllVentesOnce(): List<Vente>

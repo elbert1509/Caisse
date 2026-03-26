@@ -145,6 +145,22 @@ fun AppNavigation() {
             DownLoadScreen(menuViewModel = menuViewModel, navController = navController)
         }
 
+        composable(
+            route = "ticket/{venteId}",
+            arguments = listOf(
+                navArgument("venteId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val venteId = backStackEntry.arguments?.getString("venteId") ?: return@composable
+
+            InvoiceScreen(
+                venteId = venteId,
+                viewModel = menuViewModel,
+                bluetoothViewModel = bluetoothViewModel,
+                navController = navController
+            )
+        }
+
     }
 
 }

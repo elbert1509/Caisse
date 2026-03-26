@@ -1,7 +1,9 @@
 package com.example.caisse.composable
 
+import android.os.Build
 import android.view.MotionEvent
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +70,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrendreCommandeScreen(
@@ -164,7 +167,7 @@ fun PrendreCommandeScreen(
                                             menuViewModel.loggerEvenement("Impression Annulée", "Impression annulée car pas de device connecté")
                                             return@Button
                                         } else {
-                                            bluetoothViewModel.printInvoice(cart, totalPrice, shopInfos)
+                                            bluetoothViewModel.printProforma(cart, totalPrice, shopInfos)
                                             Toast.makeText(navController.context, "Ticket imprimé", Toast.LENGTH_SHORT).show()
                                             navController.popBackStack()
                                         }
@@ -307,7 +310,7 @@ fun PrendreCommandeScreen(
                                         menuViewModel.loggerEvenement("Impression Annulée", "Impression annulée car pas de device connecté")
                                         return@Button
                                     } else {
-                                        bluetoothViewModel.printInvoice(cart, totalPrice, shopInfos)
+                                        bluetoothViewModel.printProforma(cart, totalPrice, shopInfos)
                                         Toast.makeText(navController.context, "Ticket imprimé", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
                                     }

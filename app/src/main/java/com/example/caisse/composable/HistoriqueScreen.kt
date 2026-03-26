@@ -14,10 +14,12 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.Produit
 import com.example.caisse.data.Ticket
 import com.example.caisse.data.VenteWithDetails
 import com.example.caisse.util.formatPrice
@@ -97,13 +100,24 @@ fun HistoriqueScreen(
             if (selectedTab == 0) {
                 LazyColumn {
                     items(invoicesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.getInfos()?.devise ?: "")
+                        VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.getInfos()?.devise ?: "",
+                            onVenteClick = {
+                                navController.navigate("ticket/${venteDetails.vente.id}")
+                            }
+                        )
                     }
                 }
             } else {
                 LazyColumn {
                     items(ventesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails, title = "Ventes", devise = menuViewModel.getInfos()?.devise ?: "")
+                        VenteCard(
+                            venteDetails,
+                            title = "Ventes",
+                            devise = menuViewModel.getInfos()?.devise ?: "",
+                            onVenteClick = {
+                                navController.navigate("ticket/${venteDetails.vente.id}")
+                            }
+                        )
                     }
                 }
             }
@@ -114,38 +128,186 @@ fun HistoriqueScreen(
 
 
 @Composable
-fun VenteCard(venteDetails: VenteWithDetails, title: String = "Vente", devise : String) {
+fun VenteCard(
+    venteDetails: VenteWithDetails,
+    title: String = "Vente",
+    devise: String,
+    onVenteClick: () -> Unit = {}
+) {
+    val formattedDate = remember(venteDetails.vente.date) {
+        SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.getDefault())
+            .format(Date(venteDetails.vente.date))
+    }
+
+    val totalArticles = venteDetails.lignes.sumOf { it.ligne.quantity }
+    val isTable = venteDetails.vente.tableId != null
+    val previewLines = venteDetails.lignes.take(3)
+    val hasMoreLines = venteDetails.lignes.size > 3
+
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(6.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        onClick = onVenteClick
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                .format(Date(venteDetails.vente.date))
-            Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text("Date: $formattedDate", style = MaterialTheme.typography.bodySmall)
-            Text("Total: " +  formatPrice(venteDetails.vente.total,devise),
-                fontWeight = FontWeight.Bold,
-                fontSize = MaterialTheme.typography.titleMedium.fontSize
-            )
-            Spacer(Modifier.height(8.dp))
-            venteDetails.lignes.forEach { ArticleRow(it, devise = devise) }
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                    color = if (isTable) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    }
+                ) {
+                    Text(
+                        text = if (isTable) "TABLE" else "COMPTOIR",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isTable) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = "Total encaissé",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        text = formatPrice(venteDetails.vente.total, devise),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(10.dp))
+
+            previewLines.forEach { ligne ->
+                ArticlePreviewRow(
+                    produitNom = ligne.produit.nom,
+                    quantity = ligne.ligne.quantity,
+                    total = ligne.ligne.sousTotal,
+                    devise = devise
+                )
+            }
+
+            if (hasMoreLines) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "+ ${venteDetails.lignes.size - 3} autre(s) article(s)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "$totalArticles article(s)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "Voir le ticket",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
 @Composable
-fun ArticleRow(ticket: Ticket,devise : String ) {
+private fun ArticlePreviewRow(
+    produitNom: String,
+    quantity: Int,
+    total: Double,
+    devise: String
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(ticket.produit.nom, style = MaterialTheme.typography.bodyMedium)
-        Text("x${ticket.quantity} • ${formatPrice(ticket.produit.prix * ticket.quantity,devise)}",
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = produitNom,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+
+            Text(
+                text = "Qté : $quantity",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Text(
+            text = formatPrice(total, devise),
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

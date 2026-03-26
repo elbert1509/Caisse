@@ -114,14 +114,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // Infos
 
-    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String,initialPassword: String="1234") {
+    fun addInfos(name: String, address: String, phone: String, siret : String,   email: String, logo: Int? = null,devise : String,initialPassword: String="1234") {
         val salt = PasswordHasher.generateSalt()
         val hash = PasswordHasher.hash(initialPassword, salt)
         viewModelScope.launch {
-            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo, passwordHash = hash, passwordSalt = salt, devise = devise))
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, siret = siret, logo, passwordHash = hash, passwordSalt = salt, devise = devise))
         }
     }
-    fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String) {
+    fun updateInfos(name: String, address: String, phone: String, email: String,siret : String,   logo: Int? = null,devise : String) {
         viewModelScope.launch {
             val existing = repository.getInfos()
                 ?: return@launch // ou alors créer par défaut
@@ -132,6 +132,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                     address = address,
                     phone = phone,
                     email = email,
+                    siret = siret,
                     logo = logo,
                     devise = devise
                 )
@@ -275,7 +276,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    private val _selectedVente = MutableStateFlow<VenteWithDetails?>(null)
+    val selectedVente: StateFlow<VenteWithDetails?> = _selectedVente
 
+    fun loadVenteWithDetailsById(id: UUID) {
+        viewModelScope.launch {
+            _selectedVente.value = repository.getVenteWithDetailsById(id)
+        }
+    }
     // ---- PANIER ----
     private val _cart = MutableStateFlow<List<Ticket>>(emptyList())
     val cart: StateFlow<List<Ticket>> = _cart.asStateFlow()
@@ -647,14 +655,16 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             repository.getAllVentes().collect { allVentes ->
                 val onlyCart = allVentes.filter { it.tableId ==  UUID.fromString("22222222-0000-2222-2222-222222222222") &&  !it.isDeleted}
                 val details = onlyCart.map { vente ->
-                    // Collecter les lignes de cette vente
                     val lignes = repository.getLignesForVente(vente.id).first()
-                    val tickets = lignes.mapNotNull { ligne ->
+                    val lignesAvecProduit = lignes.mapNotNull { ligne ->
                         repository.getProduitById(ligne.produitId)?.let { produit ->
-                            Ticket(produit, ligne.quantity)
+                            VenteLigneWithProduit(
+                                ligne = ligne,
+                                produit = produit
+                            )
                         }
                     }
-                    VenteWithDetails(vente, tickets)
+                    VenteWithDetails(vente, lignesAvecProduit)
                 }
                 _ventesWithDetails.value = details
             }
@@ -671,10 +681,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 val onlyTables = allVentes.filter { it.tableId != null && it.tableId != sentinelPanier && !it.isDeleted }
                 val details = onlyTables.map { vente ->
                     val lignes = repository.getLignesForVente(vente.id).first()
-                    val tickets = lignes.mapNotNull { l ->
-                        repository.getProduitById(l.produitId)?.let { p -> Ticket(p, l.quantity) }
+                    val lignesAvecProduit = lignes.mapNotNull { l ->
+                        repository.getProduitById(l.produitId)?.let { p ->
+                            VenteLigneWithProduit(
+                                ligne = l,
+                                produit = p
+                            )
+                        }
                     }
-                    VenteWithDetails(vente, tickets)
+                    VenteWithDetails(vente, lignesAvecProduit)
                 }
                 _ventesTablesWithDetails.value = details
             }

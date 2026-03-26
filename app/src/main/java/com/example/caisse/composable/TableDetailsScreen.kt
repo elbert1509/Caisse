@@ -219,7 +219,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                             menuViewModel.loggerEvenement("Erreur d'impression", "Pas de device connecté")
                                             return@Button
                                         } else {
-                                            bluetoothViewModel.printInvoice(tableItems, totaltable, info)
+                                            bluetoothViewModel.printProforma(tableItems, totaltable, info)
                                             Toast.makeText(ctx, "Ticket imprimé", Toast.LENGTH_SHORT).show()
                                             navController.popBackStack()
                                         }
@@ -428,7 +428,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                         Toast.makeText(ctx, "Pas de device connecté", Toast.LENGTH_SHORT).show()
                                         return@Button
                                     } else {
-                                        bluetoothViewModel.printInvoice(tableItems, totaltable, info)
+                                        bluetoothViewModel.printProforma(tableItems, totaltable, info)
                                         Toast.makeText(ctx, "Ticket imprimé", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
                                     }

@@ -46,6 +46,7 @@ fun InfosScreen(
     var address by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var siret by remember { mutableStateOf("") }
     var devise by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val listDevise = listOf("FCFA", "€", "£", "US$")
@@ -107,6 +108,7 @@ fun InfosScreen(
                                         address = address.trim(),
                                         phone = phone.trim(),
                                         email = email.trim(),
+                                        siret = siret,
                                         logo = null,
                                         devise = devise
                                     )
@@ -116,6 +118,7 @@ fun InfosScreen(
                                         address = address.trim(),
                                         phone = phone.trim(),
                                         email = email.trim(),
+                                        siret = siret,
                                         logo = null,
                                         devise = devise
                                     )
@@ -260,6 +263,7 @@ fun InfosScreen(
                                                     address = address.trim(),
                                                     phone = phone.trim(),
                                                     email = email.trim(),
+                                                    siret = siret,
                                                     logo = null,
                                                     devise = devise
                                                 )
@@ -269,6 +273,7 @@ fun InfosScreen(
                                                     address = address.trim(),
                                                     phone = phone.trim(),
                                                     email = email.trim(),
+                                                    siret = siret,
                                                     logo = null,
                                                     devise = devise
                                                 )

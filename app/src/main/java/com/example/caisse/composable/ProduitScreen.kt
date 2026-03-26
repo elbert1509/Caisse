@@ -234,7 +234,7 @@ fun ProductScreen(
                                 image = editImageUri?.toString() ?: target.image
                             )
                             viewModel.updateProduit(updatedProduct)
-                            viewModel.loggerEvenement("Produit modifié", name )
+                            viewModel.loggerEvenement("Produit modifié", name + " \nancien prix : " + target.prix + "\t\t\t nouveau prix : $price  " )
                             renameTarget = null
                         }
                     }) { Text("Enregistrer") }

@@ -81,6 +81,7 @@ dependencies {
     implementation(libs.androidx.foundation.layout)
     implementation(libs.io.coil.kt)
     implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.compose.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

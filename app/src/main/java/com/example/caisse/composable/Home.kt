@@ -102,12 +102,15 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
 
             )
         },
+
         bottomBar = {
-            BottomHome(
-                selectedIndex = selectedTab,
-                onTabSelected = { selectedTab = it },
-                navController = navController
-            )
+            if(caisseOuverte) {
+                BottomHome(
+                    selectedIndex = selectedTab,
+                    onTabSelected = { selectedTab = it },
+                    navController = navController
+                )
+            }
         }
 
     ) { padding ->
@@ -122,7 +125,7 @@ fun HomeScreen( onAction: (HomeActionButton) -> Unit,
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = {
                     // Appel au repository pour ouvrir la caisse
-                    viewModel.ouvrirLaCaisse(UUID.fromString(user?.uid ?: ""))
+                    viewModel.ouvrirLaCaisse(UUID.randomUUID())
                 }) {
                     Text("Ouvrir la caisse pour aujourd'hui")
                 }

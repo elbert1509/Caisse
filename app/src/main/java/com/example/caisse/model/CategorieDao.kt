@@ -31,6 +31,9 @@ interface CategorieDao {
 
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun get(id: UUID): Category?
+    @Query("DELETE FROM category")
+    suspend fun deleteAllCategories()
+
 
 
 }

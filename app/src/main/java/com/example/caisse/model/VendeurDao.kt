@@ -25,4 +25,6 @@ interface VendeurDao {
 
     @Query("SELECT * FROM vendeur WHERE id = :id")
     suspend fun getVendeurById(id: Int): Vendeur?
+    @Query("DELETE FROM vendeur")
+    suspend fun deleteAllVendeurs()
 }

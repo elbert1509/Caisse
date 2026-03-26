@@ -33,3 +33,9 @@ fun formatPrice(
         }
     }
 }
+
+ fun formatTimestampToDate(timestamp: Long): String {
+    val date = java.util.Date(timestamp)
+    val formatter = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE)
+    return formatter.format(date)
+}

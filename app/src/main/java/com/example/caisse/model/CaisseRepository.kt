@@ -121,6 +121,8 @@ class CaisseRepository(
 
     fun getAllLogs(): Flow<List<LogTechnique>> = logDao.getAllLogs()
 
+    suspend fun getAllLogsOnce(): List<LogTechnique> = logDao.getAllLogsOnce()
+
     suspend fun genererClotureJournaliere(): Cloture {
         val dateAujourdhui = LocalDate.now().toString()
         val today = LocalDate.now()
@@ -240,6 +242,19 @@ class CaisseRepository(
 
         return clotureResult
     }
+    suspend fun clearCatalogueData() {
+        produitDao.deleteAllProduits()
+        categorieDao.deleteAllCategories()
+        vendeurDao.deleteAllVendeurs()
+
+        // Optionnel : Loguer l'action dans le journal technique
+        loggerEvenement(
+            type = "RESET_CATALOGUE",
+            description = "Suppression complète des produits, catégories et vendeurs par l'utilisateur.",
+            vendeurId = null
+        )
+    }
+
 
 
 }

@@ -141,6 +141,10 @@ fun AppNavigation() {
             InfosLegalesScreen()
         }
 
+        composable("download"){
+            DownLoadScreen(menuViewModel = menuViewModel, navController = navController)
+        }
+
     }
 
 }

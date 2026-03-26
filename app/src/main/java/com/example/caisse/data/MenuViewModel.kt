@@ -1,11 +1,13 @@
 package com.example.caisse.data
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,7 +15,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.caisse.util.PasswordHasher
 import com.example.caisse.util.SecurityUtils
+import com.example.caisse.util.formatTimestampToDate
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +28,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.io.File
 import java.util.UUID
 
 class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
@@ -565,7 +570,11 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-
+    fun clearAllData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearCatalogueData()
+        }
+    }
 
     // On observe l'état de la caisse en temps réel
     val caisseOuverte: StateFlow<Boolean> = repository.observeEtatCaisse()
@@ -589,7 +598,43 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    // Dans MenuViewModel.kt
+    fun exportVentesToCSV(context: Context) {
+        viewModelScope.launch {
+            val ventes = repository.venteDao.getAllVentesOnce() // Créez cette méthode dans le DAO
+            val csvHeader = "ID;Date;Montant;Vendeur;Hashpre;Hash\n"
+            val csvData = ventes.joinToString("\n") {
+                "${it.id};${formatTimestampToDate(it.date)};${it.total};${it.vendeurId};${it.previousHash};${it.hash}"
+            }
+            shareFile(context, "export_ventes.csv", csvHeader + csvData)
+        }
+    }
 
+    fun exportJETToCSV(context: Context) {
+        viewModelScope.launch {
+            val logs = repository.getAllLogsOnce() // Récupère tous les LogTechnique
+            val csvHeader = "ID;Date;Type;Description;Signature\n"
+            val csvData = logs.joinToString("\n") {
+                val dateOriginale = java.time.LocalDateTime.parse(it.date)
+                val dateFormatee = dateOriginale.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                "${it.id};${dateFormatee};${it.typeEvenement};${it.description};${it.empreinte}"
+            }
+            shareFile(context, "journal_technique.csv", csvHeader + csvData)
+        }
+    }
+
+    private fun shareFile(context: Context, fileName: String, content: String) {
+        val file = File(context.cacheDir, fileName)
+        file.writeText(content)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Partager le fichier"))
+    }
 
 
 

@@ -29,7 +29,8 @@ interface ProduitDao {
     @Query("SELECT * FROM produit")
     suspend fun getAllProduitsOnce(): List<Produit> // one-shot pour le Worker
 
-
+    @Query("DELETE FROM Produit")
+    suspend fun deleteAllProduits()
 
 
 

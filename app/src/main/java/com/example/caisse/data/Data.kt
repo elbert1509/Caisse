@@ -314,9 +314,10 @@ data class Cloture(
     val isDeleted: Boolean = false
 )
 object AppConfig {
-    const val VERSION_LOGICIEL = "1.2.4-NF" // À incrémenter à chaque build
+    const val VERSION_LOGICIEL = "1.3" // À incrémenter à chaque build
     const val NOM_LOGICIEL = "MaCaissePro"
     const val EDITEUR = "Ogooué Infos"
+    const val NUMERO = "0667724958"
     const val NUM_CERTIFICAT = "NF525-XXXX-YYYY" // Fourni lors de la certification
 }
 

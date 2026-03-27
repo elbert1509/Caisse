@@ -3,6 +3,7 @@ package com.example.caisse.data
 import android.os.Build
 import androidx.annotation.RequiresApi
 import com.example.caisse.model.CategorieDao
+import com.example.caisse.model.ClotureDao
 import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.LogDao
@@ -25,7 +26,8 @@ class CaisseRepository(
     private val tableDao: TableDao,
     private val invoiceDao: InvoiceDao,
     private val infosDao: InfosDao,
-    private val logDao: LogDao
+    private val logDao: LogDao,
+    private val clotureDao: ClotureDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -125,6 +127,7 @@ class CaisseRepository(
 
     suspend fun getAllLogsOnce(): List<LogTechnique> = logDao.getAllLogsOnce()
 
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun genererClotureJournaliere(): Cloture {
         val dateAujourdhui = LocalDate.now().toString()
         val today = LocalDate.now()
@@ -135,7 +138,7 @@ class CaisseRepository(
         val endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
 
-        val clotureExistante = venteDao.getClotureByDateAndType(
+        val clotureExistante = clotureDao.getClotureByDateAndType(
             dateCloture = dateAujourdhui,
             type = "JOURNALIERE"
         )
@@ -171,11 +174,12 @@ class CaisseRepository(
         val cloture = clotureTemp.copy(hash = finalHash)
 
         // 6. Enregistrer en base
-        venteDao.insertCloture(cloture)
+        clotureDao.insertCloture(cloture)
 
         return cloture
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun ouvrirCaisse(vendeurId: UUID) {
         val date = LocalDateTime.now().toString()
 
@@ -197,6 +201,7 @@ class CaisseRepository(
     }
 
 
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun fermerCaisse() {
         val date = LocalDateTime.now().toString()
         // 1. Mettre à jour l'état à "fermé"
@@ -218,6 +223,7 @@ class CaisseRepository(
      * Mutualisation de la clôture comptable (Z) et de la fermeture technique.
      * NF525 : Garantit que l'état de la caisse passe à "Fermé" dès que le rapport est scellé.
      */
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun executerClotureGlobale(): Cloture {
         // 1. Générer le rapport Z (Calcul, Signature/Hash, Insertion)
         val clotureResult = genererClotureJournaliere()
@@ -244,6 +250,7 @@ class CaisseRepository(
 
         return clotureResult
     }
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun clearCatalogueData() {
         produitDao.deleteAllProduits()
         categorieDao.deleteAllCategories()

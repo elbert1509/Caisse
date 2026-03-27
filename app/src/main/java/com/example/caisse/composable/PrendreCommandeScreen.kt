@@ -129,7 +129,7 @@ fun PrendreCommandeScreen(
                             Text("Panier", style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(8.dp))
 
-                            LazyColumn {
+                            LazyColumn(modifier = Modifier.weight(0.8f)) {
                                 items(cart, key = { it.produit.id }) { ticket ->
                                     CartItemRow(
                                         ticket = ticket,
@@ -141,7 +141,7 @@ fun PrendreCommandeScreen(
 
                             Spacer(Modifier.height(12.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().weight(0.1f),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Total", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -150,7 +150,7 @@ fun PrendreCommandeScreen(
 
                             Spacer(Modifier.height(12.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().weight(0.1f),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Button(

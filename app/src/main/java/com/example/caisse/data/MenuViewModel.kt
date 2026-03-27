@@ -550,6 +550,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun getLogs() = repository.getAllLogs()
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun clotureJournaliere(
         onSuccess: (Cloture) -> Unit,
         onError: (String) -> Unit
@@ -578,6 +579,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun clearAllData() {
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearCatalogueData()
@@ -593,6 +595,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         )
 
     // Fonction pour ouvrir la caisse (déjà discutée, à ajouter si absente)
+    @RequiresApi(Build.VERSION_CODES.O)
     fun ouvrirLaCaisse(vendeurId: UUID) {
         viewModelScope.launch {
             repository.ouvrirCaisse(vendeurId)
@@ -600,6 +603,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
     // Fonction pour fermer la caisse
+    @RequiresApi(Build.VERSION_CODES.O)
     fun fermerCaisse() {
         viewModelScope.launch {
             repository.fermerCaisse()
@@ -618,6 +622,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun exportJETToCSV(context: Context) {
         viewModelScope.launch {
             val logs = repository.getAllLogsOnce() // Récupère tous les LogTechnique
@@ -744,7 +749,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                         database.tableDao(),
                         database.invoiceDao(),
                         database.infosDao(),
-                        database.logDao()
+                        database.logDao(),
+                        database.clotureDao()
                     )
                     MenuViewModel(repository)
                 }

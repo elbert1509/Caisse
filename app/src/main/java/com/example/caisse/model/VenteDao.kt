@@ -184,8 +184,6 @@ interface VenteDao {
      * Insère une nouvelle clôture (Z de caisse).
      * NF525 : Une fois insérée, cette donnée est inaltérable.
      */
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertCloture(cloture: Cloture)
 
     @Query("""
     SELECT * FROM Vente
@@ -195,21 +193,7 @@ interface VenteDao {
 """)
     suspend fun getVentesByPeriod(startOfDay: Long, endOfDay: Long): List<Vente>
 
-    @Query("""
-    SELECT * FROM clotures
-    WHERE dateCloture = :dateCloture AND type = :type
-    LIMIT 1
-""")
-    suspend fun getClotureByDateAndType(dateCloture: String, type: String): Cloture?
 
-    @Query("SELECT * FROM clotures")
-    suspend fun getAllCloturesOnce(): List<Cloture>
-
-    @Query("SELECT * FROM clotures WHERE idCloture = :id LIMIT 1")
-    suspend fun getClotureById(id: UUID): Cloture?
-
-    @Update
-    suspend fun updateCloture(cloture: Cloture)
 
     @Query("SELECT * FROM etat_caisse WHERE id = 1")
     suspend fun getEtatCaisse(): EtatCaisse?

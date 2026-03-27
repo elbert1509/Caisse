@@ -112,7 +112,7 @@ fun HistoriqueScreen(
                     items(ventesWithDetails) { venteDetails ->
                         VenteCard(
                             venteDetails,
-                            title = "Ventes",
+                            title = "Comptoir",
                             devise = menuViewModel.getInfos()?.devise ?: "",
                             onVenteClick = {
                                 navController.navigate("ticket/${venteDetails.vente.id}")
@@ -130,7 +130,7 @@ fun HistoriqueScreen(
 @Composable
 fun VenteCard(
     venteDetails: VenteWithDetails,
-    title: String = "Vente",
+    title: String,
     devise: String,
     onVenteClick: () -> Unit = {}
 ) {
@@ -188,7 +188,7 @@ fun VenteCard(
                     }
                 ) {
                     Text(
-                        text = if (isTable) "TABLE" else "COMPTOIR",
+                        text = title,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,

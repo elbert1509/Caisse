@@ -225,8 +225,10 @@ class BluetoothViewModel : ViewModel() {
                 }
 
                 writeCmd(0x1B, 0x40)
-                writeCmd(0x1D, 0x21, 0x00)
+                writeCmd(0x1D, 0x21, 0x01)
+                writeCmd(0x1B, 0x45, 0x00)
                 writeCmd(0x1B, 0x4D, 0x01)
+                writeCmd(0x1B, 0x74, 0x02)
 
                 val dateHeure = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.FRANCE).format(Date())
                 val invoiceNo = invoiceNoFromId(invoiceId)
@@ -235,44 +237,61 @@ class BluetoothViewModel : ViewModel() {
                 val montantTVA = total - montantHT
 
                 val sb = StringBuilder()
-                sb.append("${infos?.name ?: "NOM BOUTIQUE"}\r\n")
-                sb.append("${infos?.address ?: ""}\r\n")
+                sb.append("\r\n")
+                sb.append("*** ${infos?.name ?: ""} ***\r\n")
+                sb.append("Adresse: ${infos?.address ?: ""}\r\n")
                 sb.append("SIRET: ${infos?.siret ?: "000 000 000"}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
-                sb.append(sepLine())
-                sb.append("TICKET N°: $invoiceNo\r\n")
                 sb.append("Date: $dateHeure\r\n")
                 sb.append(sepLine())
-                sb.append(formatLine58("Article", "Qté", "P.U", "Total"))
+                sb.append("TICKET N°: $invoiceNo\r\n")
+                sb.append(sepLine())
+
+                sb.append(
+                    formatLine58(
+                        article = "Article",
+                        qty = "Qte",
+                        price = "Prix",
+                        total = "Total"
+                    )
+                )
                 sb.append(sepLine())
 
                 tableItems.forEach { ticket ->
-                    val art = ticket.produit.nom.take(12)
+                    val article = ticket.produit.nom.replace("\n", " ")
                     val qty = ticket.quantity.toString()
                     val price = formatPriceShort(ticket.produit.prix)
-                    val totalL = formatPriceShort(ticket.produit.prix * ticket.quantity)
-                    sb.append(formatLine58(art, qty, price, totalL))
+                    val totalLine = formatPriceShort(ticket.produit.prix * ticket.quantity)
+
+                    sb.append(
+                        formatLine58(
+                            article = article,
+                            qty = qty,
+                            price = price,
+                            total = totalLine
+                        )
+                    )
                 }
 
                 sb.append(sepLine())
                 sb.append("TOTAL TTC: ${formatPrice(total, infos?.devise)}\r\n")
-                sb.append("Dont TVA (20%): ${formatPrice(montantTVA, infos?.devise)}\r\n")
-                sb.append("Total HT: ${formatPrice(montantHT, infos?.devise)}\r\n")
-                sb.append(sepLine())
+                sb.append("TVA (20%): ${formatPrice(montantTVA, infos?.devise)}\r\n")
+                sb.append("TOTAL HT : ${formatPrice(montantHT, infos?.devise)}\r\n")
 
                 if (signatureHash != null) {
                     val displayHash = if (signatureHash.length > 8) signatureHash.takeLast(8) else signatureHash
-                    sb.append("Signature: $displayHash\n")
+                    sb.append("Signature: $displayHash\r\n")
                 }
 
-                sb.append("Logiciel: Caisse App v1.0\r\n")
-                sb.append("Certifié NF525\r\n")
                 sb.append(sepLine())
-                sb.append("Merci de votre visite !\r\n\n\n\n")
+                sb.append("Logiciel: Caisse App v1.0\r\n")
+                sb.append("Certifie NF525\r\n")
+                sb.append(sepLine())
+                sb.append("Merci de votre visite !\r\n")
+                sb.append("\r\n\r\n\r\n")
 
                 val text = StripAccents(sb.toString())
                 val bmp = textToBitmap58mm(text)
-
                 printBitmapEscPos(bmp, outputStream)
 
                 onSuccess?.invoke()
@@ -282,7 +301,6 @@ class BluetoothViewModel : ViewModel() {
             }
         }
     }
-
     // Fonction utilitaire pour gagner de la place sur 58mm
     private fun formatPriceShort(amount: Double): String {
         return String.format(Locale.FRANCE, "%.2f", amount)
@@ -321,7 +339,7 @@ class BluetoothViewModel : ViewModel() {
     }
 
 
-    fun testPrint(context: Context, menuViewModel: MenuViewModel) {
+    fun testPrint( menuViewModel: MenuViewModel) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 🔹 Nom de l’imprimante connectée

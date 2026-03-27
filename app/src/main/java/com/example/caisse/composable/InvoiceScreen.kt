@@ -1,6 +1,8 @@
 package com.example.caisse.composable
 
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -50,6 +52,7 @@ private val TicketDivider   = Color(0xFFD1D5DB)
 private val TicketSuccess   = Color(0xFF16A34A)
 
 // ─── Composable principal ─────────────────────────────────────────────────────
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InvoiceScreen(
@@ -119,6 +122,8 @@ fun InvoiceScreen(
                                     viewModel.loggerEvenement("Impression Annulée", "Erreur: ${e.message}")
                                 }
                             )
+                          //  bluetoothViewModel.testPrint(viewModel)
+
                         },
                         enabled = !isPrinting
                     ) {

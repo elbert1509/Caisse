@@ -32,6 +32,7 @@ class SyncWorker(
         val vendeurDao = dbLocal.vendeurDao()
         val infosDao = dbLocal.infosDao()
         val logDao = dbLocal.logDao()
+        val clotureDao = dbLocal.clotureDao()
         val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
         val since = prefs.getLong("lastSyncAt", 0L)
         val isInitialSync = since == 0L
@@ -48,7 +49,7 @@ class SyncWorker(
         pushInfos(cloud, uid, infosDao)
         pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync)
         pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync)
-        pushDirtyClotures(cloud, uid, venteDao, isInitialSync)
+        pushDirtyClotures(cloud, uid, clotureDao, isInitialSync)
         pushDirtyLogs(cloud, uid, logDao, isInitialSync)
 
         // 2) PULL : récupérer ce qui a changé depuis lastSyncAt
@@ -62,7 +63,7 @@ class SyncWorker(
         pullVentesSince(cloud, uid, since, venteDao, isInitialSync)
         pullVenteLignesSince(cloud, uid, since, venteDao, produitDao, isInitialSync)
         pullInfos(cloud, uid, infosDao)
-        pullCloturesSince(cloud, uid, since, venteDao, isInitialSync)
+        pullCloturesSince(cloud, uid, since, clotureDao, isInitialSync)
         pullLogsSince(cloud, uid, since, logDao, isInitialSync)
 
 
@@ -211,10 +212,10 @@ class SyncWorker(
     private suspend fun pushDirtyClotures(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: VenteDao,
+        clotureDao: ClotureDao,
         isInitialSync: Boolean
     ) {
-        val all = venteDao.getAllCloturesOnce()
+        val all = clotureDao.getAllCloturesOnce()
         val list = if (isInitialSync) all else all.filter { it.isDirty }
 
         for (c in list) {
@@ -223,7 +224,7 @@ class SyncWorker(
                 .set(clotureToMap(c.copy(isDirty = false)))
                 .await()
 
-            venteDao.updateCloture(c.copy(isDirty = false))
+            clotureDao.updateCloture(c.copy(isDirty = false))
         }
     }
 
@@ -498,7 +499,7 @@ class SyncWorker(
         cloud: FirebaseFirestore,
         uid: String,
         since: Long,
-        venteDao: VenteDao,
+        clotureDao: ClotureDao,
         isInitialSync: Boolean
     ) {
         val base = cloud.collection("users").document(uid).collection("clotures")
@@ -509,12 +510,12 @@ class SyncWorker(
             val data = doc.data ?: continue
             try {
                 val remote = mapToCloture(data)
-                val local = venteDao.getClotureById(remote.idCloture)
+                val local = clotureDao.getClotureById(remote.idCloture)
 
                 if (local == null) {
-                    venteDao.insertCloture(remote.copy(isDirty = false))
+                    clotureDao.insertCloture(remote.copy(isDirty = false))
                 } else if (remote.updatedAt >= local.updatedAt) {
-                    venteDao.updateCloture(remote.copy(isDirty = false))
+                    clotureDao.updateCloture(remote.copy(isDirty = false))
                 }
             } catch (e: Exception) {
                 Log.e("SyncWorker", "Cloture invalide doc=${doc.id}: ${e.message}")

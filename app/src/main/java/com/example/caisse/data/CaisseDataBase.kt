@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.caisse.model.CategorieDao
+import com.example.caisse.model.ClotureDao
 import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.LogDao
@@ -47,6 +48,7 @@ abstract class CaisseDataBase : RoomDatabase() {
     abstract fun invoiceDao(): InvoiceDao
     abstract fun infosDao(): InfosDao
     abstract fun logDao(): LogDao
+    abstract fun clotureDao(): ClotureDao
 
 
 

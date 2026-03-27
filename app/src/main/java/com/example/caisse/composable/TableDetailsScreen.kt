@@ -1,6 +1,8 @@
 package com.example.caisse.composable
 
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +65,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.rememberModalBottomSheetState
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String, bluetoothViewModel: BluetoothViewModel,authVm: AuthViewModel){
@@ -157,7 +160,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                             // ✅ Total en haut du sheet
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().weight(0.1f),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -173,7 +176,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
 
                             Spacer(Modifier.height(8.dp))
 
-                            LazyColumn {
+                            LazyColumn (modifier = Modifier.weight(0.8f)) {
                                 itemsIndexed(
                                     tableItems,
                                     key = { index, ticket -> "${ticket.produit.id}@$index" }
@@ -197,7 +200,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                             Spacer(Modifier.height(12.dp))
 
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().weight(0.1f),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {

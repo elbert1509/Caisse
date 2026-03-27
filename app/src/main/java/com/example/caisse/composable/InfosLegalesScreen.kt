@@ -13,11 +13,12 @@ import com.example.caisse.data.AppConfig
 
 @Composable
 fun InfosLegalesScreen() {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.padding(20.dp)) {
         Text("Information de Certification", style = MaterialTheme.typography.h6)
         Text("Logiciel : ${AppConfig.NOM_LOGICIEL}")
         Text("Version : ${AppConfig.VERSION_LOGICIEL}")
         Text("Éditeur : ${AppConfig.EDITEUR}")
+        Text("Numéro : ${AppConfig.NUMERO}")
         Text("Certificat : ${AppConfig.NUM_CERTIFICAT}")
         Spacer(modifier = Modifier.height(20.dp))
         Text("Ce logiciel est conforme aux exigences d'inaltérabilité, de sécurisation, de conservation et d'archivage des données conformément à l'article 286 du code général des impôts.",

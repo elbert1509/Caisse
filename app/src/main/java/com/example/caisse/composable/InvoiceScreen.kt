@@ -35,7 +35,10 @@ import androidx.navigation.NavController
 import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
+import com.example.caisse.data.AppConfig
+import com.example.caisse.data.TypeEvenement
 import com.example.caisse.util.formatPrice
+import com.example.caisse.util.formatTicketNumber
 import com.example.caisse.util.invoiceNoFromId
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -109,17 +112,24 @@ fun InvoiceScreen(
                             val vente = venteDetails ?: return@IconButton
                             val tickets = vente.lignes.map { Ticket(it.produit, it.ligne.quantity) }
                             bluetoothViewModel.printInvoice(
-                                tableItems    = tickets,
-                                total         = vente.vente.total,
-                                infos         = infos,
-                                invoiceId     = vente.vente.id,
-                                signatureHash = vente.vente.hash,
+                                tableItems     = tickets,
+                                total          = vente.vente.total,
+                                infos          = infos,
+                                invoiceId      = vente.vente.id,
+                                sequenceNumber = vente.vente.sequenceNumber,
+                                signatureHash  = vente.vente.hash,
                                 onSuccess = {
-                                    viewModel.loggerEvenement("IMPRESSION_TICKET", "Ticket ${vente.vente.id} imprimé")
+                                    viewModel.loggerEvenement(
+                                        type        = TypeEvenement.IMPRESSION_TICKET.name,
+                                        description = "Ticket seq=${vente.vente.sequenceNumber} imprimé"
+                                    )
                                 },
                                 onError = { e ->
                                     Toast.makeText(context, "Erreur d'impression", Toast.LENGTH_SHORT).show()
-                                    viewModel.loggerEvenement("Impression Annulée", "Erreur: ${e.message}")
+                                    viewModel.loggerEvenement(
+                                        type        = TypeEvenement.IMPRESSION_ANNULEE.name,
+                                        description = "Erreur: ${e.message}"
+                                    )
                                 }
                             )
                           //  bluetoothViewModel.testPrint(viewModel)
@@ -168,11 +178,17 @@ fun InvoiceScreen(
         val formattedDate = remember(vente.vente.date) {
             SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.FRANCE).format(Date(vente.vente.date))
         }
-        val invoiceNo = remember(vente.vente.id) { invoiceNoFromId(vente.vente.id) }
+        val invoiceNo = remember(vente.vente.sequenceNumber, vente.vente.id) {
+            if (vente.vente.sequenceNumber > 0) formatTicketNumber(vente.vente.sequenceNumber)
+            else invoiceNoFromId(vente.vente.id)
+        }
 
         val montantTTC = vente.vente.total
-        val montantHT  = montantTTC / 1.20
-        val montantTVA = montantTTC - montantHT
+        // NF525 : TVA calculée à partir des taux réels de chaque ligne
+        val montantTVA = vente.lignes.sumOf { l ->
+            l.ligne.sousTotal * l.ligne.tauxTVA / (100.0 + l.ligne.tauxTVA)
+        }
+        val montantHT  = montantTTC - montantTVA
 
         // ── Ticket principal ─────────────────────────────────────────────────
         AnimatedVisibility(
@@ -355,7 +371,7 @@ fun InvoiceScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text      = "Logiciel Caisse App v1.0 • Certifié NF525",
+                                text      = "${AppConfig.NOM_LOGICIEL} v${AppConfig.VERSION_LOGICIEL} • ${AppConfig.NUM_CERTIFICAT}",
                                 fontSize  = 9.sp,
                                 color     = TicketMuted,
                                 modifier  = Modifier.fillMaxWidth(),

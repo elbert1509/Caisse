@@ -17,8 +17,10 @@ import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
 import com.example.caisse.data.Ticket
 import com.example.caisse.data.Vente
+import com.example.caisse.data.AppConfig
 import com.example.caisse.util.StripAccents
 import com.example.caisse.util.formatPrice
+import com.example.caisse.util.formatTicketNumber
 import com.example.caisse.util.invoiceNoFromId
 import com.example.caisse.util.printBitmapEscPos
 import com.example.caisse.util.textToBitmap58mm
@@ -214,6 +216,7 @@ class BluetoothViewModel : ViewModel() {
         total: Double,
         infos: ShopInfos?,
         invoiceId: UUID,
+        sequenceNumber: Long = 0L,
         signatureHash: String? = null,
         onError: ((Throwable) -> Unit)? = null,
         onSuccess: (() -> Unit)? = null
@@ -231,10 +234,13 @@ class BluetoothViewModel : ViewModel() {
                 writeCmd(0x1B, 0x74, 0x02)
 
                 val dateHeure = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.FRANCE).format(Date())
-                val invoiceNo = invoiceNoFromId(invoiceId)
+                // NF525 Axe B : numéro séquentiel ininterrompu
+                val invoiceNo = if (sequenceNumber > 0) formatTicketNumber(sequenceNumber)
+                                else invoiceNoFromId(invoiceId)
 
-                val montantHT = total / 1.20
-                val montantTVA = total - montantHT
+                // TVA par défaut 20 % pour l'impression (ventilation exacte sur l'écran ticket)
+                val montantTVA = total * 20.0 / 120.0
+                val montantHT  = total - montantTVA
 
                 val sb = StringBuilder()
                 sb.append("\r\n")
@@ -284,8 +290,8 @@ class BluetoothViewModel : ViewModel() {
                 }
 
                 sb.append(sepLine())
-                sb.append("Logiciel: Caisse App v1.0\r\n")
-                sb.append("Certifie NF525\r\n")
+                sb.append("${AppConfig.NOM_LOGICIEL} v${AppConfig.VERSION_LOGICIEL}\r\n")
+                sb.append("${AppConfig.NUM_CERTIFICAT}\r\n")
                 sb.append(sepLine())
                 sb.append("Merci de votre visite !\r\n")
                 sb.append("\r\n\r\n\r\n")

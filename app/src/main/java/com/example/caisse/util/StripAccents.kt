@@ -13,8 +13,11 @@ fun StripAccents(input: String): String {
     val normalized = Normalizer.normalize(input, Normalizer.Form.NFD)
     return normalized.replace("\\p{Mn}+".toRegex(), "")
 }
+/** NF525 Axe B — Numéro de ticket séquentiel et ininterrompu. */
+fun formatTicketNumber(sequenceNumber: Long): String = "TKT-%06d".format(sequenceNumber)
+
+/** Conservé pour compatibilité avec les tickets sans numéro de séquence (données migrées). */
 fun invoiceNoFromId(id: UUID): String {
-    // Exemple: INV-9F3A1C2B (8 chars, lisible)
     val short = id.toString().replace("-", "").takeLast(8).uppercase()
     return "INV-$short"
 }

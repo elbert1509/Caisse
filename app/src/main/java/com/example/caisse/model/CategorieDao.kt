@@ -1,7 +1,6 @@
 package com.example.caisse.model
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -19,21 +18,20 @@ interface CategorieDao {
     @Update
     suspend fun updateCategory(category: Category)
 
+    // NF525 Axe A : soft delete — les catégories sont conservées pour l'historique
+    @Query("UPDATE category SET isDeleted = 1, isDirty = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDeleteCategory(id: UUID, ts: Long = System.currentTimeMillis())
 
-    @Delete
-    suspend fun deleteCategory(category: Category)
-
-    @Query("SELECT * FROM category")
+    @Query("SELECT * FROM category WHERE isDeleted = 0")
     fun getAllCategory(): Flow<List<Category>>
 
-    @Query("SELECT * FROM category")
-    suspend fun getAllCategoryOnce(): List<Category> // one-shot pour le Worker
+    @Query("SELECT * FROM category WHERE isDeleted = 0")
+    suspend fun getAllCategoryOnce(): List<Category>
 
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun get(id: UUID): Category?
-    @Query("DELETE FROM category")
-    suspend fun deleteAllCategories()
 
-
-
+    // NF525 : suppression physique de masse remplacée par soft-delete
+    @Query("UPDATE category SET isDeleted = 1, isDirty = 1, updatedAt = :ts")
+    suspend fun softDeleteAllCategories(ts: Long = System.currentTimeMillis())
 }

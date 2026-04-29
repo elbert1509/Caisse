@@ -11,8 +11,10 @@ class App : Application()  {
 
     override fun onCreate() {
         super.onCreate()
-        database = Room.databaseBuilder(this, CaisseDataBase::class.java, "salon_database").allowMainThreadQueries()
-            .fallbackToDestructiveMigration(false)
+        database = Room.databaseBuilder(this, CaisseDataBase::class.java, "salon_database")
+            .allowMainThreadQueries()
+            // NF525 Axe C : pas de migration destructive — les migrations sont gérées dans CaisseDataBase
+            .addMigrations(*com.example.caisse.data.CaisseDataBase.getMigrations())
             .build()
     }
 }

@@ -14,7 +14,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.caisse.util.PasswordHasher
-import com.example.caisse.util.SecurityUtils
 import com.example.caisse.util.formatTimestampToDate
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.Dispatchers
@@ -67,7 +66,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
-            repository.deleteCategory(category)
+            repository.softDeleteCategory(category.id)
         }
     }
 
@@ -108,7 +107,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
     fun deleteProduit(produit: Produit) {
         viewModelScope.launch {
-            repository.deleteProduit(produit)
+            repository.softDeleteProduit(produit.id)
         }
     }
 
@@ -172,7 +171,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun deleteVendeur(vendeur: Vendeur) {
         viewModelScope.launch {
-            repository.deleteVendeur(vendeur)
+            repository.softDeleteVendeur(vendeur.id)
         }
     }
 
@@ -184,52 +183,38 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
-    fun addVente(vente: Vente, lignes: List<VenteLigne>) {
-        viewModelScope.launch {
-            val v = vente.copy(updatedAt = now(), isDirty = true)
-            val ls = lignes.map { it.copy(updatedAt = now(), isDirty = true) }
-            repository.insertVenteWithLignes(v, ls)
-
-            val tickets = ls.mapNotNull { l ->
-                repository.getProduitById(l.produitId)?.let { p -> Ticket(p, l.quantity) }
-            }
-            decrementStocks(tickets)
-        }
-    }
-
-    fun deleteVente(vente: Vente) {
-        viewModelScope.launch {
-            repository.deleteVente(vente)
-        }
-    }
-
-
     fun confirmerVente(vendeurId: Int? = 1) {
         viewModelScope.launch {
             val cartItems = cart.value
             if (cartItems.isEmpty()) return@launch
 
             val venteId = UUID.randomUUID()
+            val ts      = now()
             val vente = Vente(
-                id = venteId,
+                id        = venteId,
                 vendeurId = vendeurId,
-                total = totalPrice.value,
-                date = now()
-            ).copy(updatedAt = now(), isDirty = true)
+                total     = totalPrice.value,
+                date      = ts,
+                updatedAt = ts,
+                isDirty   = true
+            )
 
             val lignes = cartItems.map { ticket ->
                 VenteLigne(
-                    id = UUID.randomUUID(),
-                    venteId = venteId,
-                    produitId = ticket.produit.id,
-                    quantity = ticket.quantity,
+                    id           = UUID.randomUUID(),
+                    venteId      = venteId,
+                    produitId    = ticket.produit.id,
+                    quantity     = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
-                    sousTotal = ticket.produit.prix * ticket.quantity
-                ).copy(updatedAt = now(), isDirty = true)
+                    sousTotal    = ticket.produit.prix * ticket.quantity,
+                    tauxTVA      = ticket.produit.tauxTVA,
+                    updatedAt    = ts,
+                    isDirty      = true
+                )
             }
 
-            // ❌ plus de repository.insertVente(vente) ici
-            insertVenteSecurisee(vente, lignes) // ✅ une seule transaction
+            // NF525 Axe B : transaction atomique avec hash + numéro de séquence
+            repository.insertVenteSecurisee(vente, lignes)
 
             decrementStocks(cartItems)
             clearCart()
@@ -238,41 +223,26 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun deleteVenteWithStock(vente: Vente) {
         viewModelScope.launch {
-            // 1) Récupérer les lignes de la vente
+            val ts = now()
+            // 1) Récupérer les lignes de la vente pour rétablir les stocks
             val lignes = repository.getLignesForVente(vente.id).first()
 
-            // 2) Rétablir les stocks (on ajoute les quantités vendues)
+            // 2) Rétablir les stocks
             lignes.forEach { l ->
                 val p = repository.getProduitById(l.produitId)
                 if (p != null) {
-                    repository.updateProduit(
-                        p.copy(
-                            stock = (p.stock + l.quantity),
-                            updatedAt = now(),
-                            isDirty = true
-                        )
-                    )
+                    repository.updateProduit(p.copy(stock = p.stock + l.quantity, updatedAt = ts, isDirty = true))
                 }
             }
 
-            // 3) Marquer la vente + ses lignes en "supprimé" (soft delete) et "dirty" pour synchro
-            repository.updateVente(
-                vente.copy(
-                    isDeleted = true,
-                    isDirty = true,
-                    updatedAt = now()
-                )
+            // 3) NF525 Axe A : soft-delete atomique via requêtes SQL (pas de @Delete physique)
+            repository.softDeleteVente(vente.id)
+            repository.venteDao.softDeleteLignesForVente(vente.id, ts)
+
+            loggerEvenement(
+                type        = TypeEvenement.VENTE_ANNULEE.name,
+                description = "Vente annulée | seq=${vente.sequenceNumber} | hash=${vente.hash} | montant=${vente.total}"
             )
-
-            lignes.forEach { l ->
-                // on marque la ligne supprimée + dirty pour push
-                val updated = l.copy(isDeleted = true, isDirty = true, updatedAt = now())
-                // accès direct au DAO exposé par le repo pour faire un @Update
-                repository.venteDao.updateLigne(updated)
-            }
-
-            // (Option) si tu veux vraiment purger localement, tu pourrais deleteVente + deleteLigne,
-            // mais ça ne pousserait pas l'info au cloud. Le soft delete permet à SyncWorker d'envoyer isDeleted.
         }
     }
 
@@ -453,25 +423,32 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             if (itemsToPay.isEmpty()) return@launch
 
             val venteId = UUID.randomUUID()
+            val ts      = now()
             val vente = Vente(
-                id = venteId,
+                id        = venteId,
                 vendeurId = 1,
-                total = itemsToPay.sumOf { it.produit.prix * it.quantity },
-                date = now(),
-                tableId = tableId
-            ).copy(updatedAt = now(), isDirty = true)
+                total     = itemsToPay.sumOf { it.produit.prix * it.quantity },
+                date      = ts,
+                tableId   = tableId,
+                updatedAt = ts,
+                isDirty   = true
+            )
 
             val lignes = itemsToPay.map { ticket ->
                 VenteLigne(
-                    id = UUID.randomUUID(),
-                    venteId = venteId,
-                    produitId = ticket.produit.id,
-                    quantity = ticket.quantity,
+                    id           = UUID.randomUUID(),
+                    venteId      = venteId,
+                    produitId    = ticket.produit.id,
+                    quantity     = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
-                    sousTotal = ticket.produit.prix * ticket.quantity
-                ).copy(updatedAt = now(), isDirty = true)
+                    sousTotal    = ticket.produit.prix * ticket.quantity,
+                    tauxTVA      = ticket.produit.tauxTVA,
+                    updatedAt    = ts,
+                    isDirty      = true
+                )
             }
-            insertVenteSecurisee(vente, lignes)
+            // NF525 Axe B : transaction atomique
+            repository.insertVenteSecurisee(vente, lignes)
 
             val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
             val invoice = Invoice(tableId = tableId, totalAmount = total)
@@ -499,21 +476,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>) {
-        // 1. Récupérer la dernière vente pour avoir son hash
-        val lastVente = repository.getLastVente() // Il faudra ajouter cette méthode dans le DAO
-        val prevHash = lastVente?.hash ?: "0000000000000000"
-
-        // 2. Créer la vente avec le lien vers la précédente
-        val venteAvecLien = vente.copy(previousHash = prevHash)
-
-        // 3. Calculer le hash de la vente actuelle
-        val finalHash = SecurityUtils.calculateHash(venteAvecLien, lignes)
-        val venteSignee = venteAvecLien.copy(hash = finalHash)
-
-        // 4. Enregistrer en base
-        repository.insertVenteWithLignes(venteSignee, lignes)
-    }
+    // insertVenteSecurisee est maintenant dans VenteDao (@Transaction atomique)
 
 
     private val _invoicesWithDetails = MutableStateFlow<List<InvoiceWithDetails>>(emptyList())
@@ -558,22 +521,17 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 val cloture = repository.genererClotureJournaliere()
-
-                // 👉 Log enrichi (beaucoup mieux)
                 loggerEvenement(
-                    type = "CLOTURE",
-                    description = "Clôture ${cloture.dateCloture} | CA=${cloture.chiffreAffaireBrut} | ventes=${cloture.compteurVentes}"
+                    type = TypeEvenement.CLOTURE_JOURNALIERE.name,
+                    description = "Clôture ${cloture.dateCloture} | CA=${cloture.chiffreAffaireBrut} | " +
+                                  "TVA=${cloture.totalTVA} | ventes=${cloture.compteurVentes} | GT=${cloture.grandTotalCumule}"
                 )
-
                 onSuccess(cloture)
-
             } catch (e: Exception) {
-
                 loggerEvenement(
-                    type = "ERREUR_CLOTURE",
+                    type        = TypeEvenement.ERREUR_CLOTURE.name,
                     description = e.message ?: "Erreur inconnue"
                 )
-
                 onError(e.message ?: "Erreur inconnue")
             }
         }
@@ -583,6 +541,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun clearAllData() {
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearCatalogueData()
+        }
+    }
+
+    /** NF525 Axe B — Lance la vérification de la chaîne de hash et retourne les IDs de ventes rompues. */
+    fun verifierIntegriteChaineVentes(onResult: (List<java.util.UUID>) -> Unit) {
+        viewModelScope.launch {
+            val rompues = repository.verifierIntegriteChaineVentes()
+            onResult(rompues)
         }
     }
 

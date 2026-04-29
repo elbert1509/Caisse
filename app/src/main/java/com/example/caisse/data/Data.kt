@@ -70,6 +70,7 @@ data class Produit(
     val stock: Int = 0,
     val description: String? = null,
     val isActive: Boolean = true,
+    val tauxTVA: Double = 20.0,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -98,6 +99,7 @@ data class Vente(
     val vendeurId: Int? = 1,
     val total: Double,
     val tableId: UUID? =  UUID.fromString("22222222-0000-2222-2222-222222222222"),
+    val sequenceNumber: Long = 0,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -131,6 +133,7 @@ data class VenteLigne(
     val quantity: Int,
     val prixUnitaire: Double,
     val sousTotal: Double,
+    val tauxTVA: Double = 20.0,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -292,8 +295,17 @@ data class LogTechnique(
 )
 enum class TypeEvenement {
     OUVERTURE_SESSION,
+    FERMETURE_SESSION,
+    CLOTURE_JOURNALIERE,
+    CLOTURE_ET_FERMETURE,
     ERREUR_SYSTEME,
-    MODIF_PRIX
+    ERREUR_CLOTURE,
+    MODIF_PRIX,
+    RESET_CATALOGUE,
+    IMPRESSION_TICKET,
+    IMPRESSION_ANNULEE,
+    VENTE_ANNULEE,
+    SYNC_CLOUD
 }
 
 @Entity(tableName = "clotures",
@@ -314,11 +326,11 @@ data class Cloture(
     val isDeleted: Boolean = false
 )
 object AppConfig {
-    const val VERSION_LOGICIEL = "1.3" // À incrémenter à chaque build
+    const val VERSION_LOGICIEL = "1.3"
     const val NOM_LOGICIEL = "MaCaissePro"
     const val EDITEUR = "Ogooué Infos"
     const val NUMERO = "0667724958"
-    const val NUM_CERTIFICAT = "NF525-XXXX-YYYY" // Fourni lors de la certification
+    const val NUM_CERTIFICAT = "NF525-EN COURS" // À remplacer par le numéro fourni par l'organisme certificateur
 }
 
 @Entity(tableName = "etat_caisse")

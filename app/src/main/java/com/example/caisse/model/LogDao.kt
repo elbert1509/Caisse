@@ -21,7 +21,7 @@ interface LogDao {
     @Query("SELECT * FROM logs_techniques WHERE id = :id LIMIT 1")
     suspend fun getLogById(id: Long): LogTechnique?
 
-
-    @Update
-    suspend fun updateLog(log: LogTechnique)
+    // NF525 Axe A : seule la mise à jour du flag de sync est autorisée (pas de modification fiscale)
+    @Query("UPDATE logs_techniques SET isDirty = 0 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }

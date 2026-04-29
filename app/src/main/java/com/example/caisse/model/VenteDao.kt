@@ -9,6 +9,7 @@ import com.example.caisse.data.SalesData
 import com.example.caisse.data.Vente
 import com.example.caisse.data.VenteLigne
 import com.example.caisse.data.VenteWithDetails
+import com.example.caisse.util.SecurityUtils
 import kotlinx.coroutines.flow.Flow
 import java.util.*
 
@@ -19,8 +20,9 @@ interface VenteDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertVente(vente: Vente)
 
-    @Delete
-    suspend fun deleteVente(vente: Vente)
+    // NF525 : pas de suppression physique — soft delete uniquement
+    @Query("UPDATE Vente SET isDeleted = 1, isDirty = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDeleteVente(id: UUID, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM Vente ORDER BY date DESC")
     fun getAllVentes(): Flow<List<Vente>>
@@ -35,8 +37,9 @@ interface VenteDao {
     @Query("SELECT * FROM VenteLigne WHERE venteId = :venteId")
     fun getLignesForVente(venteId: UUID): Flow<List<VenteLigne>>
 
-    @Delete
-    suspend fun deleteLigne(ligne: VenteLigne)
+    // NF525 : pas de suppression physique des lignes
+    @Query("UPDATE VenteLigne SET isDeleted = 1, isDirty = 1, updatedAt = :ts WHERE venteId = :venteId")
+    suspend fun softDeleteLignesForVente(venteId: UUID, ts: Long = System.currentTimeMillis())
 
     // ---- STATS ----
     @Query("""
@@ -121,6 +124,38 @@ interface VenteDao {
     suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) {
         insertVente(vente)
         for (l in lignes) insertLigne(l)
+    }
+
+    /**
+     * NF525 Axe B — Transaction atomique garantissant la cohérence de la chaîne de hash
+     * et la séquence ininterrompue des tickets.
+     */
+    @Transaction
+    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>) {
+        val lastVente = getLastVente()
+        val prevHash = lastVente?.hash ?: "0000000000000000"
+        val nextSeq  = (lastVente?.sequenceNumber ?: 0L) + 1L
+
+        val venteAvecLien = vente.copy(previousHash = prevHash, sequenceNumber = nextSeq)
+        val finalHash     = SecurityUtils.calculateHash(venteAvecLien, lignes)
+        val venteSignee   = venteAvecLien.copy(hash = finalHash)
+
+        insertVente(venteSignee)
+        for (l in lignes) insertLigne(l)
+    }
+
+    /** NF525 — Vérifie la cohérence de toute la chaîne de hash. Retourne les IDs rompus. */
+    @Transaction
+    suspend fun verifierIntegriteChaineVentes(): List<UUID> {
+        val toutes = getAllVentesOnce().sortedBy { it.sequenceNumber }
+        val brisees = mutableListOf<UUID>()
+        var prevHash = "0000000000000000"
+        for (v in toutes) {
+            if (v.isDeleted) continue
+            if (v.previousHash != prevHash) brisees.add(v.id)
+            prevHash = v.hash
+        }
+        return brisees
     }
     @Query("""
     SELECT p.nom AS productName,

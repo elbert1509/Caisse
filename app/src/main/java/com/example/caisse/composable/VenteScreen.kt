@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.TypeEvenement
 import com.example.caisse.data.Vente
 import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
@@ -62,7 +63,13 @@ fun VenteScreen(
                     items(ventes, key = { it.id }) { v ->
                         VenteRow(
                             vente = v,
-                            onDelete = { toDelete = v; viewModel.loggerEvenement("Vente Annulée", v.hash + " \n montant "+v.total.toString()) },
+                            onDelete = {
+                                toDelete = v
+                                viewModel.loggerEvenement(
+                                    type = TypeEvenement.VENTE_ANNULEE.name,
+                                    description = "Demande annulation ticket seq=${v.sequenceNumber} montant=${v.total}"
+                                )
+                            },
                             devise = viewModel.getInfos()?.devise ?: ""
                         )
                     }
@@ -124,12 +131,12 @@ private fun ConfirmDeleteDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Annuler") }
+            TextButton(onClick = onConfirm) { Text("Confirmer l'annulation") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Retour") }
         },
-        title = { Text("Supprimer la vente ?") },
-        text = { Text("La vente sera marquée annulée et le stock des produits sera rétabli.") }
+        title = { Text("Annuler la vente ?") },
+        text = { Text("La vente sera marquée annulée (conservation NF525) et le stock des produits sera rétabli.") }
     )
 }

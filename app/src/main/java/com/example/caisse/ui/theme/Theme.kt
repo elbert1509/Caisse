@@ -1,58 +1,61 @@
 package com.example.caisse.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+import androidx.compose.ui.graphics.Color
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary              = Brand700,
+    onPrimary            = Color.White,
+    primaryContainer     = Brand100,
+    onPrimaryContainer   = Brand900,
+    secondary            = Accent500,
+    onSecondary          = Color.White,
+    secondaryContainer   = AccentContainer,
+    onSecondaryContainer = Color(0xFF3730A3),
+    tertiary             = SemanticAmber,
+    onTertiary           = Color.White,
+    background           = Slate50,
+    onBackground         = Slate900,
+    surface              = Color.White,
+    onSurface            = Slate900,
+    surfaceVariant       = Slate100,
+    onSurfaceVariant     = Slate700,
+    error                = SemanticRed,
+    onError              = Color.White,
+    outline              = Slate300,
+)
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val DarkColorScheme = darkColorScheme(
+    primary              = Brand400,
+    onPrimary            = Brand900,
+    primaryContainer     = Brand800,
+    onPrimaryContainer   = Brand300,
+    secondary            = Accent400,
+    onSecondary          = Color(0xFF1E1B4B),
+    background           = Color(0xFF0A0F1E),
+    onBackground         = Slate100,
+    surface              = Color(0xFF111827),
+    onSurface            = Slate100,
+    surfaceVariant       = Color(0xFF1E293B),
+    onSurfaceVariant     = Slate300,
+    error                = SemanticRed,
+    onError              = Color.White,
 )
 
 @Composable
 fun CaisseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+        typography  = Typography,
+        content     = content
     )
 }

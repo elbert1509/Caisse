@@ -224,7 +224,7 @@ class SyncWorker(
                 .set(clotureToMap(c.copy(isDirty = false)))
                 .await()
 
-            clotureDao.updateCloture(c.copy(isDirty = false))
+            clotureDao.markSynced(c.idCloture)
         }
     }
 
@@ -244,7 +244,7 @@ class SyncWorker(
                 .set(logToMap(log.copy(isDirty = false)))
                 .await()
 
-            logDao.updateLog(log.copy(isDirty = false))
+            logDao.markSynced(log.id)
         }
     }
 
@@ -512,10 +512,9 @@ class SyncWorker(
                 val remote = mapToCloture(data)
                 val local = clotureDao.getClotureById(remote.idCloture)
 
+                // NF525 Axe A : une clôture locale n'est jamais écrasée par une version distante
                 if (local == null) {
                     clotureDao.insertCloture(remote.copy(isDirty = false))
-                } else if (remote.updatedAt >= local.updatedAt) {
-                    clotureDao.updateCloture(remote.copy(isDirty = false))
                 }
             } catch (e: Exception) {
                 Log.e("SyncWorker", "Cloture invalide doc=${doc.id}: ${e.message}")
@@ -541,10 +540,9 @@ class SyncWorker(
                 val remote = mapToLog(data)
                 val local = logDao.getLogById(remote.id)
 
+                // NF525 Axe A : un log local (JET) n'est jamais écrasé par une version distante
                 if (local == null) {
                     logDao.insertLog(remote.copy(isDirty = false))
-                } else if (remote.updatedAt >= local.updatedAt) {
-                    logDao.updateLog(remote.copy(isDirty = false))
                 }
             } catch (e: Exception) {
                 Log.e("SyncWorker", "Log invalide doc=${doc.id}: ${e.message}")

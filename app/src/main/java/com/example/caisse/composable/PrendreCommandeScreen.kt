@@ -4,9 +4,13 @@ import android.os.Build
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
@@ -34,11 +39,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,13 +56,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.caisse.bluetooth.BluetoothViewModel
@@ -64,11 +73,6 @@ import com.example.caisse.data.Ticket
 import com.example.caisse.util.drawableUri
 import com.example.caisse.util.formatPrice
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Badge
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,10 +88,8 @@ fun PrendreCommandeScreen(
     val totalPrice by menuViewModel.totalPrice.collectAsState()
     val shopInfos = menuViewModel.getInfos()
 
-
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id) }
 
-    // Update selected category if the initial one is removed or not available
     LaunchedEffect(categories) {
         if (selectedCategoryId == null || categories.none { it.id == selectedCategoryId }) {
             selectedCategoryId = categories.firstOrNull()?.id
@@ -112,10 +114,10 @@ fun PrendreCommandeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            val isCompact = maxWidth < 600.dp   // seuil simple, efficace
+            val isCompact = maxWidth < 600.dp
             var showCart by remember { mutableStateOf(false) }
 
-            // ====== COMPACT (petits écrans) : Produits plein écran + Panier en bottom sheet ======
+            // ══ COMPACT (téléphone) : produits plein écran + barre totale fixe ══
             if (isCompact) {
 
                 // Panier en BottomSheet
@@ -133,6 +135,7 @@ fun PrendreCommandeScreen(
                                 items(cart, key = { it.produit.id }) { ticket ->
                                     CartItemRow(
                                         ticket = ticket,
+                                        devise = shopInfos?.devise ?: "",
                                         onIncrease = { menuViewModel.increaseQuantity(ticket.produit.id) },
                                         onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) }
                                     )
@@ -141,16 +144,29 @@ fun PrendreCommandeScreen(
 
                             Spacer(Modifier.height(12.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth().weight(0.1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(0.1f),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Total", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                Text(formatPrice(totalPrice, shopInfos?.devise), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Total",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    formatPrice(totalPrice, shopInfos?.devise),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
 
                             Spacer(Modifier.height(12.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth().weight(0.1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(0.1f),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Button(
@@ -181,7 +197,7 @@ fun PrendreCommandeScreen(
                     }
                 }
 
-                // Produits plein écran
+                // Produits + barre totale persistante
                 Column(modifier = Modifier.fillMaxSize()) {
 
                     if (categories.isNotEmpty()) {
@@ -198,10 +214,11 @@ fun PrendreCommandeScreen(
                     }
 
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp), // un peu plus compact
+                        columns = GridCells.Adaptive(minSize = 110.dp),
+                        modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(products.filter { it.categoryId == selectedCategoryId }) { product ->
                             ProductItem(product = product, devise = shopInfos?.devise ?: "") {
@@ -209,32 +226,57 @@ fun PrendreCommandeScreen(
                             }
                         }
                     }
-                }
 
-                // Bouton panier flottant (avec badge)
-                Box(modifier = Modifier.fillMaxSize()) {
-                    FloatingActionButton(
-                        onClick = { showCart = true },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp)
+                    // Barre totale persistante — remplace le FAB flottant
+                    AnimatedVisibility(
+                        visible = cart.isNotEmpty(),
+                        enter = slideInVertically { it },
+                        exit = slideOutVertically { it }
                     ) {
-                        BadgedBox(
-                            badge = {
-                                if (cart.isNotEmpty()) Badge { Text(cart.sumOf { it.quantity }.toString()) }
-                            }
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            shadowElevation = 12.dp
                         ) {
-                            Text("Panier")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        "${cart.sumOf { it.quantity }} article(s)",
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                    Text(
+                                        formatPrice(totalPrice, shopInfos?.devise),
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Button(
+                                    onClick = { showCart = true },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.White,
+                                        contentColor = MaterialTheme.colorScheme.primary
+                                    ),
+                                    shape = MaterialTheme.shapes.medium
+                                ) {
+                                    Text("Voir le panier", fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // ====== LARGE (tablettes / grands écrans) : ton layout actuel inchangé ======
+            // ══ LARGE (tablette / grand écran) : layout côte à côte ══
             else {
                 Row(modifier = Modifier.fillMaxSize()) {
 
-                    // Product Selection Area
                     Column(modifier = Modifier.weight(0.6f)) {
                         if (categories.isNotEmpty()) {
                             val selectedIndex = categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
@@ -252,8 +294,8 @@ fun PrendreCommandeScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 128.dp),
                             contentPadding = PaddingValues(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(products.filter { it.categoryId == selectedCategoryId }) { product ->
                                 ProductItem(product = product, devise = shopInfos?.devise ?: "") {
@@ -263,7 +305,6 @@ fun PrendreCommandeScreen(
                         }
                     }
 
-                    // Cart Area (comme avant)
                     Column(
                         modifier = Modifier
                             .weight(0.4f)
@@ -275,6 +316,7 @@ fun PrendreCommandeScreen(
                             items(cart, key = { it.produit.id }) { ticket ->
                                 CartItemRow(
                                     ticket = ticket,
+                                    devise = shopInfos?.devise ?: "",
                                     onIncrease = { menuViewModel.increaseQuantity(ticket.produit.id) },
                                     onDecrease = { menuViewModel.decreaseQuantity(ticket.produit.id) }
                                 )
@@ -285,8 +327,17 @@ fun PrendreCommandeScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text(formatPrice(totalPrice, shopInfos?.devise), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Total",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                formatPrice(totalPrice, shopInfos?.devise),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
@@ -300,7 +351,7 @@ fun PrendreCommandeScreen(
                                 onClick = { if (cart.isNotEmpty()) navController.navigate("panier") },
                                 modifier = Modifier.weight(.5f),
                                 enabled = cart.isNotEmpty()
-                            ) { Text("Valider la commande") }
+                            ) { Text("Valider") }
 
                             Button(
                                 modifier = Modifier.weight(.5f),
@@ -323,133 +374,150 @@ fun PrendreCommandeScreen(
             }
         }
     }
-
 }
 
 @Composable
-fun ProductItem(product: Produit, devise : String, onProductClick: () -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
+fun ProductItem(product: Produit, devise: String, onProductClick: () -> Unit) {
+    var scale by remember { mutableStateOf(1f) }
+    val animatedScale by animateFloatAsState(
+        targetValue = scale,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "product_scale"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(110.dp) // zone cliquable bien grande
+            .height(130.dp)
+            .scale(animatedScale)
             .pointerInteropFilter { event ->
                 when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        isPressed = true
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        isPressed = false
-                        onProductClick()
-                        true
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        isPressed = false
-                        true
-                    }
+                    MotionEvent.ACTION_DOWN  -> { scale = 0.94f; true }
+                    MotionEvent.ACTION_UP    -> { scale = 1f; onProductClick(); true }
+                    MotionEvent.ACTION_CANCEL -> { scale = 1f; true }
                     else -> false
                 }
             },
         elevation = cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isPressed)
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-            else
-                Color.White
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.large,
     ) {
         Column(
-            modifier = Modifier.padding(4.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+            AsyncImage(
+                model = product.image ?: drawableUri("placeholder_image"),
+                contentDescription = product.nom,
+                modifier = Modifier.size(64.dp),
+                contentScale = ContentScale.Fit
+            )
+            Text(
+                text = product.nom,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.small
             ) {
-                AsyncImage(
-                    model = product.image ?: drawableUri("placeholder_image"),
-                    contentDescription = product.nom,
-                    modifier = Modifier
-                        .size(50.dp)
-                        .background(Color.Transparent),
-                    contentScale = ContentScale.Fit
+                Text(
+                    text = formatPrice(product.prix, devise),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                product.nom,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 2, // Limite à 2 lignes pour éviter que ça déborde
-                lineHeight = 14.sp
-            )
-            Text(formatPrice(product.prix,devise), fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.primary, // Couleur pour distinguer le prix
-                fontWeight = FontWeight.Bold)
         }
     }
 }
+
 @Composable
 fun CartItemRow(
     ticket: Ticket,
+    devise: String = "",
     onIncrease: () -> Unit,
     onDecrease: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = "${ticket.produit.nom} (x${ticket.quantity})",
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = ticket.produit.nom,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${formatPrice(ticket.produit.prix, devise)} × ${ticket.quantity}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDecrease, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Remove, "Diminuer")
+            IconButton(onClick = onDecrease, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Remove,
+                    contentDescription = "Diminuer",
+                    modifier = Modifier.size(18.dp)
+                )
             }
-            IconButton(onClick = onIncrease, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Add, "Augmenter")
+            Text(
+                text = ticket.quantity.toString(),
+                modifier = Modifier.width(24.dp),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            IconButton(onClick = onIncrease, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Augmenter",
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }
 }
+
 @Composable
-fun ProductItemHorizontal(product: Produit, devise: String,onProductClick: () -> Unit) {
+fun ProductItemHorizontal(product: Produit, devise: String, onProductClick: () -> Unit) {
     var isPressed by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp) // Hauteur fixe et compacte
+            .height(72.dp)
             .pointerInteropFilter { event ->
                 when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        isPressed = true
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        isPressed = false
-                        onProductClick()
-                        true
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        isPressed = false
-                        true
-                    }
+                    MotionEvent.ACTION_DOWN  -> { isPressed = true; true }
+                    MotionEvent.ACTION_UP    -> { isPressed = false; onProductClick(); true }
+                    MotionEvent.ACTION_CANCEL -> { isPressed = false; true }
                     else -> false
                 }
             },
         elevation = cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isPressed) Color.LightGray else Color.White),
-        shape = MaterialTheme.shapes.medium // Coins moins arrondis pour gagner de la place
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.White
+        ),
+        shape = MaterialTheme.shapes.medium
     ) {
         Row(
             modifier = Modifier
@@ -457,7 +525,6 @@ fun ProductItemHorizontal(product: Produit, devise: String,onProductClick: () ->
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Image à gauche
             AsyncImage(
                 model = product.image ?: drawableUri("placeholder_image"),
                 contentDescription = product.nom,
@@ -466,12 +533,9 @@ fun ProductItemHorizontal(product: Produit, devise: String,onProductClick: () ->
                     .padding(4.dp),
                 contentScale = ContentScale.Fit
             )
-
             Spacer(modifier = Modifier.width(12.dp))
-
-            // Textes à droite
             Column(
-                modifier = Modifier.weight(1f), // Prend tout l'espace restant
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
@@ -481,9 +545,9 @@ fun ProductItemHorizontal(product: Produit, devise: String,onProductClick: () ->
                     maxLines = 1
                 )
                 Text(
-                    text =  formatPrice(product.prix,devise),
+                    text = formatPrice(product.prix, devise),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

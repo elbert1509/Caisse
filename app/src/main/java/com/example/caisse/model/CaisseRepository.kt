@@ -12,6 +12,7 @@ import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
 import com.example.caisse.util.FiscalHashUtils.calculateClotureHash
+import com.example.caisse.util.FiscalHashUtils.sha256
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -32,32 +33,24 @@ class CaisseRepository(
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
     suspend fun addCategory(category: Category) = categorieDao.addCategory(category)
-    suspend fun deleteCategory(category: Category) = categorieDao.deleteCategory(category)
+    suspend fun softDeleteCategory(id: UUID) = categorieDao.softDeleteCategory(id)
     suspend fun getAllCategoriesOnce(): List<Category> = categorieDao.getAllCategoryOnce()
     suspend fun getCategoryById(id: UUID): Category? = categorieDao.get(id)
     suspend fun updateCategory(category: Category) = categorieDao.updateCategory(category)
 
-
-
-
-
     // ----- PRODUITS -----
     fun getAllProduits(): Flow<List<Produit>> = produitDao.getAllProduits()
     suspend fun addProduit(produit: Produit) = produitDao.insertProduit(produit)
-    suspend fun deleteProduit(produit: Produit) = produitDao.deleteProduit(produit)
+    suspend fun softDeleteProduit(id: UUID) = produitDao.softDeleteProduit(id)
     suspend fun getProduitById(id: UUID): Produit? = produitDao.getProduitById(id)
     suspend fun updateProduit(produit: Produit) = produitDao.updateProduit(produit)
     suspend fun getAllProduitsOnce(): List<Produit> = produitDao.getAllProduitsOnce()
     suspend fun insertProduit(produit: Produit) = produitDao.insertProduit(produit)
 
-
-
-
-
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()
     suspend fun addVendeur(vendeur: Vendeur) = vendeurDao.insertVendeur(vendeur)
-    suspend fun deleteVendeur(vendeur: Vendeur) = vendeurDao.deleteVendeur(vendeur)
+    suspend fun softDeleteVendeur(id: Int) = vendeurDao.softDeleteVendeur(id)
 
     // --- VENTES ---
     fun getAllVentes() = venteDao.getAllVentes()
@@ -67,20 +60,28 @@ class CaisseRepository(
     suspend fun updateVente(vente: Vente) = venteDao.updateVente(vente)
     suspend fun insertVente(vente: Vente) = venteDao.insertVente(vente)
     suspend fun insertLigne(ligne: VenteLigne) = venteDao.insertLigne(ligne)
-    suspend fun deleteVente(vente: Vente) = venteDao.deleteVente(vente)
+
+    // NF525 Axe A : seul le soft-delete est autorisé sur une vente
+    suspend fun softDeleteVente(venteId: UUID) = venteDao.softDeleteVente(venteId)
+
     suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) =
         venteDao.insertVenteWithLignes(vente, lignes)
+
+    // NF525 Axe B : insertion atomique avec hash et séquence
+    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>) =
+        venteDao.insertVenteSecurisee(vente, lignes)
+
     fun getProductReportBetween(start: Long, end: Long) =
         venteDao.getProductReportBetween(start, end)
 
     fun getTotalRevenueBetween(start: Long, end: Long) =
         venteDao.getTotalRevenueBetween(start, end)
 
-    suspend fun getLastVente () = venteDao.getLastVente()
+    suspend fun getLastVente() = venteDao.getLastVente()
 
-
-
-
+    /** NF525 Axe B — Vérifie l'intégrité de toute la chaîne de hash des ventes. */
+    suspend fun verifierIntegriteChaineVentes(): List<UUID> =
+        venteDao.verifierIntegriteChaineVentes()
 
     // Table methods
     suspend fun addTable(appTable: AppTable) = tableDao.addTable(appTable)
@@ -95,7 +96,6 @@ class CaisseRepository(
     suspend fun upsertTableItem(ti: TableItem) = tableDao.upsertTableItem(ti)
     suspend fun getTableById(id: UUID): AppTable? = tableDao.getTableById(id)
 
-
     // Invoice methods
     suspend fun addInvoice(invoice: Invoice) = invoiceDao.addInvoice(invoice)
     suspend fun addInvoiceItem(invoiceItem: InvoiceItem) = invoiceDao.addInvoiceItem(invoiceItem)
@@ -108,17 +108,20 @@ class CaisseRepository(
     suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
     suspend fun updatePassword(passwordHash: String, passwordSalt: String) = infosDao.updatePassword(passwordHash, passwordSalt)
 
-
+    /**
+     * NF525 Axe B — Insère un événement dans le JET avec empreinte SHA-256 calculée.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun loggerEvenement(type: String, description: String, vendeurId: UUID? = null) {
         val date = LocalDateTime.now().toString()
-        // On peut aussi hasher le log pour plus de sécurité (similaire à l'axe B)
+        val contenu = "$date|$type|$description|${vendeurId ?: ""}"
+        val empreinte = sha256(contenu)
         val log = LogTechnique(
-            date = date,
+            date          = date,
             typeEvenement = type,
-            description = description,
-            idVendeur = vendeurId,
-            empreinte = "" // Optionnel: calcul du hash ici
+            description   = description,
+            idVendeur     = vendeurId,
+            empreinte     = empreinte
         )
         logDao.insertLog(log)
     }
@@ -131,139 +134,118 @@ class CaisseRepository(
     suspend fun genererClotureJournaliere(): Cloture {
         val dateAujourdhui = LocalDate.now().toString()
         val today = LocalDate.now()
-        val zone = java.time.ZoneId.systemDefault()
-
+        val zone  = java.time.ZoneId.systemDefault()
 
         val startOfDay = today.atStartOfDay(zone).toInstant().toEpochMilli()
-        val endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-
+        val endOfDay   = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
         val clotureExistante = clotureDao.getClotureByDateAndType(
             dateCloture = dateAujourdhui,
-            type = "JOURNALIERE"
+            type        = "JOURNALIERE"
         )
-
         if (clotureExistante != null) {
             throw IllegalStateException("La clôture journalière du $dateAujourdhui existe déjà.")
-
         }
-        // 1. Calculer les totaux des ventes non clôturées
-        val ventesDuJour =venteDao.getVentesByPeriod(startOfDay, endOfDay)
-        val totalJour = ventesDuJour.sumOf { it.total }
 
-        // 2. Récupérer la dernière clôture pour le cumul perpétuel
-        val derniereCloture = venteDao.getLastCloture()
+        val ventesDuJour = venteDao.getVentesByPeriod(startOfDay, endOfDay)
+        val totalJour    = ventesDuJour.sumOf { it.total }
+
+        // NF525 : calcul de TVA à partir du taux réel stocké dans chaque ligne
+        val toutesLignes = venteDao.getAllVenteLignesOnce()
+        val venteIds     = ventesDuJour.map { it.id }.toSet()
+        val lignesDuJour = toutesLignes.filter { it.venteId in venteIds && !it.isDeleted }
+        val totalTVA     = lignesDuJour.sumOf { l ->
+            l.sousTotal * l.tauxTVA / (100.0 + l.tauxTVA)
+        }
+
+        val derniereCloture   = venteDao.getLastCloture()
         val nouveauGrandTotal = (derniereCloture?.grandTotalCumule ?: 0.0) + totalJour
-        val previousHash = derniereCloture?.hash ?: "0000000000000000" // Valeur par défaut pour la toute première clôture
+        val previousHash      = derniereCloture?.hash ?: "0000000000000000"
 
-        // 3. Créer l'objet temporaire pour le calcul
         val clotureTemp = Cloture(
-            dateCloture = dateAujourdhui,
-            type = "JOURNALIERE",
+            dateCloture        = dateAujourdhui,
+            type               = "JOURNALIERE",
             chiffreAffaireBrut = totalJour,
-            totalTVA = totalJour * 0.20, // À adapter selon vos taux
-            compteurVentes = ventesDuJour.size,
-            grandTotalCumule = nouveauGrandTotal,
-            hash = "" // Calculer le hash comme dans l'Axe B
+            totalTVA           = totalTVA,
+            compteurVentes     = ventesDuJour.size,
+            grandTotalCumule   = nouveauGrandTotal,
+            hash               = ""
         )
 
-        // 4. Calculer le Hash NF525
         val finalHash = calculateClotureHash(clotureTemp, previousHash)
+        val cloture   = clotureTemp.copy(hash = finalHash)
 
-        // 5. Créer la clôture finale signée
-        val cloture = clotureTemp.copy(hash = finalHash)
-
-        // 6. Enregistrer en base
         clotureDao.insertCloture(cloture)
-
         return cloture
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun ouvrirCaisse(vendeurId: UUID) {
-        val date = LocalDateTime.now().toString()
+        // NF525 : vérifier que la caisse de la veille a bien été clôturée
+        val hier = LocalDate.now().minusDays(1).toString()
+        val clotureHier     = clotureDao.getClotureByDateAndType(hier, "JOURNALIERE")
+        val derniereCloture = venteDao.getLastCloture()
 
-        // 1. Mettre à jour l'état local
+        if (derniereCloture != null && clotureHier == null) {
+            loggerEvenement(
+                type        = TypeEvenement.ERREUR_SYSTEME.name,
+                description = "Ouverture de caisse sans clôture de la veille ($hier). Vérification requise.",
+                vendeurId   = vendeurId
+            )
+        }
+
         venteDao.updateEtatCaisse(
-            EtatCaisse(isOuverte = true, dateOuverture = date, idVendeurOuverture = vendeurId)
+            EtatCaisse(isOuverte = true, dateOuverture = LocalDateTime.now().toString(), idVendeurOuverture = vendeurId)
         )
-
-        // 2. Inscrire l'événement dans le journal (IMPORTANT NF525)
         loggerEvenement(
-            type = "OUVERTURE_SESSION",
+            type        = TypeEvenement.OUVERTURE_SESSION.name,
             description = "Ouverture de caisse par le vendeur $vendeurId",
-            vendeurId = vendeurId
+            vendeurId   = vendeurId
         )
     }
 
-    suspend fun estCaisseOuverte(): Boolean {
-        return venteDao.getEtatCaisse()?.isOuverte ?: false
-    }
-
+    suspend fun estCaisseOuverte(): Boolean = venteDao.getEtatCaisse()?.isOuverte ?: false
 
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun fermerCaisse() {
-        val date = LocalDateTime.now().toString()
-        // 1. Mettre à jour l'état à "fermé"
         venteDao.updateEtatCaisse(
             EtatCaisse(id = 1, isOuverte = false, dateOuverture = null, idVendeurOuverture = null)
         )
-        // 2. Log technique de l'événement
         loggerEvenement(
-            type = "FERMETURE_SESSION",
-            description = "Fermeture de session de caisse",
-            vendeurId = null // Optionnel : passer l'ID du vendeur actuel
+            type        = TypeEvenement.FERMETURE_SESSION.name,
+            description = "Fermeture de session de caisse"
         )
     }
+
     fun observeEtatCaisse(): Flow<Boolean> {
         return venteDao.observeEtatCaisse().map { it?.isOuverte ?: false }
     }
 
-    /**
-     * Mutualisation de la clôture comptable (Z) et de la fermeture technique.
-     * NF525 : Garantit que l'état de la caisse passe à "Fermé" dès que le rapport est scellé.
-     */
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun executerClotureGlobale(): Cloture {
-        // 1. Générer le rapport Z (Calcul, Signature/Hash, Insertion)
         val clotureResult = genererClotureJournaliere()
-
-        // 2. Fermer techniquement la caisse
-        val dateHeure = LocalDateTime.now().toString()
-
-        // Mise à jour de l'état (ID 1 est fixe pour l'état unique)
         venteDao.updateEtatCaisse(
-            EtatCaisse(
-                id = 1,
-                isOuverte = false,
-                dateOuverture = null,
-                idVendeurOuverture = null
-            )
+            EtatCaisse(id = 1, isOuverte = false, dateOuverture = null, idVendeurOuverture = null)
         )
-
-        // 3. Loguer la fermeture dans le JET (Journal des Événements Techniques)
         loggerEvenement(
-            type = "CLOTURE_ET_FERMETURE",
-            description = "Clôture Z n°${clotureResult.idCloture} générée et session fermée.",
-            vendeurId = null
+            type        = TypeEvenement.CLOTURE_ET_FERMETURE.name,
+            description = "Clôture Z n°${clotureResult.idCloture} générée et session fermée. " +
+                          "CA=${clotureResult.chiffreAffaireBrut} | GT=${clotureResult.grandTotalCumule} | hash=${clotureResult.hash}"
         )
-
         return clotureResult
     }
+
+    /**
+     * NF525 Axe A — Réinitialisation du catalogue par soft-delete uniquement.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun clearCatalogueData() {
-        produitDao.deleteAllProduits()
-        categorieDao.deleteAllCategories()
-        vendeurDao.deleteAllVendeurs()
-
-        // Optionnel : Loguer l'action dans le journal technique
+        produitDao.softDeleteAllProduits()
+        categorieDao.softDeleteAllCategories()
+        vendeurDao.softDeleteAllVendeurs()
         loggerEvenement(
-            type = "RESET_CATALOGUE",
-            description = "Suppression complète des produits, catégories et vendeurs par l'utilisateur.",
-            vendeurId = null
+            type        = TypeEvenement.RESET_CATALOGUE.name,
+            description = "Réinitialisation catalogue (soft-delete) — produits, catégories et vendeurs masqués."
         )
     }
-
-
-
 }

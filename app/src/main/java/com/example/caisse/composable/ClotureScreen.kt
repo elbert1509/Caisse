@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.caisse.data.Cloture
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.data.TypeEvenement
 import com.example.caisse.data.Vente
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -300,15 +301,18 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                                     "Clôture enregistrée : ${cloture.dateCloture}"
                                 )
                                 viewModel.loggerEvenement(
-                                    type = "CLOTURE",
-                                    description = "Hash=${cloture.hash} | Total=${cloture.grandTotalCumule}"
+                                    type = TypeEvenement.CLOTURE_ET_FERMETURE.name,
+                                    description = "Hash=${cloture.hash} | GT=${cloture.grandTotalCumule} | TVA=${cloture.totalTVA}"
                                 )
 
                             } catch (e: Exception) {
                                 snackbarHostState.showSnackbar(
                                     "Erreur clôture : ${e.message ?: "inconnue"}"
                                 )
-                                viewModel.loggerEvenement("Erreur", e.message ?: "Erreur inconnue")
+                                viewModel.loggerEvenement(
+                                    type = TypeEvenement.ERREUR_CLOTURE.name,
+                                    description = e.message ?: "Erreur inconnue"
+                                )
                             } finally {
                                 isLoading = false
                                 showConfirmDialog = false

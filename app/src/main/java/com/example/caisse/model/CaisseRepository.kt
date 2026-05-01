@@ -74,8 +74,8 @@ class CaisseRepository(
     suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) =
         venteDao.insertVenteWithLignes(vente, lignes)
 
-    // NF525 Axe B : insertion atomique avec hash et séquence
-    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>) =
+    // NF525 Axe B : insertion atomique avec hash et séquence — retourne la vente signée
+    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>): Vente =
         venteDao.insertVenteSecurisee(vente, lignes)
 
     fun getProductReportBetween(start: Long, end: Long) =

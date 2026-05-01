@@ -131,7 +131,7 @@ interface VenteDao {
      * et la séquence ininterrompue des tickets.
      */
     @Transaction
-    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>) {
+    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>): Vente {
         val lastVente = getLastVente()
         val prevHash = lastVente?.hash ?: "0000000000000000"
         val nextSeq  = (lastVente?.sequenceNumber ?: 0L) + 1L
@@ -142,6 +142,7 @@ interface VenteDao {
 
         insertVente(venteSignee)
         for (l in lignes) insertLigne(l)
+        return venteSignee
     }
 
     /** NF525 — Vérifie la cohérence de toute la chaîne de hash. Retourne les IDs rompus. */

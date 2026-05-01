@@ -60,13 +60,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // ---- CATEGORIES ----
     fun addCategory(name: String, description: String? = null, icon: Int? = null) {
         viewModelScope.launch {
-            repository.addCategory(Category(name = name, description = description, icon = icon,isDirty = true))
+            repository.addCategory(Category(name = name, description = description, icon = icon, isDirty = true))
+            loggerEvenement(TypeEvenement.AJOUT_CATEGORIE.name, "Catégorie ajoutée : $name")
         }
     }
 
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
             repository.softDeleteCategory(category.id)
+            loggerEvenement(TypeEvenement.SUPPRESSION_CATEGORIE.name, "Catégorie supprimée : ${category.name} (id=${category.id})")
         }
     }
 
@@ -74,7 +76,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val category = categories.value.find { it.id == id }
             category?.let {
-                repository.updateCategory(it.copy(name = newName)) // REPLACE grâce à onConflictStrategy
+                repository.updateCategory(it.copy(name = newName))
+                loggerEvenement(TypeEvenement.MODIF_CATEGORIE.name, "Catégorie renommée : ${it.name} → $newName (id=$id)")
             }
         }
     }
@@ -87,27 +90,25 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
     // ---- PRODUITS ----
-    fun addProduit(name: String, price: Double, categoryId: UUID,stock:Int = 12, imageUri: String?) {
+    fun addProduit(name: String, price: Double, categoryId: UUID, stock: Int = 12, imageUri: String?) {
         viewModelScope.launch {
-            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,image = imageUri).copy(updatedAt = now(), isDirty = true)
+            val newProduit = Produit(nom = name, prix = price, categoryId = categoryId, stock = stock, image = imageUri).copy(updatedAt = now(), isDirty = true)
             repository.addProduit(newProduit)
+            loggerEvenement(TypeEvenement.AJOUT_PRODUIT.name, "Produit ajouté : $name | prix=$price | cat=$categoryId")
         }
     }
-
 
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
-            repository.updateProduit(
-                produit.copy(
-                    updatedAt = now(),
-                    isDirty = true
-                )
-            )
+            repository.updateProduit(produit.copy(updatedAt = now(), isDirty = true))
+            loggerEvenement(TypeEvenement.MODIF_PRODUIT.name, "Produit modifié : ${produit.nom} (id=${produit.id}) | prix=${produit.prix}")
         }
     }
+
     fun deleteProduit(produit: Produit) {
         viewModelScope.launch {
             repository.softDeleteProduit(produit.id)
+            loggerEvenement(TypeEvenement.SUPPRESSION_PRODUIT.name, "Produit supprimé : ${produit.nom} (id=${produit.id})")
         }
     }
 
@@ -120,22 +121,11 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             repository.insertInfos(ShopInfos(1,name, address, phone, email, siret = siret, logo, passwordHash = hash, passwordSalt = salt, devise = devise))
         }
     }
-    fun updateInfos(name: String, address: String, phone: String, email: String,siret : String,   logo: Int? = null,devise : String) {
+    fun updateInfos(name: String, address: String, phone: String, email: String, siret: String, logo: Int? = null, devise: String) {
         viewModelScope.launch {
-            val existing = repository.getInfos()
-                ?: return@launch // ou alors créer par défaut
-
-            repository.updateInfos(
-                existing.copy(
-                    name = name,
-                    address = address,
-                    phone = phone,
-                    email = email,
-                    siret = siret,
-                    logo = logo,
-                    devise = devise
-                )
-            )
+            val existing = repository.getInfos() ?: return@launch
+            repository.updateInfos(existing.copy(name = name, address = address, phone = phone, email = email, siret = siret, logo = logo, devise = devise))
+            loggerEvenement(TypeEvenement.MODIF_CONFIG.name, "Configuration mise à jour : name=$name | siret=$siret | devise=$devise")
         }
     }
 
@@ -148,15 +138,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun supdatePassword(passwordHash: String, passwordSalt: String) {
         viewModelScope.launch {
             val existing = repository.getInfos() ?: return@launch
-
-            repository.updateInfos(
-                existing.copy(
-                    passwordHash = passwordHash,
-                    passwordSalt = passwordSalt,
-                    updatedAt = System.currentTimeMillis(),
-                    isDirty = true
-                )
-            )
+            repository.updateInfos(existing.copy(passwordHash = passwordHash, passwordSalt = passwordSalt, updatedAt = System.currentTimeMillis(), isDirty = true))
+            loggerEvenement(TypeEvenement.MODIF_MOT_DE_PASSE.name, "Mot de passe modifié")
         }
     }
 
@@ -165,13 +148,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun addVendeur(vendeur: Vendeur) {
         viewModelScope.launch {
             val newVendeur = vendeur.copy(updatedAt = now(), isDirty = true)
-            repository.addVendeur(newVendeur )
+            repository.addVendeur(newVendeur)
+            loggerEvenement(TypeEvenement.AJOUT_VENDEUR.name, "Vendeur ajouté : ${vendeur.nom} (id=${vendeur.id})")
         }
     }
 
     fun deleteVendeur(vendeur: Vendeur) {
         viewModelScope.launch {
             repository.softDeleteVendeur(vendeur.id)
+            loggerEvenement(TypeEvenement.SUPPRESSION_VENDEUR.name, "Vendeur supprimé : ${vendeur.nom} (id=${vendeur.id})")
         }
     }
 
@@ -214,8 +199,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
 
             // NF525 Axe B : transaction atomique avec hash + numéro de séquence
-            repository.insertVenteSecurisee(vente, lignes)
+            val venteSignee = repository.insertVenteSecurisee(vente, lignes)
 
+            loggerEvenement(
+                type        = TypeEvenement.VENTE_VALIDEE.name,
+                description = "Vente validée | seq=${venteSignee.sequenceNumber} | " +
+                              "total=${venteSignee.total} | articles=${cartItems.sumOf { it.quantity }} | " +
+                              "hash=${venteSignee.hash}"
+            )
             decrementStocks(cartItems)
             clearCart()
         }
@@ -338,9 +329,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     fun addTable(name: String) {
         viewModelScope.launch {
-            repository.addTable(
-                AppTable(name = name).copy(updatedAt = now(), isDirty = true)
-            )
+            repository.addTable(AppTable(name = name).copy(updatedAt = now(), isDirty = true))
+            loggerEvenement(TypeEvenement.OUVERTURE_TABLE.name, "Table ouverte : $name")
             _tableItems.value = emptyList()
             loadTables()
         }
@@ -364,9 +354,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val table = _tables.value.find { it.id == tableId }
             if (table != null) {
-                repository.updateTable(
-                    table.copy(active = false, updatedAt = now(), isDirty = true)
-                )
+                repository.updateTable(table.copy(active = false, updatedAt = now(), isDirty = true))
+                loggerEvenement(TypeEvenement.FERMETURE_TABLE.name, "Table fermée : ${table.name} (id=$tableId)")
                 loadTables()
             }
         }
@@ -448,7 +437,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 )
             }
             // NF525 Axe B : transaction atomique
-            repository.insertVenteSecurisee(vente, lignes)
+            val venteSignee = repository.insertVenteSecurisee(vente, lignes)
+
+            loggerEvenement(
+                type        = TypeEvenement.VENTE_VALIDEE.name,
+                description = "Vente table encaissée | tableId=$tableId | seq=${venteSignee.sequenceNumber} | " +
+                              "total=${venteSignee.total} | articles=${itemsToPay.sumOf { it.quantity }} | " +
+                              "hash=${venteSignee.hash}"
+            )
 
             val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
             val invoice = Invoice(tableId = tableId, totalAmount = total)

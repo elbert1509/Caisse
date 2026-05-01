@@ -64,6 +64,13 @@ class CaisseRepository(
     // NF525 Axe A : seul le soft-delete est autorisé sur une vente
     suspend fun softDeleteVente(venteId: UUID) = venteDao.softDeleteVente(venteId)
 
+    // Requête directe pour éviter le problème Flow.first() vide dans deleteVenteWithStock
+    suspend fun getLignesForVenteOnce(venteId: UUID) = venteDao.getLignesForVenteOnce(venteId)
+
+    // Historique : Room @Transaction+@Relation gère le JOIN de manière fiable
+    fun getVentesCartWithDetails(sentinelId: UUID) = venteDao.getVentesCartWithDetails(sentinelId)
+    fun getVentesTablesWithDetails(sentinelId: UUID) = venteDao.getVentesTablesWithDetails(sentinelId)
+
     suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) =
         venteDao.insertVenteWithLignes(vente, lignes)
 

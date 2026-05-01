@@ -224,10 +224,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun deleteVenteWithStock(vente: Vente) {
         viewModelScope.launch {
             val ts = now()
-            // 1) Récupérer les lignes de la vente pour rétablir les stocks
-            val lignes = repository.getLignesForVente(vente.id).first()
+            // 1) Requête directe (suspend, pas Flow) — évite le bug Flow.first() vide
+            val lignes = repository.getLignesForVenteOnce(vente.id)
 
-            // 2) Rétablir les stocks
+            // 2) Rétablir les stocks pour chaque ligne
             lignes.forEach { l ->
                 val p = repository.getProduitById(l.produitId)
                 if (p != null) {
@@ -235,7 +235,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 }
             }
 
-            // 3) NF525 Axe A : soft-delete atomique via requêtes SQL (pas de @Delete physique)
+            // 3) NF525 Axe A : soft-delete atomique
             repository.softDeleteVente(vente.id)
             repository.venteDao.softDeleteLignesForVente(vente.id, ts)
 
@@ -617,55 +617,19 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
 
 
-    private val _ventesWithDetails = MutableStateFlow<List<VenteWithDetails>>(emptyList())
-    val ventesWithDetails: StateFlow<List<VenteWithDetails>> = _ventesWithDetails.asStateFlow()
+    // Room @Transaction+@Relation : fiable, auto-mis à jour, plus de construction manuelle
+    val ventesWithDetails: StateFlow<List<VenteWithDetails>> =
+        repository.getVentesCartWithDetails(sentinelPanier)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Compatibilité avec les appels LaunchedEffect dans HistoriqueScreen (devenu no-op)
+    fun loadVentesHistory() {}
 
-    fun loadVentesHistory() {
-        viewModelScope.launch {
-            repository.getAllVentes().collect { allVentes ->
-                val onlyCart = allVentes.filter { it.tableId ==  UUID.fromString("22222222-0000-2222-2222-222222222222") &&  !it.isDeleted}
-                val details = onlyCart.map { vente ->
-                    val lignes = repository.getLignesForVente(vente.id).first()
-                    val lignesAvecProduit = lignes.mapNotNull { ligne ->
-                        repository.getProduitById(ligne.produitId)?.let { produit ->
-                            VenteLigneWithProduit(
-                                ligne = ligne,
-                                produit = produit
-                            )
-                        }
-                    }
-                    VenteWithDetails(vente, lignesAvecProduit)
-                }
-                _ventesWithDetails.value = details
-            }
-        }
-    }
+    val ventesTablesWithDetails: StateFlow<List<VenteWithDetails>> =
+        repository.getVentesTablesWithDetails(sentinelPanier)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-
-    private val _ventesTablesWithDetails = MutableStateFlow<List<VenteWithDetails>>(emptyList())
-    val ventesTablesWithDetails: StateFlow<List<VenteWithDetails>> = _ventesTablesWithDetails.asStateFlow()
-
-    fun loadVentesTablesHistory() {
-        viewModelScope.launch {
-            repository.getAllVentes().collect { allVentes ->
-                val onlyTables = allVentes.filter { it.tableId != null && it.tableId != sentinelPanier && !it.isDeleted }
-                val details = onlyTables.map { vente ->
-                    val lignes = repository.getLignesForVente(vente.id).first()
-                    val lignesAvecProduit = lignes.mapNotNull { l ->
-                        repository.getProduitById(l.produitId)?.let { p ->
-                            VenteLigneWithProduit(
-                                ligne = l,
-                                produit = p
-                            )
-                        }
-                    }
-                    VenteWithDetails(vente, lignesAvecProduit)
-                }
-                _ventesTablesWithDetails.value = details
-            }
-        }
-    }
+    fun loadVentesTablesHistory() {}
     private suspend fun updateStocksForTickets(tickets: List<Ticket>) {
         tickets.forEach { ticket ->
             val produitActuel = repository.getProduitById(ticket.produit.id)

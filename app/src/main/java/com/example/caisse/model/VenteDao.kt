@@ -145,6 +145,21 @@ interface VenteDao {
     }
 
     /** NF525 — Vérifie la cohérence de toute la chaîne de hash. Retourne les IDs rompus. */
+    // ---- REQUÊTES FIABLES POUR L'HISTORIQUE ----
+
+    // Requête directe (suspend, pas Flow) — évite le problème Flow.first() vide
+    @Query("SELECT * FROM VenteLigne WHERE venteId = :venteId AND isDeleted = 0")
+    suspend fun getLignesForVenteOnce(venteId: UUID): List<VenteLigne>
+
+    // Room @Transaction + @Relation : Room génère le JOIN correctement, sans construction manuelle fragile
+    @Transaction
+    @Query("SELECT * FROM Vente WHERE tableId = :sentinelId AND isDeleted = 0 ORDER BY date DESC")
+    fun getVentesCartWithDetails(sentinelId: UUID): Flow<List<VenteWithDetails>>
+
+    @Transaction
+    @Query("SELECT * FROM Vente WHERE tableId IS NOT NULL AND tableId != :sentinelId AND isDeleted = 0 ORDER BY date DESC")
+    fun getVentesTablesWithDetails(sentinelId: UUID): Flow<List<VenteWithDetails>>
+
     @Transaction
     suspend fun verifierIntegriteChaineVentes(): List<UUID> {
         val toutes = getAllVentesOnce().sortedBy { it.sequenceNumber }

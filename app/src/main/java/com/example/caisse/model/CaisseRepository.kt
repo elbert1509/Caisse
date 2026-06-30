@@ -94,6 +94,7 @@ class CaisseRepository(
     suspend fun addTable(appTable: AppTable) = tableDao.addTable(appTable)
     suspend fun updateTable(appTable: AppTable) = tableDao.updateTable(appTable)
     suspend fun getActiveTables(): List<AppTable> = tableDao.getActiveTables()
+    fun getActiveTablesFlow(): kotlinx.coroutines.flow.Flow<List<AppTable>> = tableDao.getActiveTablesFlow()
     suspend fun addProductToTable(tableItem: TableItem) = tableDao.addProductToTable(tableItem)
     suspend fun updateProductInTable(tableItem: TableItem) = tableDao.updateProductInTable(tableItem)
     suspend fun deleteProductFromTable(tableId: UUID, productId: UUID) = tableDao.deleteProductFromTable(tableId, productId)

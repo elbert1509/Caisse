@@ -31,7 +31,14 @@ interface ProduitDao {
     @Query("SELECT * FROM produit WHERE isDeleted = 0")
     suspend fun getAllProduitsOnce(): List<Produit>
 
-    // NF525 : suppression physique de masse remplacée par soft-delete
-    @Query("UPDATE Produit SET isDeleted = 1, isDirty = 1, updatedAt = :ts")
+    // Sync : TOUS les produits y compris supprimés (soft-delete), pour propager la suppression
+    @Query("SELECT * FROM produit")
+    suspend fun getAllProduitsForSync(): List<Produit>
+
+    // NF525 : suppression physique de masse remplacée par soft-delete.
+    // isDirty = 0 VOLONTAIREMENT : un reset de masse reste LOCAL et ne se propage pas vers le cloud
+    // (sinon un "Effacer toutes les données" sur un appareil viderait tous les autres). Seules les
+    // suppressions UNITAIRES (softDeleteProduit, isDirty=1) sont propagées.
+    @Query("UPDATE Produit SET isDeleted = 1, isDirty = 0, updatedAt = :ts")
     suspend fun softDeleteAllProduits(ts: Long = System.currentTimeMillis())
 }

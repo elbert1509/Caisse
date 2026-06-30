@@ -25,6 +25,11 @@ interface TableDao {
     @Query("SELECT * FROM app_table WHERE active = 1")
     suspend fun getActiveTables(): List<AppTable>
 
+    // Flux réactif : émet automatiquement à chaque écriture en base (y compris par le SyncWorker),
+    // pour que l'écran des tables se mette à jour sans rechargement manuel.
+    @Query("SELECT * FROM app_table WHERE active = 1")
+    fun getActiveTablesFlow(): kotlinx.coroutines.flow.Flow<List<AppTable>>
+
     @Query("SELECT * FROM app_table")
     suspend fun getAllTablesOnce(): List<AppTable>
 
@@ -49,5 +54,8 @@ interface TableDao {
 
     @Query("SELECT * FROM table_item")
     suspend fun getAllTableItemsOnce(): List<TableItem>
+
+    @Query("SELECT * FROM table_item WHERE id = :id")
+    suspend fun getTableItemById(id: UUID): TableItem?
 
 }

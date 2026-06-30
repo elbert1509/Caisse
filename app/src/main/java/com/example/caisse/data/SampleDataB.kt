@@ -164,6 +164,14 @@ val sampleProductsBertrand = listOf(
         stock = 22,
         description = "Milkshake à la vanille"
     ),
+    Produit(
+        nom = "schweppes",
+        prix = 3.50,
+        image = drawableUri("schweppes"),
+        categoryId = JUS_ID,
+        stock = 22,
+        description = "Milkshake à la vanille"
+    ),
 
 
     // Vin
@@ -343,7 +351,7 @@ val sampleProductsBertrand = listOf(
     // Compléments
     Produit(
         nom = " Bâton de Manioc  ",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("manioc"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -352,7 +360,7 @@ val sampleProductsBertrand = listOf(
 
     Produit(
         nom = " Miodo  ",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("miodo"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -361,7 +369,7 @@ val sampleProductsBertrand = listOf(
 
     Produit(
         nom = " Plantain vapeur   ",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("plantainvap"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -370,7 +378,7 @@ val sampleProductsBertrand = listOf(
 
     Produit(
         nom = " Plantain tapé  ",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("tape"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -379,7 +387,7 @@ val sampleProductsBertrand = listOf(
 
     Produit(
         nom = " Riz  ",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("riz"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -388,7 +396,7 @@ val sampleProductsBertrand = listOf(
 
     Produit(
         nom = " Igname",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("igname"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -397,7 +405,7 @@ val sampleProductsBertrand = listOf(
 
     Produit(
         nom = " Aloko",
-        prix = 0.00,
+        prix = 3.00,
         image = drawableUri("alloco"),
         categoryId =  COMPLEMENT_ID,
         stock = 22,
@@ -527,7 +535,7 @@ val sampleProductsBertrand = listOf(
     Produit(
         nom = "Kondre ",
         prix = 25.00,
-        image = drawableUri("gombo"),
+        image = drawableUri("kondre"),
         categoryId =  GOMBO_ID,
         stock = 3,
         description =  "Plat à base de gombo"
@@ -540,8 +548,6 @@ val sampleProductsBertrand = listOf(
         stock = 3,
         description =  "Plat à base de gombo"
     ),
-
-
     )
 
 val sampleVendeursBertrand = listOf(

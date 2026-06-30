@@ -27,10 +27,15 @@ interface VendeurDao {
     @Query("SELECT * FROM Vendeur WHERE isDeleted = 0")
     fun getAllVendeursOnce(): List<Vendeur>
 
+    // Sync : tous les vendeurs y compris supprimés (soft-delete), pour propager la suppression
+    @Query("SELECT * FROM Vendeur")
+    fun getAllVendeursForSync(): List<Vendeur>
+
     @Query("SELECT * FROM vendeur WHERE id = :id")
     suspend fun getVendeurById(id: Int): Vendeur?
 
-    // NF525 : suppression physique de masse remplacée par soft-delete de masse
-    @Query("UPDATE vendeur SET isDeleted = 1, isDirty = 1, updatedAt = :ts")
+    // NF525 : suppression physique de masse remplacée par soft-delete de masse.
+    // isDirty = 0 VOLONTAIREMENT : reset de masse local, non propagé (voir ProduitDao.softDeleteAllProduits).
+    @Query("UPDATE vendeur SET isDeleted = 1, isDirty = 0, updatedAt = :ts")
     suspend fun softDeleteAllVendeurs(ts: Long = System.currentTimeMillis())
 }

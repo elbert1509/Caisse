@@ -56,9 +56,25 @@ class AuthViewModel : ViewModel() {
         _ui.value = _ui.value.copy(isSignedIn = false)
     }
 
-    fun enqueueSync(context: Context, tag: String = "sync") {
+    /** Lance une synchro ponctuelle et renvoie l'ID du travail pour pouvoir l'observer (spinner, toast). */
+    fun enqueueSync(context: Context, tag: String = "sync"): java.util.UUID {
         val req = OneTimeWorkRequestBuilder<SyncWorker>().addTag(tag).build()
         WorkManager.getInstance(context).enqueue(req)
+        return req.id
+    }
+
+    /**
+     * Synchro UNIQUE pour les déclencheurs répétitifs (polling de l'écran Tables) : si une synchro
+     * est déjà en cours/en file, on n'en empile pas une autre (ExistingWorkPolicy.KEEP). Évite de
+     * multiplier les workers quand périodique + polling + événements se chevauchent.
+     */
+    fun enqueueSyncUnique(context: Context, name: String = "sync_unique") {
+        val req = OneTimeWorkRequestBuilder<SyncWorker>().addTag("sync").build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            name,
+            androidx.work.ExistingWorkPolicy.KEEP,
+            req
+        )
     }
 
 

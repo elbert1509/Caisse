@@ -65,6 +65,8 @@ fun CategoriesScreen(
     // État du dialogue de renommage
     var renameTarget by remember { mutableStateOf<Category?>(null) }
     var renameText by remember { mutableStateOf(TextFieldValue("")) }
+    // État du dialogue de confirmation de suppression
+    var deleteTarget by remember { mutableStateOf<Category?>(null) }
 
     Scaffold(
         topBar = {
@@ -131,11 +133,30 @@ fun CategoriesScreen(
                             renameText = TextFieldValue(cat.name)
                         },
                         onDelete = {
-                            viewModelcategories.deleteCategory(cat)
+                            deleteTarget = cat
                         }
                     )
                 }
             }
+        }
+
+        // Confirmation de suppression
+        deleteTarget?.let { target ->
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                title = { Text("Supprimer la catégorie ?") },
+                text = { Text("Voulez-vous vraiment supprimer « ${target.name} » ? Cette action sera synchronisée sur vos autres appareils.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModelcategories.deleteCategory(target)
+                        deleteTarget = null
+                    }) { Text("Supprimer", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text("Annuler") }
+                }
+            )
         }
 
         if (renameTarget != null) {

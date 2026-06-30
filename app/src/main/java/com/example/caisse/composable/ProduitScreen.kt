@@ -3,11 +3,16 @@ package com.example.caisse.composable
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -25,6 +30,8 @@ import coil.compose.AsyncImage
 import com.example.caisse.data.Category
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
+import com.example.caisse.util.PRODUCT_DRAWABLES
+import com.example.caisse.util.drawableUri
 import com.example.caisse.util.formatPrice
 
 
@@ -50,8 +57,12 @@ fun ProductScreen(
     var renameBarcode by remember { mutableStateOf(TextFieldValue("")) }
 
     var productText by remember { mutableStateOf(TextFieldValue("")) }
+    var deleteTarget by remember { mutableStateOf<Produit?>(null) }
     val context = LocalContext.current
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Image choisie (formulaire d'ajout) : peut être une URI galerie OU une URI drawable.
+    var addImage by remember { mutableStateOf<String?>(null) }
+    var showAddDrawablePicker by remember { mutableStateOf(false) }
     val imagePickerLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenDocument()
@@ -62,18 +73,19 @@ fun ProductScreen(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                selectedImageUri = uri
+                addImage = uri.toString()
             }
         }
 
-    var editImageUri by remember { mutableStateOf<Uri?>(null) }
-
+    // Image choisie (boîte de modification).
+    var editImage by remember { mutableStateOf<String?>(null) }
+    var showEditDrawablePicker by remember { mutableStateOf(false) }
     val editImagePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            editImageUri = uri
+            if (uri != null) editImage = uri.toString()
         }
 
-    // Liste filtrée en fonction de la recherche
+    // Liste filtrée en fonction de la recherche, triée par ordre alphabétique (insensible à la casse)
     val filteredProducts = remember(products, productText.text, selectedCategory) {
         products.filter { produit ->
             val matchesText =
@@ -84,7 +96,7 @@ fun ProductScreen(
                 selectedCategory == null || produit.categoryId == selectedCategory!!.id
 
             matchesText && matchesCategory
-        }
+        }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.nom })
     }
 
     Scaffold(
@@ -121,13 +133,18 @@ fun ProductScreen(
                 onCategorySelected = { selectedCategory = it }
             )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { imagePickerLauncher.launch(arrayOf("image/*")) }) {
-                Text(if (selectedImageUri == null) "Choisir une photo" else "Changer la photo")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { imagePickerLauncher.launch(arrayOf("image/*")) }) {
+                    Text(if (addImage == null) "Choisir une photo" else "Changer la photo")
+                }
+                OutlinedButton(onClick = { showAddDrawablePicker = true }) {
+                    Text("Galerie de l'app")
+                }
             }
-            selectedImageUri?.let { uri ->
+            addImage?.let { img ->
                 Spacer(Modifier.height(8.dp))
                 AsyncImage(
-                    model = uri,
+                    model = img,
                     contentDescription = "Photo produit",
                     modifier = Modifier.size(90.dp)
                 )
@@ -139,11 +156,24 @@ fun ProductScreen(
                     val price = newPrice.text.trim().toDoubleOrNull()
                     val category = selectedCategory
                     if (name.isNotEmpty() && price != null && category != null) {
-                        viewModel.addProduit(name, price, category.id, imageUri = selectedImageUri?.toString())
-                        productText = TextFieldValue("")
-                        newPrice = TextFieldValue("")
-                        selectedImageUri = null
-                        selectedCategory = null
+                        // Interdire un doublon : même nom (insensible à la casse) dans la même catégorie
+                        val duplicate = products.any {
+                            it.categoryId == category.id &&
+                                    it.nom.trim().equals(name, ignoreCase = true)
+                        }
+                        if (duplicate) {
+                            Toast.makeText(
+                                context,
+                                "« $name » existe déjà dans la catégorie « ${category.name} »",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            viewModel.addProduit(name, price, category.id, imageUri = addImage)
+                            productText = TextFieldValue("")
+                            newPrice = TextFieldValue("")
+                            addImage = null
+                            selectedCategory = null
+                        }
                     }
                 },
                 modifier = Modifier.align(Alignment.End)
@@ -167,13 +197,32 @@ fun ProductScreen(
                             renameText = TextFieldValue(product.nom)
                             renamePrice = TextFieldValue(product.prix.toString())
                             renameCategory = categories.find { it.id == product.categoryId }
-                            editImageUri = product.image?.let { Uri.parse(it) }
+                            editImage = product.image
                         },
-                        onDelete = { viewModel.deleteProduit(product) },
+                        onDelete = { deleteTarget = product },
                         devise = viewModel.getInfos()?.devise ?: ""
                     )
                 }
             }
+        }
+
+        // Confirmation de suppression
+        deleteTarget?.let { target ->
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                title = { Text("Supprimer le produit ?") },
+                text = { Text("Voulez-vous vraiment supprimer « ${target.nom} » ? Cette action sera synchronisée sur vos autres appareils.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.deleteProduit(target)
+                        deleteTarget = null
+                    }) { Text("Supprimer", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text("Annuler") }
+                }
+            )
         }
 
         // Rename/Edit Dialog
@@ -205,15 +254,20 @@ fun ProductScreen(
                         )
                         Spacer(Modifier.height(8.dp))
 
-                        Button(onClick = { editImagePickerLauncher.launch("image/*") }) {
-                            Text(if (editImageUri == null) "Ajouter/Changer photo" else "Changer photo")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { editImagePickerLauncher.launch("image/*") }) {
+                                Text(if (editImage == null) "Ajouter/Changer photo" else "Changer photo")
+                            }
+                            OutlinedButton(onClick = { showEditDrawablePicker = true }) {
+                                Text("Galerie de l'app")
+                            }
                         }
 
-                        editImageUri?.let { uri ->
+                        editImage?.let { img ->
                             Spacer(Modifier.height(8.dp))
 
                             AsyncImage(
-                                model = uri,
+                                model = img,
                                 contentDescription = "Photo produit",
                                 modifier = Modifier.size(90.dp)
                             )
@@ -231,7 +285,7 @@ fun ProductScreen(
                                 nom = name,
                                 prix = price,
                                 categoryId = category.id,
-                                image = editImageUri?.toString() ?: target.image
+                                image = editImage ?: target.image
                             )
                             viewModel.updateProduit(updatedProduct)
                             viewModel.loggerEvenement("Produit modifié", name + " \nancien prix : " + target.prix + "\t\t\t nouveau prix : $price  " )
@@ -244,7 +298,64 @@ fun ProductScreen(
                 }
             )
         }
+
+        // Sélecteur d'image intégrée (formulaire d'ajout)
+        if (showAddDrawablePicker) {
+            DrawableGalleryDialog(
+                onPick = { name ->
+                    addImage = drawableUri(name)
+                    showAddDrawablePicker = false
+                },
+                onDismiss = { showAddDrawablePicker = false }
+            )
+        }
+
+        // Sélecteur d'image intégrée (boîte de modification)
+        if (showEditDrawablePicker) {
+            DrawableGalleryDialog(
+                onPick = { name ->
+                    editImage = drawableUri(name)
+                    showEditDrawablePicker = false
+                },
+                onDismiss = { showEditDrawablePicker = false }
+            )
+        }
     }
+}
+
+@Composable
+private fun DrawableGalleryDialog(
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Galerie de l'app") },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 80.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(PRODUCT_DRAWABLES, key = { it }) { name ->
+                    AsyncImage(
+                        model = drawableUri(name),
+                        contentDescription = name,
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clickable { onPick(name) }
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Fermer") }
+        }
+    )
 }
 
 @Composable

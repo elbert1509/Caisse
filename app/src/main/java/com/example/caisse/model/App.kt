@@ -1,20 +1,39 @@
 package com.example.caisse.model
-
 import android.app.Application
-import androidx.room.Room
-import com.example.caisse.data.CaisseDataBase
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
-class App : Application()  {
-
-    lateinit var database: CaisseDataBase
-        private set
+class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        database = Room.databaseBuilder(this, CaisseDataBase::class.java, "salon_database")
-            .allowMainThreadQueries()
-            // NF525 Axe C : pas de migration destructive — les migrations sont gérées dans CaisseDataBase
-            .addMigrations(*com.example.caisse.data.CaisseDataBase.getMigrations())
+        schedulePeriodicSync()
+    }
+
+    /**
+     * Synchro automatique de fond toutes les 15 minutes (minimum imposé par WorkManager).
+     * Sert de filet de sécurité : la fraîcheur "temps réel" vient surtout de la synchro
+     * événementielle (création de table, vente, ouverture d'app, pull-to-refresh).
+     * Ne s'exécute que si le réseau est disponible.
+     */
+    private fun schedulePeriodicSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
+
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .addTag("sync")
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "sync_periodic",
+            ExistingPeriodicWorkPolicy.KEEP, // garde la planification existante au redémarrage
+            request
+        )
     }
 }

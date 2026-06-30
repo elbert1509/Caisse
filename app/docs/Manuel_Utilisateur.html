@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>MaCaissePro — Manuel utilisateur</title>
+<style>
+  @page { size: A4; margin: 10mm 11mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 9.4px; line-height: 1.34; color: #1e293b; margin: 0;
+  }
+  h1 { font-size: 19px; margin: 0; color: #fff; }
+  .sub { color: #d9e2ff; font-size: 9.5px; margin-top: 2px; }
+  header {
+    background: linear-gradient(100deg,#3b3f9e,#5b21b6);
+    padding: 11px 14px; border-radius: 9px; margin-bottom: 9px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  header .badge {
+    background:#ffffff22; border:1px solid #ffffff55; color:#fff;
+    padding:5px 9px; border-radius:7px; font-size:8.6px; text-align:right; line-height:1.3;
+  }
+  .cols { column-count: 2; column-gap: 11px; }
+  section { break-inside: avoid; margin-bottom: 8px; }
+  h2 {
+    font-size: 10.6px; margin: 0 0 4px; color:#3b3f9e;
+    border-bottom: 1.4px solid #c7d2fe; padding-bottom: 2px;
+    display:flex; align-items:center; gap:5px;
+  }
+  h2 .n {
+    background:#3b3f9e; color:#fff; width:15px; height:15px; border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center; font-size:8.6px; flex:none;
+  }
+  ol, ul { margin: 0 0 0 14px; padding: 0; }
+  li { margin-bottom: 1.5px; }
+  p { margin: 0 0 3px; }
+  .tip {
+    background:#ecfdf5; border-left:3px solid #10b981; padding:4px 6px;
+    border-radius:4px; margin:4px 0;
+  }
+  .warn {
+    background:#fff7ed; border-left:3px solid #f59e0b; padding:4px 6px;
+    border-radius:4px; margin:4px 0;
+  }
+  .key { background:#eef2ff; border:1px solid #c7d2fe; border-radius:4px; padding:0 4px; font-weight:600; color:#3b3f9e; white-space:nowrap; }
+  .tile { display:inline-block; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:5px; padding:1.5px 5px; margin:1px; font-weight:600; font-size:8.8px; }
+  footer { margin-top:6px; padding-top:5px; border-top:1px solid #e2e8f0; color:#64748b; font-size:8.2px; text-align:center; }
+  b { color:#0f172a; }
+  .lead { background:#f8fafc; border:1px solid #e2e8f0; border-radius:7px; padding:7px 9px; margin-bottom:9px; font-size:9.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>MaCaissePro</h1>
+    <div class="sub">Manuel d'utilisation — caisse tactile &amp; imprimante Bluetooth</div>
+  </div>
+  <div class="badge">Gardez ce guide<br>près de la caisse</div>
+</header>
+
+<div class="lead">
+  <b>Bienvenue !</b> Ce guide vous apprend à utiliser la caisse au quotidien : ouvrir la session,
+  prendre et encaisser une commande, imprimer le ticket, gérer les tables et consulter les ventes.
+  L'écran est <b>tactile</b> : appuyez simplement sur les boutons. En cas de doute, le bouton
+  <span class="key">←</span> en haut à gauche revient toujours à l'écran précédent.
+</div>
+
+<div class="cols">
+
+  <section>
+    <h2><span class="n">1</span> Démarrer la journée</h2>
+    <ol>
+      <li>Allumez le terminal : l'application <b>MaCaissePro</b> s'ouvre automatiquement.</li>
+      <li>Si un écran de connexion apparaît, saisissez vos <b>identifiants</b> et validez.</li>
+      <li>Sur l'accueil, la caisse est <b>fermée</b>. Appuyez sur <span class="key">▶ Ouvrir la caisse</span> pour démarrer la session.</li>
+      <li>Le menu principal s'affiche avec les grandes tuiles de couleur.</li>
+    </ol>
+    <div class="tip">L'état <b>« Session ouverte »</b> s'affiche en haut. Tant que la caisse est fermée, vous ne pouvez pas encaisser.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span> Le menu d'accueil</h2>
+    <p>Cinq tuiles principales :</p>
+    <p>
+      <span class="tile">Prendre Commande</span>
+      <span class="tile">Historique</span>
+      <span class="tile">Exporter</span>
+      <span class="tile">Table</span>
+      <span class="tile">Gestion</span>
+    </p>
+    <p>L'icône <span class="key">⚙ Paramètres</span> (en haut) donne accès à l'imprimante Bluetooth et aux réglages.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span> Prendre une commande</h2>
+    <ol>
+      <li>Appuyez sur <span class="key">Prendre Commande</span>.</li>
+      <li>Choisissez une <b>catégorie</b> (boissons, plats…).</li>
+      <li>Appuyez sur chaque <b>produit</b> pour l'ajouter au panier. Appuyez plusieurs fois pour augmenter la quantité.</li>
+      <li>Le <b>panier</b> et le <b>total</b> se mettent à jour en bas de l'écran.</li>
+      <li>Pour retirer ou ajuster un article, utilisez les boutons <b>+ / −</b> dans le panier.</li>
+    </ol>
+    <div class="tip">Une photo accompagne chaque produit pour le retrouver d'un coup d'œil.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span> Encaisser &amp; rendre la monnaie</h2>
+    <ol>
+      <li>Quand le panier est complet, ouvrez le <b>Récapitulatif du panier</b>.</li>
+      <li>Vérifiez la liste et le <b>Total</b>.</li>
+      <li>Dans le champ <b>Paiement</b>, saisissez la somme remise par le client.</li>
+      <li>La <b>Monnaie</b> à rendre se calcule automatiquement.</li>
+      <li>Appuyez sur <span class="key">Confirmer la commande</span> pour valider la vente.</li>
+    </ol>
+    <div class="warn">Vérifiez toujours le <b>Total</b> et la <b>Monnaie</b> avant de confirmer : une vente confirmée est enregistrée.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span> Imprimer le ticket</h2>
+    <ol>
+      <li>Après confirmation, le <b>ticket</b> s'affiche.</li>
+      <li>Appuyez sur <span class="key">Imprimer</span> : l'imprimante Bluetooth intégrée édite le reçu.</li>
+      <li>Le même ticket peut être réimprimé depuis l'<b>Historique</b>.</li>
+    </ol>
+    <div class="warn">Rien ne s'imprime ? Vérifiez que l'imprimante est <b>connectée</b> (section 10) et qu'il reste du papier.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">6</span> Gérer les tables</h2>
+    <ol>
+      <li>Appuyez sur <span class="key">Table</span> pour voir le plan des tables.</li>
+      <li>Sélectionnez une table pour ouvrir son <b>détail</b> et lui rattacher une commande.</li>
+      <li>Vous pouvez ajouter des articles au fur et à mesure, puis encaisser la table au départ du client.</li>
+    </ol>
+    <div class="tip">Idéal en service à table : chaque table garde sa commande en cours jusqu'au paiement.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">7</span> Historique &amp; réimpression</h2>
+    <ol>
+      <li>Appuyez sur <span class="key">Historique</span>.</li>
+      <li>Retrouvez toutes les commandes passées (date, montant).</li>
+      <li>Ouvrez une commande pour la <b>consulter</b> ou <b>réimprimer son ticket</b>.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">8</span> Voir les ventes (Rapports)</h2>
+    <ol>
+      <li>Tuile <span class="key">Exporter</span> : rapports des ventes <b>du jour, de la semaine, du mois</b>.</li>
+      <li>Dans <b>Gestion → Dashboard</b> : graphiques (ventes par jour, par catégorie, meilleurs produits).</li>
+    </ol>
+    <div class="tip">Le Dashboard donne une vue claire de l'activité : utile en fin de journée.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">9</span> Gestion (catalogue &amp; stock)</h2>
+    <p>Tuile <span class="key">Gestion</span> — outils de configuration :</p>
+    <ul>
+      <li><b>Catégories</b> : créer / modifier les familles de produits.</li>
+      <li><b>Produits</b> : ajouter un article, prix, photo.</li>
+      <li><b>Stock</b> &amp; <b>Inventaire</b> : suivre et ajuster les quantités.</li>
+      <li><b>Entreprise</b> : nom, coordonnées imprimés sur le ticket.</li>
+      <li><b>Clôture</b> : clôturer la caisse en fin de journée.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">10</span> Imprimante Bluetooth</h2>
+    <ol>
+      <li>Ouvrez <span class="key">⚙ Paramètres</span> → Bluetooth.</li>
+      <li>Activez le Bluetooth si besoin, puis sélectionnez l'imprimante dans la liste.</li>
+      <li>Une fois <b>connectée</b>, l'impression des tickets est automatique.</li>
+    </ol>
+    <div class="tip">L'imprimante est intégrée au terminal : laissez le Bluetooth activé en permanence.</div>
+  </section>
+
+  <section>
+    <h2><span class="n">11</span> Clôturer la journée</h2>
+    <ol>
+      <li>Encaissez les dernières tables ouvertes.</li>
+      <li>Allez dans <b>Gestion → Clôture</b> et confirmez la clôture.</li>
+      <li>Consultez le récapitulatif des ventes du jour avant d'éteindre.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">12</span> Dépannage rapide</h2>
+    <ul>
+      <li><b>L'écran reste sur l'app</b> : c'est normal (mode caisse sécurisé).</li>
+      <li><b>Pas d'impression</b> : Bluetooth déconnecté ou plus de papier → section 10.</li>
+      <li><b>Impossible d'encaisser</b> : la caisse n'est pas ouverte → section 1.</li>
+      <li><b>Données pas à jour</b> : vérifiez le Wi‑Fi / réseau (synchronisation automatique).</li>
+      <li><b>Doute</b> : appuyez sur <span class="key">←</span> pour revenir, rien n'est perdu.</li>
+    </ul>
+    <div class="warn">Pour la maintenance technique (Wi‑Fi, mises à jour, sortie du mode caisse), contactez votre administrateur.</div>
+  </section>
+
+</div>
+
+<footer>
+  MaCaissePro — Manuel utilisateur · Conservez ce document près du terminal · En cas de problème technique, contactez votre administrateur.
+</footer>
+
+</body>
+</html>

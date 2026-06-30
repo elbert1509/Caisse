@@ -11,8 +11,8 @@ composeBom = "2024.09.00"
 navigationCompose = "2.9.5"
 navigationRuntimeKtxVersion = "2.9.5"
 work = "2.10.5"
-roomCompiler = "2.8.1"
-roomRuntime = "2.8.1"
+roomCompiler = "2.6.1"
+roomRuntime = "2.6.1"
 adapters = "3.2.0-alpha11"
 material3 = "1.4.0"
 runtime = "1.9.2"
@@ -99,6 +99,6 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref 
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version = "2.0.0-1.0.23" }
+ksp = { id = "com.google.devtools.ksp", version = "2.0.21-1.0.25" }
 google-gms-google-services = { id = "com.google.gms.google-services", version.ref = "googleGmsGoogleServices" }
 

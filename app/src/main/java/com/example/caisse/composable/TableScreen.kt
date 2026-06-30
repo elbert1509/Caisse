@@ -82,6 +82,17 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
         }
     }
 
+    // Polling avant-plan : tant que l'écran Tables est affiché, on synchronise à l'ouverture
+    // puis toutes les 45 s, pour que les tables créées/supprimées sur un autre appareil
+    // apparaissent rapidement sans attendre la synchro périodique de fond (15 min).
+    // Synchro UNIQUE : si une synchro est déjà en cours, on n'en empile pas une seconde.
+    LaunchedEffect(Unit) {
+        while (true) {
+            authViewModel.enqueueSyncUnique(context = ctx)
+            kotlinx.coroutines.delay(45_000)
+        }
+    }
+
     val columns = when {
         screenWidthDp >= 900 -> 4
         screenWidthDp >= 600 -> 3
@@ -141,6 +152,8 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
                                 onClick = {
                                     if (tableName.isNotBlank()) {
                                         menuViewModel.addTable(tableName)
+                                        // Pousser immédiatement la nouvelle table vers le cloud
+                                        authViewModel.enqueueSync(context = ctx, tag = "sync")
                                         showDialog = false
                                         tableName = ""
 
@@ -167,6 +180,8 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
                             TextButton(onClick = {
                                 tableToDelete?.let { t ->
                                     menuViewModel.deleteTable(t.id) // active=false, isDirty=true, updatedAt=now()
+                                    // Propager immédiatement la suppression vers le cloud
+                                    authViewModel.enqueueSync(context = ctx, tag = "sync")
                                 }
                                 showDeleteDialog = false
                                 tableToDelete = null

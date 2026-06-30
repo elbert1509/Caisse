@@ -3,6 +3,7 @@ package com.example.caisse.composable
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +37,16 @@ fun AppNavigation() {
     )
     val authViewModel = remember { AuthViewModel() }
     val isSignedIn = remember { FirebaseAuth.getInstance().currentUser != null }
+    val appContext = LocalContext.current
+
+    // Au lancement de l'app, si l'utilisateur est déjà connecté, on ne passe PAS par l'écran
+    // de login (donc enqueueSync n'y est pas appelé). On déclenche donc la synchro ici pour
+    // qu'une tablette déjà connectée récupère bien les données du cloud à chaque ouverture.
+    LaunchedEffect(isSignedIn) {
+        if (isSignedIn) {
+            authViewModel.enqueueSync(context = appContext, tag = "sync")
+        }
+    }
 
 
     NavHost(navController,

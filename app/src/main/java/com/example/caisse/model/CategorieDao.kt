@@ -28,10 +28,15 @@ interface CategorieDao {
     @Query("SELECT * FROM category WHERE isDeleted = 0")
     suspend fun getAllCategoryOnce(): List<Category>
 
+    // Sync : TOUTES les catégories y compris supprimées (soft-delete), pour propager la suppression
+    @Query("SELECT * FROM category")
+    suspend fun getAllCategoriesForSync(): List<Category>
+
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun get(id: UUID): Category?
 
-    // NF525 : suppression physique de masse remplacée par soft-delete
-    @Query("UPDATE category SET isDeleted = 1, isDirty = 1, updatedAt = :ts")
+    // NF525 : suppression physique de masse remplacée par soft-delete.
+    // isDirty = 0 VOLONTAIREMENT : reset de masse local, non propagé (voir ProduitDao.softDeleteAllProduits).
+    @Query("UPDATE category SET isDeleted = 1, isDirty = 0, updatedAt = :ts")
     suspend fun softDeleteAllCategories(ts: Long = System.currentTimeMillis())
 }

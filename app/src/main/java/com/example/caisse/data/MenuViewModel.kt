@@ -305,8 +305,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // ---- TABLES ----
 
-    private val _tables = MutableStateFlow<List<AppTable>>(emptyList())
-    val tables: StateFlow<List<AppTable>> = _tables.asStateFlow()
+    // Flux réactif issu de Room : se met à jour automatiquement quand le SyncWorker (ou une action
+    // locale) écrit des tables en base, sans rechargement manuel.
+    val tables: StateFlow<List<AppTable>> = repository.getActiveTablesFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _tableItems = MutableStateFlow<List<Ticket>>(emptyList())
     val tableItems: StateFlow<List<Ticket>> = _tableItems.asStateFlow()
@@ -321,11 +323,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         // ⚡ Charger les tables dès que le ViewModel est instancié
         loadTables()
     }
-    fun loadTables() {
-        viewModelScope.launch {
-            _tables.value = repository.getActiveTables()
-        }
-    }
+    // Conservée pour compatibilité avec les appelants existants. Le flux `tables` étant désormais
+    // réactif (Room Flow), aucun rechargement manuel n'est nécessaire.
+    fun loadTables() { /* no-op : `tables` est un flux réactif */ }
 
     fun addTable(name: String) {
         viewModelScope.launch {
@@ -352,7 +352,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
     fun deleteTable(tableId: UUID) {
         viewModelScope.launch {
-            val table = _tables.value.find { it.id == tableId }
+            val table = tables.value.find { it.id == tableId }
             if (table != null) {
                 repository.updateTable(table.copy(active = false, updatedAt = now(), isDirty = true))
                 loggerEvenement(TypeEvenement.FERMETURE_TABLE.name, "Table fermée : ${table.name} (id=$tableId)")
@@ -404,7 +404,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     }
 
     fun getTableById(id: UUID): AppTable? {
-        return _tables.value.find { it.id == id }
+        return tables.value.find { it.id == id }
     }
     fun payTable(tableId: UUID) {
         viewModelScope.launch {

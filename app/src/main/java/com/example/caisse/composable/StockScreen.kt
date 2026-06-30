@@ -45,6 +45,10 @@ import com.example.caisse.ui.theme.Slate900
 import com.example.caisse.util.formatPrice
 import kotlin.math.max
 
+/* Seuil d'alerte stock + couleur associée */
+private const val LOW_STOCK_THRESHOLD = 10
+private val LowStockRed = Color(0xFFDC2626)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
@@ -54,7 +58,11 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
         produits
             .filter { it.isActive } // on n’affiche que les produits actifs
             .map { it.toUiRow() }
-            .sortedByDescending { it.revenue }
+            // Stock faible (≤ 10) d'abord, puis CA potentiel décroissant
+            .sortedWith(
+                compareByDescending<UiRow> { it.stock <= LOW_STOCK_THRESHOLD }
+                    .thenByDescending { it.revenue }
+            )
     }
 
     val totalUnits = remember(lignes) { lignes.sumOf { it.stock } }
@@ -241,6 +249,10 @@ private fun StockRow(
     ratio: Float,
     devise: String
 ) {
+    val isLow = stock <= LOW_STOCK_THRESHOLD
+    val primaryTextColor = if (isLow) LowStockRed else Slate900
+    val secondaryTextColor = if (isLow) LowStockRed else Slate500
+
     Column {
         Row(
             Modifier.fillMaxWidth(),
@@ -248,14 +260,28 @@ private fun StockRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.titleSmall, color = Slate900)
-                Text(formatPrice(price, devise = devise) +" • stock: $stock", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                Text(
+                    name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = primaryTextColor,
+                    fontWeight = if (isLow) FontWeight.SemiBold else null
+                )
+                Text(
+                    formatPrice(price, devise = devise) + " • stock: $stock",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = secondaryTextColor
+                )
             }
-            Text( formatPrice(revenue,devise) , style = MaterialTheme.typography.titleSmall, color = Slate900)
+            Text(
+                formatPrice(revenue, devise),
+                style = MaterialTheme.typography.titleSmall,
+                color = primaryTextColor
+            )
         }
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
             progress = { ratio.coerceIn(0f, 1f) },
+            color = if (isLow) LowStockRed else MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(6.dp)

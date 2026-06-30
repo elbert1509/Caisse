@@ -128,29 +128,26 @@ class BluetoothViewModel : ViewModel() {
     fun printProforma(tableItems: List<Ticket>, total: Double, infos: ShopInfos?, invoiceId: UUID? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1) Reset + taille normale (évite le double-size résiduel)
+                // 1) Reset + taille normale
                 writeCmd(0x1B, 0x40)        // ESC @  (initialize)
-                writeCmd(0x1D, 0x21, 0x01)  // GS ! 0 (taille normale)
+                writeCmd(0x1D, 0x21, 0x00)  // GS ! 0 (taille normale - largeur/hauteur x1)
                 writeCmd(0x1B, 0x45, 0x00)  // ESC E 0 (pas gras)
 
-                // 2) Sélection police PETITE (Font B)
+                // 2) Sélection police plus petite (Font B) pour gagner de la place
                 writeCmd(0x1B, 0x4D, 0x01)  // ESC M 1
-
-                // 3) Code page pour accents (CP850)
-                writeCmd(0x1B, 0x74, 0x02)  // ESC t 2  (souvent = CP850)
 
                 val dateHeure = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date())
                 val invoiceNo = invoiceId?.let { invoiceNoFromId(it) }
                 val sb = StringBuilder()
+                sb.append("\u001B\u0061\u0001") // Alignement centré
                 sb.append("\r\n")
                 sb.append("*** ${infos?.name ?: ""} ***\r\n")
                 sb.append("Adresse: ${infos?.address ?: ""}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
                 sb.append("Date: $dateHeure\r\n")
-                sb.append("------------------------------\r\n")
-                sb.append("       NOTE PROVISOIRE        \r\n")
-                sb.append("    (Ceci n'est pas un ticket)\r\n")
-                sb.append("------------------------------\r\n")
+                sb.append(sepLine())
+                sb.append("NOTE PROVISOIRE\r\n")
+                sb.append("(Ceci n'est pas un ticket)\r\n")
                 sb.append(sepLine())
                 if (invoiceId != null){
                     sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
@@ -159,6 +156,7 @@ class BluetoothViewModel : ViewModel() {
                     sb.append("FACTURE CLIENT \r\n")
                     sb.append(sepLine())
                 }
+                sb.append("\u001B\u0061\u0000") // Alignement à gauche
 
                 sb.append(
                     formatLine58(
@@ -195,15 +193,10 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("Merci pour votre confiance\r\n")
                 sb.append("\r\n\r\n\r\n")
 
-                // IMPORTANT: encoder le texte avec la même code page
-               val text = StripAccents(sb.toString())
-                val bmp = textToBitmap58mm(text) // largeur 58mm
-                printBitmapEscPos(bmp, outputStream)
-
-
-                /*
-                   outputStream?.write(text.toByteArray(Charsets.US_ASCII))
-                   outputStream?.flush()*/
+                // Remplacement EUR et nettoyage des accents pour la compatibilité POS
+                val text = StripAccents(sb.toString().replace("€", "EUR"))
+                outputStream?.write(text.toByteArray(Charsets.UTF_8))
+                outputStream?.flush()
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -228,10 +221,9 @@ class BluetoothViewModel : ViewModel() {
                 }
 
                 writeCmd(0x1B, 0x40)
-                writeCmd(0x1D, 0x21, 0x01)
+                writeCmd(0x1D, 0x21, 0x00) // Taille normale
                 writeCmd(0x1B, 0x45, 0x00)
-                writeCmd(0x1B, 0x4D, 0x01)
-                writeCmd(0x1B, 0x74, 0x02)
+                writeCmd(0x1B, 0x4D, 0x01) // Font B (plus petit)
 
                 val dateHeure = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.FRANCE).format(Date())
                 // NF525 Axe B : numéro séquentiel ininterrompu
@@ -239,10 +231,11 @@ class BluetoothViewModel : ViewModel() {
                                 else invoiceNoFromId(invoiceId)
 
                 // TVA par défaut 20 % pour l'impression (ventilation exacte sur l'écran ticket)
-                val montantTVA = total * 20.0 / 120.0
+                val montantTVA = total * 5.0 / 120.0
                 val montantHT  = total - montantTVA
 
                 val sb = StringBuilder()
+                sb.append("\u001B\u0061\u0001") // Alignement centré
                 sb.append("\r\n")
                 sb.append("*** ${infos?.name ?: ""} ***\r\n")
                 sb.append("Adresse: ${infos?.address ?: ""}\r\n")
@@ -252,6 +245,7 @@ class BluetoothViewModel : ViewModel() {
                 sb.append(sepLine())
                 sb.append("TICKET N°: $invoiceNo\r\n")
                 sb.append(sepLine())
+                sb.append("\u001B\u0061\u0000") // Alignement à gauche
 
                 sb.append(
                     formatLine58(
@@ -281,7 +275,7 @@ class BluetoothViewModel : ViewModel() {
 
                 sb.append(sepLine())
                 sb.append("TOTAL TTC: ${formatPrice(total, infos?.devise)}\r\n")
-                sb.append("TVA (20%): ${formatPrice(montantTVA, infos?.devise)}\r\n")
+                sb.append("TVA (5%): ${formatPrice(montantTVA, infos?.devise)}\r\n")
                 sb.append("TOTAL HT : ${formatPrice(montantHT, infos?.devise)}\r\n")
 
                 if (signatureHash != null) {
@@ -296,9 +290,9 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("Merci de votre visite !\r\n")
                 sb.append("\r\n\r\n\r\n")
 
-                val text = StripAccents(sb.toString())
-                val bmp = textToBitmap58mm(text)
-                printBitmapEscPos(bmp, outputStream)
+                val text = StripAccents(sb.toString().replace("€", "EUR"))
+                outputStream?.write(text.toByteArray(Charsets.UTF_8))
+                outputStream?.flush()
 
                 onSuccess?.invoke()
             } catch (e: Exception) {
@@ -326,13 +320,13 @@ class BluetoothViewModel : ViewModel() {
         return "$a$q$p$t\r\n"
     }
 
-    private val LINE_CHARS_58 = 32
-    private fun sepLine(): String = "-".repeat(LINE_CHARS_58) + "\n"
+    private val LINE_CHARS_58 = 42
+    private fun sepLine(): String = "-".repeat(LINE_CHARS_58) + "\r\n"
     private fun formatLine58(article: String, qty: String, price: String, total: String): String {
-        val aW = 13
+        val aW = 20
         val qW = 4
-        val pW = 6
-        val tW = 6
+        val pW = 7
+        val tW = 8
 
         fun cut(s: String, w: Int) = if (s.length <= w) s else s.take(w)
 
@@ -341,7 +335,7 @@ class BluetoothViewModel : ViewModel() {
         val p = cut(price, pW).padStart(pW, ' ')
         val t = cut(total, tW).padStart(tW, ' ')
 
-        return "$a $q $p $t\n" // 13+1+4+1+6+1+6 = 32
+        return "$a $q $p $t\r\n" // 20+1+4+1+7+1+8 = 42
     }
 
 

@@ -47,6 +47,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -137,6 +138,28 @@ fun ParametreBluetooothScreen(
 
     val user  = com.google.firebase.Firebase.auth.currentUser
     val email = user?.email ?: "Utilisateur non connecté"
+
+    // État du bouton "Synchroniser" : spinner pendant la synchro + toast à la fin.
+    var isSyncing by remember { mutableStateOf(false) }
+    var syncWorkId by remember { mutableStateOf<java.util.UUID?>(null) }
+    LaunchedEffect(syncWorkId) {
+        val id = syncWorkId ?: return@LaunchedEffect
+        WorkManager.getInstance(context).getWorkInfoByIdFlow(id).collect { workInfo ->
+            if (workInfo != null && workInfo.state.isFinished) {
+                isSyncing = false
+                syncWorkId = null
+                val ok = workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED &&
+                        workInfo.outputData.getBoolean("ok", true)
+                val message = if (ok) {
+                    val p = workInfo.outputData.getInt("produits", 0)
+                    "Synchronisation réussie ($p produits)"
+                } else {
+                    "Échec de la synchronisation"
+                }
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -383,8 +406,17 @@ fun ParametreBluetooothScreen(
                     icon     = Icons.Filled.Sync,
                     iconTint = SemanticGreen,
                     title    = stringResource(R.string.text_synch),
-                    subtitle = "Envoyer les données vers le cloud",
-                    onClick  = { authVm.enqueueSync(context = context, tag = "sync") }
+                    subtitle = if (isSyncing) "Synchronisation en cours…" else "Envoyer les données vers le cloud",
+                    enabled  = !isSyncing,
+                    onClick  = {
+                        if (!isSyncing) {
+                            isSyncing = true
+                            syncWorkId = authVm.enqueueSync(context = context, tag = "sync")
+                        }
+                    },
+                    trailing = if (isSyncing) {
+                        { CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp) }
+                    } else null
                 )
                 HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
                 SettingItem(
@@ -637,12 +669,14 @@ private fun SettingItem(
     iconTint: Color,
     title: String,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -652,11 +686,15 @@ private fun SettingItem(
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Icon(
-            Icons.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-        )
+        if (trailing != null) {
+            trailing()
+        } else {
+            Icon(
+                Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            )
+        }
     }
 }
 

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "988409644169",
+    "project_id": "caisse-e2af3",
+    "storage_bucket": "caisse-e2af3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:988409644169:android:ab14f60fc49308f2d5f258",
+        "android_client_info": {
+          "package_name": "com.example.caisse"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCP5UlL8z4vUICvYhij_pcxsTK1zA-og1A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

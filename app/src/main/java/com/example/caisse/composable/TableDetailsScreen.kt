@@ -204,16 +204,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Button(
-                                    modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        menuViewModel.payTable(tableUuid)
-                                        navController.popBackStack()
-                                        authVm.enqueueSync(context = ctx, tag = "sync")
-                                    },
-                                    enabled = totaltable > 0
-                                ) { Text("Valider", maxLines = 1) }
-
+                                // Variante owner : pas de bouton "Valider" — consultation seule
                                 Button(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
@@ -287,9 +278,8 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(products.filter { it.categoryId == selecredCategoryID }) { product ->
-                            ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
-                                menuViewModel.addProductToTable(product.id, tableUuid)
-                            }
+                            // Variante owner : catalogue affiché à titre indicatif, ajout désactivé
+                            ProductItemHorizontal(product = product, devise = info?.devise ?: "") { }
                         }
                     }
                 }
@@ -348,9 +338,8 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             items(products.filter { it.categoryId == selecredCategoryID }) { product ->
-                                ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
-                                    menuViewModel.addProductToTable(product.id, tableUuid)
-                                }
+                                // Variante owner : catalogue affiché à titre indicatif, ajout désactivé
+                                ProductItemHorizontal(product = product, devise = info?.devise ?: "") { }
                             }
                         }
                     }
@@ -414,16 +403,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    menuViewModel.payTable(tableUuid)
-                                    navController.popBackStack()
-                                    authVm.enqueueSync(context = ctx, tag = "sync")
-                                },
-                                enabled = totaltable > 0
-                            ) { Text("Valider", maxLines = 1) }
-
+                            // Variante owner : pas de bouton "Valider" — consultation seule
                             Button(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
@@ -455,6 +435,8 @@ fun TableItemRow(
     onDecrease: () -> Unit
 )
 {
+    // Variante owner : consultation seule — les boutons +/- de modification des quantités
+    // sont retirés (la signature est conservée pour limiter le diff avec la branche caisse).
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -466,13 +448,5 @@ fun TableItemRow(
             text = "${ticket.produit.nom} (x${ticket.quantity})",
             modifier = Modifier.weight(1f)
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDecrease, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Remove, "Diminuer")
-            }
-            IconButton(onClick = onIncrease, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Add, "Augmenter")
-            }
-        }
     }
 }

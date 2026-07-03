@@ -35,16 +35,7 @@ fun BottomHome(
             icon = { Icon(Icons.Filled.Home, contentDescription = "Accueil") },
             label = { Text("Home") }
         )
-        NavigationBarItem(
-            selected = selectedIndex == 1,
-            onClick =
-                {
-                    onTabSelected(1)
-                    navController?.navigate("prendre_commande")
-                },
-            icon = { Icon(Icons.Filled.PointOfSale, contentDescription = "Commande") },
-            label = { Text("Commande") }
-        )
+        // Variante owner : pas de bouton "Commande" (supervision uniquement)
         NavigationBarItem(
             selected = selectedIndex == 2,
             onClick = { navController?.navigate("historique") },

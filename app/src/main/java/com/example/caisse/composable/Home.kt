@@ -224,8 +224,8 @@ fun ActionButton(data: HomeTileData, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
+// Variante owner : pas de tuile "Prendre Commande" (supervision uniquement)
 private fun defaultHomeButton(): List<HomeTileData> = listOf(
-    HomeTileData("Prendre Commande", Icons.Default.PointOfSale,     color = Brand600,       HomeActionButton.PRENDRE_COMMANDE),
     HomeTileData("Historique",        Icons.Default.History,          color = Accent500,      HomeActionButton.HISTORIQUE_COMMANDES),
     HomeTileData("Exporter",          Icons.Default.Share,            color = SemanticGreen,  HomeActionButton.EXPORTER),
     HomeTileData("Table",             Icons.Default.TableRestaurant,  color = SemanticOrange, HomeActionButton.TABLE),

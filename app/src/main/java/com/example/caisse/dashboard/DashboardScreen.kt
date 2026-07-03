@@ -46,10 +46,6 @@ import com.example.caisse.util.formatPrice
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel, menuViewModel: MenuViewModel) {
-    var showAdminDialog by remember { mutableStateOf(false) }
-    if (showAdminDialog) {
-        AdminExitDialog(onDismiss = { showAdminDialog = false })
-    }
     val weeklySales     by viewModel.weeklySales.collectAsState()
     val monthlySales    by viewModel.monthlySales.collectAsState()
     val salesByCategory by viewModel.salesByCategory.collectAsState()
@@ -65,14 +61,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel,
         topBar = {
             TopAppBar(
                 title = {
-                    Column(
-                        modifier = Modifier.combinedClickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {},
-                            onLongClick = { showAdminDialog = true } // appui long = accès admin (kiosk)
-                        )
-                    ) {
+                    Column {
                         Text("Tableau de bord", style = MaterialTheme.typography.titleLarge, color = Slate900)
                         Text("Aperçu des ventes", style = MaterialTheme.typography.bodySmall, color = Slate500)
                     }

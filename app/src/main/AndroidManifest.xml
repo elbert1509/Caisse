@@ -17,8 +17,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Démarrage automatique de la caisse au boot du pad (mode kiosk) -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
 
     <application
@@ -39,42 +37,17 @@
             android:theme="@style/Theme.Caisse">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Récepteur Device Owner : indispensable au mode kiosk verrouillé -->
-        <receiver
-            android:name=".kiosk.KioskAdminReceiver"
-            android:description="@string/app_name"
-            android:exported="true"
-            android:permission="android.permission.BIND_DEVICE_ADMIN">
-            <meta-data
-                android:name="android.app.device_admin"
-                android:resource="@xml/device_admin_receiver" />
-            <intent-filter>
-                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
-            </intent-filter>
-        </receiver>
-
+        <!-- Variante owner : pas de récepteur Device Admin ni de démarrage auto (pas de kiosk) -->
         <!-- Reçoit le résultat de l'installation silencieuse des mises à jour -->
         <receiver
             android:name=".kiosk.InstallResultReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.example.caisse.INSTALL_RESULT" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Relance la caisse au boot du pad et après une mise à jour silencieuse -->
-        <receiver
-            android:name=".kiosk.BootReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

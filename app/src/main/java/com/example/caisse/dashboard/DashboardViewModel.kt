@@ -14,6 +14,7 @@ import com.example.caisse.model.VenteDao
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlinx.coroutines.flow.map
 import java.io.File
@@ -150,109 +151,50 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
         }
     }
 
+    /**
+     * Génère le rapport de la période (journalier / hebdo / mensuel) en PDF — en-tête boutique,
+     * devise de la boutique, pagination automatique — puis ouvre le sélecteur de partage.
+     */
     fun exportRapportPdf(
         context: Context,
         title: String,
         items: List<ProductReport>,
         total: Double,
+        infos: com.example.caisse.data.ShopInfos? = null,
     ) {
-        // 1) Créer le doc PDF (A4 portrait)
-        val pdf = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // ~A4 en points (72dpi)
-        val page = pdf.startPage(pageInfo)
-        val canvas = page.canvas
+        viewModelScope.launch {
+            try {
+                val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.example.caisse.util.PdfReportGenerator.generateRapportProduits(
+                        destDir = context.cacheDir,
+                        infos = infos,
+                        title = title,
+                        items = items,
+                        total = total
+                    )
+                }
 
-        // Styles
-        val paintTitle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textSize = 18f
-            color = Color.BLACK
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date())
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    putExtra(Intent.EXTRA_SUBJECT, title)
+                    putExtra(Intent.EXTRA_TEXT, "$title — généré le $dateStr")
+                }
+                context.startActivity(Intent.createChooser(share, "Partager le rapport PDF"))
+            } catch (e: Exception) {
+                android.util.Log.e("DashboardViewModel", "Échec de génération du rapport PDF", e)
+                android.widget.Toast.makeText(
+                    context, "Échec de génération du rapport PDF", android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
         }
-        val paintSub = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 12f
-            color = Color.DKGRAY
-        }
-        val paintHeader = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textSize = 12f
-            color = Color.BLACK
-        }
-        val paintText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 12f
-            color = Color.BLACK
-        }
-        val line = Paint().apply {
-            color = Color.LTGRAY
-            strokeWidth = 1f
-        }
-
-        val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date())
-        var y = 40f
-        val left = 32f
-        val right = pageInfo.pageWidth - 32f
-
-        // Titre + date
-        canvas.drawText(title, left, y, paintTitle); y += 20f
-        canvas.drawText("Généré le $dateStr", left, y, paintSub); y += 16f
-
-        // Total
-        canvas.drawText("Chiffre d'affaires : € ${formatMoney(total)}", left, y, paintHeader); y += 18f
-        canvas.drawLine(left, y, right, y, line); y += 14f
-
-        // En-têtes de colonnes
-        val col1 = left
-        val col2 = left + 180f
-        val col3 = left + 280f
-        val col4 = right - 80f
-        canvas.drawText("Produit", col1, y, paintHeader)
-        canvas.drawText("Quantité", col2, y, paintHeader)
-        canvas.drawText("Montant", col3, y, paintHeader)
-        canvas.drawText("Stock", col4, y, paintHeader)
-
-        y += 14f
-        canvas.drawLine(left, y, right, y, line); y += 10f
-
-        // Lignes
-        items.forEach { r ->
-            // retour à la page si on déborde (simple: stop si plein)
-            if (y > pageInfo.pageHeight - 40) return@forEach
-            canvas.drawText(r.productName, col1, y, paintText)
-            canvas.drawText("${r.totalQuantity}", col2, y, paintText)
-            canvas.drawText("€ ${formatMoney(r.revenue)}", col3, y, paintText)
-            canvas.drawText("${r.productStock}", col4, y, paintText)
-            y += 16f
-        }
-
-        pdf.finishPage(page)
-
-        // 2) Sauvegarder dans le cache
-        val safeTitle = title.lowercase(Locale.ROOT).replace(" ", "_")
-        val file = File(context.cacheDir, "rapport_${safeTitle}_${System.currentTimeMillis()}.pdf")
-        pdf.writeTo(FileOutputStream(file))
-        pdf.close()
-
-        // 3) Partager via FileProvider
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-
-        val share = Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            putExtra(Intent.EXTRA_SUBJECT, title)
-            putExtra(Intent.EXTRA_TEXT, "$title — généré le $dateStr")
-        }
-        context.startActivity(Intent.createChooser(share, "Partager le rapport PDF"))
-    }
-
-    private fun formatMoney(value: Double): String {
-        return if (value % 1.0 == 0.0)
-            "%,.0f".format(Locale.FRANCE, value)
-        else
-            "%,.2f".format(Locale.FRANCE, value)
     }
 
 }

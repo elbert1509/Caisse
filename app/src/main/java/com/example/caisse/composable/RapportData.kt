@@ -100,7 +100,7 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
                         1 -> Triple("Rapport Hebdomadaire", weekList, revWeek)
                         else -> Triple("Rapport Mensuel", monthList, revMonth)
                     }
-                    dashboardViewModel.exportRapportPdf(navController.context, title, items, total)
+                    dashboardViewModel.exportRapportPdf(navController.context, title, items, total, devise)
                 }
             )
         },

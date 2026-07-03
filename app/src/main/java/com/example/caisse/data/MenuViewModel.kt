@@ -609,15 +609,21 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     private fun shareFile(context: Context, fileName: String, content: String) {
         val file = File(context.cacheDir, fileName)
         file.writeText(content)
+        shareFileAs(context, file, "text/csv")
+    }
+
+    /** Partage un fichier déjà écrit via le sélecteur Android (WhatsApp, mail, Drive...). */
+    private fun shareFileAs(context: Context, file: File, mimeType: String) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/csv"
+            type = mimeType
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, "Partager le fichier"))
     }
+
 
 
 

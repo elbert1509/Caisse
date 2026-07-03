@@ -84,10 +84,12 @@ fun LoginScreen(
                         CaisseDataBase.getDatabase(ctx).clearAllTables()
                     }
 
-                    // ♻️ réinitialiser les infos de sync
+                    // ♻️ réinitialiser les infos de sync (les deux clés de curseur : l'ancienne
+                    // "lastSyncAt" et l'actuelle "lastServerSyncAt") pour forcer une sync complète
                     prefs.edit()
                         .putString("uid", uid)
-                        .putLong("lastSyncAt", 0L) // ⚠️ force initial sync
+                        .putLong("lastSyncAt", 0L)
+                        .remove("lastServerSyncAt")
                         .apply()
                 }
 

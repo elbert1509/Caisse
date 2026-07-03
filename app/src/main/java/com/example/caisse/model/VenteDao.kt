@@ -214,6 +214,14 @@ interface VenteDao {
     @Query("SELECT * FROM VenteLigne WHERE id = :id")
     suspend fun getVenteLigneById(id: UUID): VenteLigne?
 
+    // Sync : ne baisse le flag dirty QUE si la ligne n'a pas été modifiée depuis sa lecture
+    // (sinon une modification faite pendant le push serait perdue sans jamais être poussée).
+    @Query("UPDATE Vente SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearVenteDirty(id: UUID, updatedAt: Long)
+
+    @Query("UPDATE VenteLigne SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearLigneDirty(id: UUID, updatedAt: Long)
+
     @Query("SELECT * FROM vente ORDER BY date DESC LIMIT 1")
     suspend fun getLastVente(): Vente?
 

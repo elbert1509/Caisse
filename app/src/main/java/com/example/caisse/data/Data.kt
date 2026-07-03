@@ -79,7 +79,9 @@ data class Produit(
 
 @Entity(tableName = "vendeur")
 data class Vendeur(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    // UUID (et pas auto-incrément) : deux appareils qui créent chacun un vendeur hors-ligne
+    // ne doivent pas entrer en collision sur le même id lors de la synchronisation.
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
     val nom: String,
     val prenom: String,
     // sync
@@ -96,7 +98,7 @@ data class Vendeur(
 data class Vente(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val date: Long = System.currentTimeMillis(),
-    val vendeurId: Int? = 1,
+    val vendeurId: UUID? = null,
     val total: Double,
     val tableId: UUID? =  UUID.fromString("22222222-0000-2222-2222-222222222222"),
     val sequenceNumber: Long = 0,
@@ -282,7 +284,9 @@ data class TableItem(
 
 @Entity(tableName = "logs_techniques")
 data class LogTechnique(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    // UUID (et pas auto-incrément) : les ids locaux entraient en collision entre appareils,
+    // ce qui écrasait/faisait sauter des logs JET lors de la synchronisation (NF525).
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
     val date: String, // Format ISO8601
     val typeEvenement: String, // ex: "OUVERTURE_SESSION", "ERREUR_SYSTEME", "MODIF_PRIX"
     val description: String,

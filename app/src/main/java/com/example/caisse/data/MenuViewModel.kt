@@ -114,17 +114,22 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // Infos
 
-    fun addInfos(name: String, address: String, phone: String, siret : String,   email: String, logo: Int? = null,devise : String,initialPassword: String="1234") {
+    fun addInfos(name: String, address: String, phone: String, siret : String,   email: String, logo: Int? = null,devise : String,initialPassword: String) {
         val salt = PasswordHasher.generateSalt()
         val hash = PasswordHasher.hash(initialPassword, salt)
         viewModelScope.launch {
-            repository.insertInfos(ShopInfos(1,name, address, phone, email, siret = siret, logo, passwordHash = hash, passwordSalt = salt, devise = devise))
+            // isDirty = true : sans ce flag, la fiche magasin n'était JAMAIS poussée vers le
+            // cloud (pushInfos n'envoie que le dirty) -> les nouveaux appareils ne recevaient
+            // ni les infos ni le mot de passe gestion.
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, siret = siret, logo, passwordHash = hash, passwordSalt = salt, devise = devise, updatedAt = now(), isDirty = true))
         }
     }
     fun updateInfos(name: String, address: String, phone: String, email: String, siret: String, logo: Int? = null, devise: String) {
         viewModelScope.launch {
             val existing = repository.getInfos() ?: return@launch
-            repository.updateInfos(existing.copy(name = name, address = address, phone = phone, email = email, siret = siret, logo = logo, devise = devise))
+            // isDirty = true + updatedAt : une édition de la fiche doit se propager aux autres
+            // appareils (elle restait locale auparavant).
+            repository.updateInfos(existing.copy(name = name, address = address, phone = phone, email = email, siret = siret, logo = logo, devise = devise, updatedAt = now(), isDirty = true))
             loggerEvenement(TypeEvenement.MODIF_CONFIG.name, "Configuration mise à jour : name=$name | siret=$siret | devise=$devise")
         }
     }
@@ -134,6 +139,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             repository.getInfos()
         }
     }
+
+    /** Fiche magasin en continu : émet dès que la sync l'importe (cas du nouvel appareil). */
+    fun observeInfos() = repository.observeInfos()
 
     fun supdatePassword(passwordHash: String, passwordSalt: String) {
         viewModelScope.launch {
@@ -168,7 +176,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
-    fun confirmerVente(vendeurId: Int? = 1) {
+    fun confirmerVente(vendeurId: UUID? = null) {
         viewModelScope.launch {
             val cartItems = cart.value
             if (cartItems.isEmpty()) return@launch
@@ -415,7 +423,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             val ts      = now()
             val vente = Vente(
                 id        = venteId,
-                vendeurId = 1,
+                vendeurId = null,
                 total     = itemsToPay.sumOf { it.produit.prix * it.quantity },
                 date      = ts,
                 tableId   = tableId,

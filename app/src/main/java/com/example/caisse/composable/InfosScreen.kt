@@ -51,28 +51,46 @@ fun InfosScreen(
     var expanded by remember { mutableStateOf(false) }
     val listDevise = listOf("FCFA", "€", "£", "US$")
     var showChangePassword by remember { mutableStateOf(false) }
+    // Mot de passe gestion défini à la CRÉATION de la fiche (plus de "1234" par défaut)
+    var initialPwd by remember { mutableStateOf("") }
+    var initialPwdConfirm by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        // getInfos() renvoie ShopInfos? (synchronement via runBlocking côté VM)
-        val info = withContext(Dispatchers.IO) { viewModel.getInfos() }
-        existing = info
-        if (info != null) {
-            // Mode lecture par défaut si déjà présent
-            isEdit = false
-            name = info.name
-            address = info.address
-            phone = info.phone
-            email = info.email
-            devise = info.devise
-        } else {
-            // Pas d’infos -> mode édition
-            isEdit = true
+        // Sur un nouvel appareil, la fiche peut arriver du cloud quelques secondes après
+        // l'ouverture de l'écran : on déclenche une sync et on OBSERVE la base (au lieu d'une
+        // lecture unique) pour afficher la fiche dès son import — et éviter que l'utilisateur
+        // en recrée une par-dessus celle du cloud.
+        androidx.work.WorkManager.getInstance(navController.context).enqueueUniqueWork(
+            "sync_unique",
+            androidx.work.ExistingWorkPolicy.KEEP,
+            androidx.work.OneTimeWorkRequestBuilder<com.example.caisse.model.SyncWorker>()
+                .addTag("sync").build()
+        )
+        viewModel.observeInfos().collect { info ->
+            val hadNone = existing == null
+            existing = info
+            if (info != null) {
+                // Remplir les champs à la 1re émission ou tant qu'on n'est pas en édition
+                if (hadNone || !isEdit) {
+                    isEdit = false
+                    name = info.name
+                    address = info.address
+                    phone = info.phone
+                    email = info.email
+                    devise = info.devise
+                    siret = info.siret
+                }
+            } else {
+                // Pas d’infos -> mode édition
+                isEdit = true
+            }
         }
     }
 
-    val canSave = name.isNotBlank() && email.isNotBlank()
+    val pwdOk = existing != null || (initialPwd.length >= 4 && initialPwd == initialPwdConfirm)
+    val canSave = name.isNotBlank() && email.isNotBlank() && pwdOk
 
     Scaffold(
         topBar = {
@@ -110,7 +128,8 @@ fun InfosScreen(
                                         email = email.trim(),
                                         siret = siret,
                                         logo = null,
-                                        devise = devise
+                                        devise = devise,
+                                        initialPassword = initialPwd.trim()
                                     )
                                 } else {
                                     viewModel.updateInfos(
@@ -243,6 +262,29 @@ fun InfosScreen(
                                     }
                                 }
                             }
+                            if (existing == null) {
+                                Spacer(Modifier.height(10.dp))
+                                OutlinedTextField(
+                                    value = initialPwd,
+                                    onValueChange = { initialPwd = it },
+                                    label = { Text("Mot de passe gestion (min. 4 caractères)") },
+                                    singleLine = true,
+                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                OutlinedTextField(
+                                    value = initialPwdConfirm,
+                                    onValueChange = { initialPwdConfirm = it },
+                                    label = { Text("Confirmer le mot de passe") },
+                                    singleLine = true,
+                                    isError = initialPwdConfirm.isNotEmpty() && initialPwd != initialPwdConfirm,
+                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                             Spacer(Modifier.height(18.dp))
                             OutlinedButton(onClick = { showChangePassword = true }) {
                                 Text("Changer le mot de passe")
@@ -265,7 +307,8 @@ fun InfosScreen(
                                                     email = email.trim(),
                                                     siret = siret,
                                                     logo = null,
-                                                    devise = devise
+                                                    devise = devise,
+                                                    initialPassword = initialPwd.trim()
                                                 )
                                             } else {
                                                 viewModel.updateInfos(
@@ -296,7 +339,10 @@ fun InfosScreen(
                             if (!canSave) {
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = "Le nom et l’email sont obligatoires.",
+                                    text = if (existing == null)
+                                        "Le nom, l’email et le mot de passe gestion (min. 4 caractères, confirmé) sont obligatoires."
+                                    else
+                                        "Le nom et l’email sont obligatoires.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Slate700
                                 )

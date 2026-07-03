@@ -50,7 +50,7 @@ class CaisseRepository(
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()
     suspend fun addVendeur(vendeur: Vendeur) = vendeurDao.insertVendeur(vendeur)
-    suspend fun softDeleteVendeur(id: Int) = vendeurDao.softDeleteVendeur(id)
+    suspend fun softDeleteVendeur(id: UUID) = vendeurDao.softDeleteVendeur(id)
 
     // --- VENTES ---
     fun getAllVentes() = venteDao.getAllVentes()
@@ -114,6 +114,7 @@ class CaisseRepository(
     suspend fun insertInfos(infos: ShopInfos) = infosDao.insertInfos(infos)
     suspend fun updateInfos(infos: ShopInfos) = infosDao.updateInfos(infos)
     suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
+    fun observeInfos(): Flow<ShopInfos?> = infosDao.getInfosFlow()
     suspend fun updatePassword(passwordHash: String, passwordSalt: String) = infosDao.updatePassword(passwordHash, passwordSalt)
 
     /**

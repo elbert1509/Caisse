@@ -22,6 +22,11 @@ interface CategorieDao {
     @Query("UPDATE category SET isDeleted = 1, isDirty = 1, updatedAt = :ts WHERE id = :id")
     suspend fun softDeleteCategory(id: UUID, ts: Long = System.currentTimeMillis())
 
+    // Sync : ne baisse le flag dirty QUE si la ligne n'a pas été modifiée depuis sa lecture
+    // (sinon une modification faite pendant le push serait perdue sans jamais être poussée).
+    @Query("UPDATE category SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearDirty(id: UUID, updatedAt: Long)
+
     @Query("SELECT * FROM category WHERE isDeleted = 0")
     fun getAllCategory(): Flow<List<Category>>
 

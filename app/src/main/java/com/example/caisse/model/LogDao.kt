@@ -6,6 +6,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.caisse.data.LogTechnique
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 @Dao
 interface LogDao {
@@ -19,9 +20,9 @@ interface LogDao {
     suspend fun getAllLogsOnce(): List<LogTechnique>
 
     @Query("SELECT * FROM logs_techniques WHERE id = :id LIMIT 1")
-    suspend fun getLogById(id: Long): LogTechnique?
+    suspend fun getLogById(id: UUID): LogTechnique?
 
     // NF525 Axe A : seule la mise à jour du flag de sync est autorisée (pas de modification fiscale)
     @Query("UPDATE logs_techniques SET isDirty = 0 WHERE id = :id")
-    suspend fun markSynced(id: Long)
+    suspend fun markSynced(id: UUID)
 }

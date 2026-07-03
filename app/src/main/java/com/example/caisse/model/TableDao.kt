@@ -36,6 +36,11 @@ interface TableDao {
     @Query("SELECT * FROM app_table WHERE id = :id")
     suspend fun getTableById(id: UUID): AppTable?
 
+    // Sync : ne baisse le flag dirty QUE si la ligne n'a pas été modifiée depuis sa lecture
+    // (sinon une modification faite pendant le push serait perdue sans jamais être poussée).
+    @Query("UPDATE app_table SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearTableDirty(id: UUID, updatedAt: Long)
+
     // ---------- TABLE ITEMS ----------
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTableItem(tableItem: TableItem)
@@ -57,5 +62,8 @@ interface TableDao {
 
     @Query("SELECT * FROM table_item WHERE id = :id")
     suspend fun getTableItemById(id: UUID): TableItem?
+
+    @Query("UPDATE table_item SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearTableItemDirty(id: UUID, updatedAt: Long)
 
 }

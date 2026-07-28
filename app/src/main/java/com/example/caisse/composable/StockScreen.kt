@@ -11,10 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,6 +74,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
     val totalRevenue = remember(lignes) { lignes.sumOf { it.revenue } }
     val maxRevenue = remember(lignes) { lignes.maxOfOrNull { it.revenue } ?: 0.0 }
     val shopInfos = viewModel.getInfos()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -77,6 +83,11 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
                     Column {
                         Text("Stock produits", style = MaterialTheme.typography.titleLarge, color = Slate900)
                         Text("Inventaire & CA potentiel", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.exportEtatStockPdf(context) }) {
+                        Icon(Icons.Filled.Share, contentDescription = "Partager l'état du stock", tint = Slate700)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)

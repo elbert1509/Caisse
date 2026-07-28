@@ -115,9 +115,12 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // Infos
 
     fun addInfos(name: String, address: String, phone: String, siret : String,   email: String, logo: Int? = null,devise : String,initialPassword: String) {
-        val salt = PasswordHasher.generateSalt()
-        val hash = PasswordHasher.hash(initialPassword, salt)
         viewModelScope.launch {
+            // PBKDF2 (120k itérations) : plusieurs secondes de calcul, jamais sur le thread UI
+            val salt = PasswordHasher.generateSalt()
+            val hash = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                PasswordHasher.hash(initialPassword, salt)
+            }
             // isDirty = true : sans ce flag, la fiche magasin n'était JAMAIS poussée vers le
             // cloud (pushInfos n'envoie que le dirty) -> les nouveaux appareils ne recevaient
             // ni les infos ni le mot de passe gestion.
@@ -624,6 +627,34 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         context.startActivity(Intent.createChooser(intent, "Partager le fichier"))
     }
 
+    /** Génère l'état du stock des produits actifs en PDF puis ouvre le sélecteur de partage. */
+    fun exportEtatStockPdf(context: Context) {
+        viewModelScope.launch {
+            try {
+                // Stock faible (≤ 10) d'abord pour attirer l'attention, puis ordre alphabétique
+                val actifs = produits.value
+                    .filter { it.isActive }
+                    .sortedWith(
+                        compareByDescending<Produit> { it.stock <= 10 }
+                            .thenBy { it.nom.lowercase() }
+                    )
+                val file = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    com.example.caisse.util.PdfReportGenerator.generateEtatStock(
+                        destDir = context.cacheDir,
+                        infos = getInfos(),
+                        produits = actifs
+                    )
+                }
+                shareFileAs(context, file, "application/pdf")
+            } catch (e: Exception) {
+                android.util.Log.e("MenuViewModel", "Échec de génération de l'état du stock", e)
+                android.widget.Toast.makeText(
+                    context, "Échec de génération de l'état du stock", android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
 
 
 
@@ -743,25 +774,31 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         tablesListener?.remove()
         tablesListener = null
     }
-    fun changePassword(
+    // suspend + Dispatchers.Default : deux PBKDF2 d'affilée (~plusieurs secondes) gelaient
+    // l'UI et provoquaient un ANR quand c'était appelé depuis un onClick.
+    suspend fun changePassword(
         oldPassword: String,
         newPassword: String
     ): Result<Unit> {
 
-        val shop = getInfos() ?: return Result.failure(Exception("Aucune config"))
+        val shop = repository.getInfos() ?: return Result.failure(Exception("Aucune config"))
 
-        val isValid = PasswordHasher.verify(
-            inputPassword = oldPassword,
-            storedHash = shop.passwordHash,
-            storedSalt = shop.passwordSalt
-        )
+        val isValid = kotlinx.coroutines.withContext(Dispatchers.Default) {
+            PasswordHasher.verify(
+                inputPassword = oldPassword,
+                storedHash = shop.passwordHash,
+                storedSalt = shop.passwordSalt
+            )
+        }
 
         if (!isValid) {
             return Result.failure(Exception("Ancien mot de passe incorrect"))
         }
 
         val newSalt = PasswordHasher.generateSalt()
-        val newHash = PasswordHasher.hash(newPassword, newSalt)
+        val newHash = kotlinx.coroutines.withContext(Dispatchers.Default) {
+            PasswordHasher.hash(newPassword, newSalt)
+        }
 
         supdatePassword(
             passwordHash = newHash,

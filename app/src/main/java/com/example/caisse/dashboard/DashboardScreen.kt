@@ -400,7 +400,7 @@ private fun KpiCard(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = formatPrice(amount,devise),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = Slate900
                 )
             }

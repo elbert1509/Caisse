@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.caisse"
         minSdk = 23
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.9"
+        versionCode = 11
+        versionName = "1.13"
         vectorDrawables.useSupportLibrary = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -38,6 +38,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     configurations.all {
        exclude("com.google.guava","listenablefuture")
@@ -101,5 +102,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material:1.9.0")
     implementation("androidx.compose.material3:material3:1.3.0") // exemple
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
 }

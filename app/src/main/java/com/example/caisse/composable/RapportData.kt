@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.caisse.data.MenuViewModel
 import androidx.navigation.NavController
@@ -231,7 +233,8 @@ private fun TotalBar(total: Double,devise : String) {
 
 @Composable
 private fun ProductLine(p: ProductReport, devise: String) {
-    // une petite card par ligne
+    val lowStock = p.productStock <= 5
+
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = cardElevation(2.dp),
@@ -241,25 +244,71 @@ private fun ProductLine(p: ProductReport, devise: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(Modifier.weight(0.5f)) {
-                Text(p.productName, style = MaterialTheme.typography.titleSmall, color = Slate900)
-                Spacer(Modifier.height(2.dp))
-                Text("${p.totalQuantity} vendu(s)", style = MaterialTheme.typography.bodySmall, color = Slate700)
+            // --- Gauche : nom + quantité vendue
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = p.productName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Slate900,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    QtyBadge(p.totalQuantity)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "vendu(s)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
             }
-            Text(formatPrice(p.revenue,devise),Modifier.weight(0.1f), style = MaterialTheme.typography.titleSmall, color = Slate900)
-            Column(Modifier.weight(0.4f)) {
-                Text("Stock", style = MaterialTheme.typography.titleSmall, color = Slate900)
-                Spacer(Modifier.height(2.dp))
-                Text("${p.productStock} ", style = MaterialTheme.typography.bodySmall, color = Slate700)
+
+            Spacer(Modifier.width(12.dp))
+
+            // --- Droite : CA + stock
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = formatPrice(p.revenue, devise),
+                    style = MaterialTheme.typography.titleSmall
+                        .copy(fontWeight = FontWeight.SemiBold),
+                    color = Slate900,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Stock : ${p.productStock}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (lowStock) Color(0xFFDC2626) else Slate500,
+                    maxLines = 1
+                )
             }
         }
     }
 }
 
+@Composable
+private fun QtyBadge(qty: Int) {
+    Box(
+        modifier = Modifier
+            .background(Color(0xFFECFDF5), MaterialTheme.shapes.small)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = "×$qty",
+            style = MaterialTheme.typography.labelMedium
+                .copy(fontWeight = FontWeight.SemiBold),
+            color = Color(0xFF047857)
+        )
+    }
+}
 private fun Double.formatMoney(): String {
     val v = this
     return if (v % 1.0 == 0.0) "%,.0f".format(java.util.Locale.FRANCE, v)

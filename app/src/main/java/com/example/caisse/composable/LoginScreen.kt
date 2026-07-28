@@ -5,6 +5,8 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.MenuViewModel
+import com.example.caisse.kiosk.AdminExitDialog
 import com.example.caisse.model.AuthViewModel
 import com.example.caisse.ui.theme.MintEnd
 import com.example.caisse.ui.theme.MintStart
@@ -67,7 +70,10 @@ fun LoginScreen(
     val ui by vm.ui.collectAsState()
     var isSignUp by remember { mutableStateOf(false) }
     var showPassword by remember { mutableStateOf(false) }
-
+    var showAdminDialog by remember { mutableStateOf(false) }
+    if (showAdminDialog) {
+        AdminExitDialog(onDismiss = { showAdminDialog = false })
+    }
     // Redirige si connecté
     if (ui.isSignedIn) {
         LaunchedEffect(ui.isSignedIn) {
@@ -120,7 +126,14 @@ fun LoginScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                            onLongClick = { showAdminDialog = true } // appui long = accès admin (kiosk)
+                        )
+                    ) {
                         Text(
                             text = if (isSignUp) "Créer un compte" else "Connexion",
                             style = MaterialTheme.typography.titleLarge,

@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.caisse.data.MenuViewModel
+import kotlinx.coroutines.launch
 
 
 @Composable
@@ -19,6 +20,7 @@ fun ChangePasswordDialog(
     var confirmPwd by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val canSubmit = oldPwd.isNotBlank() && newPwd.isNotBlank() && confirmPwd.isNotBlank()
 
@@ -74,13 +76,21 @@ fun ChangePasswordDialog(
                     }
 
                     isSubmitting = true
-                    val result = viewModel.changePassword(oldPwd, newPwd)
-                    isSubmitting = false
+                    scope.launch {
+                        val result = viewModel.changePassword(oldPwd, newPwd)
+                        isSubmitting = false
 
-                    if (result.isSuccess) onDismiss()
-                    else error = result.exceptionOrNull()?.message ?: "Erreur"
+                        if (result.isSuccess) onDismiss()
+                        else error = result.exceptionOrNull()?.message ?: "Erreur"
+                    }
                 }
-            ) { Text("Valider") }
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Valider")
+                }
+            }
         },
         dismissButton = {
             TextButton(enabled = !isSubmitting, onClick = onDismiss) {

@@ -30,8 +30,10 @@ import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.LogoDev
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Warehouse
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,6 +65,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -253,6 +259,8 @@ private fun PasswordGate(
 ) {
     var pwd by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var isChecking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -290,12 +298,28 @@ private fun PasswordGate(
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
-                enabled = pwd.isNotBlank(),
+                enabled = pwd.isNotBlank() && !isChecking,
                 onClick = {
-                    val ok = checkPwd( pwd,infos)
-                    if (ok) onUnlock() else error = "Mot de passe incorrect."
+                    // PBKDF2 = calcul volontairement lent : hors du thread UI, sinon
+                    // l'écran gèle plusieurs secondes (ANR / crash).
+                    isChecking = true
+                    scope.launch {
+                        val ok = withContext(Dispatchers.Default) { checkPwd(pwd, infos) }
+                        isChecking = false
+                        if (ok) onUnlock() else error = "Mot de passe incorrect."
+                    }
                 }
-            ) { Text("Entrer") }
+            ) {
+                if (isChecking) {
+                    CircularProgressIndicator(
+                        Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Entrer")
+                }
+            }
         }
     }
 }

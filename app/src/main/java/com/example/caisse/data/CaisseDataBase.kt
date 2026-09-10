@@ -12,6 +12,7 @@ import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.LogDao
 import com.example.caisse.model.ProduitDao
+import com.example.caisse.model.SessionCaisseDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
@@ -30,9 +31,10 @@ import com.example.caisse.model.VenteDao
         ShopInfos::class,
         LogTechnique::class,
         Cloture::class,
-        EtatCaisse::class
+        EtatCaisse::class,
+        SessionCaisse::class
     ],
-    version = 13,
+    version = 17,
     exportSchema = true   // NF525 : traçabilité des évolutions du schéma
 )
 @TypeConverters(UUIDConverters::class)
@@ -46,6 +48,7 @@ abstract class CaisseDataBase : RoomDatabase() {
     abstract fun infosDao(): InfosDao
     abstract fun logDao(): LogDao
     abstract fun clotureDao(): ClotureDao
+    abstract fun sessionCaisseDao(): SessionCaisseDao
 
     companion object {
         @Volatile
@@ -57,7 +60,7 @@ abstract class CaisseDataBase : RoomDatabase() {
                     context.applicationContext,
                     CaisseDataBase::class.java,
                     "caisse_database"
-                ).addMigrations(*MIGRATIONS_TO_13)
+                ).addMigrations(*MIGRATIONS_TO_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                     .fallbackToDestructiveMigration(false)
                     .build()
                 INSTANCE = instance

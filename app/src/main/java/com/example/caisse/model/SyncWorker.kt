@@ -8,6 +8,7 @@ import com.example.caisse.R
 import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.LegacyIds
 import com.example.caisse.data.Produit
+import com.example.caisse.data.TypeEvenement
 import com.example.caisse.data.Vente
 import com.example.caisse.data.VenteLigne
 import com.google.firebase.Timestamp
@@ -101,12 +102,17 @@ class SyncWorker(
             }
         }
 
+        // 0) Clôture automatique des caisses vendeur oubliées ouvertes, avant le push pour que
+        // la fermeture soit propagée aux autres appareils dans le même passage.
+        step("clôture auto caisses") { autoCloseCaissesOubliees(dbLocal.sessionCaisseDao(), infosDao, logDao) }
+
         // 1) PUSH : envoyer ce qui est dirty (Produit, Vente, VenteLigne)
         step("push produits") { pushDirtyProduits(cloud, uid, produitDao, isInitialSync) }
         step("push categories") { pushDirtyCategories(cloud, uid, categorieDao, isInitialSync) }
         step("push ventes") { pushDirtyVentes(cloud, uid, venteDao, isInitialSync) }
         step("push venteLignes") { pushDirtyVenteLignes(cloud, uid, venteDao, isInitialSync) }
         step("push vendeurs") { pushDirtyVendeurs(cloud, uid, vendeurDao) }
+        step("push sessions") { pushDirtySessions(cloud, uid, dbLocal.sessionCaisseDao()) }
         step("push infos") { pushInfos(cloud, uid, infosDao) }
         step("push tables") { pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync) }
         step("push table_items") { pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync) }
@@ -119,6 +125,7 @@ class SyncWorker(
         step("pull tables") { pullTablesSince(cloud, uid, sinceTs, dbLocal.tableDao()) }
         step("pull table_items") { pullTableItemsSince(cloud, uid, sinceTs, dbLocal.tableDao(), produitDao) }
         step("pull vendeurs") { pullVendeursSince(cloud, uid, sinceTs, vendeurDao) }
+        step("pull sessions") { pullSessionsSince(cloud, uid, sinceTs, dbLocal.sessionCaisseDao()) }
         step("pull ventes") { pullVentesSince(cloud, uid, sinceTs, venteDao) }
         step("pull venteLignes") { pullVenteLignesSince(cloud, uid, sinceTs, venteDao, produitDao) }
         step("pull infos") { pullInfos(cloud, uid, infosDao) }
@@ -282,6 +289,65 @@ class SyncWorker(
                 .set(vendeurToMap(v.copy(isDirty = false)) + serverStamp())
                 .await()
             vendeurDao.clearDirty(v.id, v.updatedAt)
+        }
+    }
+
+    /**
+     * Clôture automatique : une caisse vendeur oubliée ouverte (jamais fermée manuellement)
+     * empoisonne le rattachement des ventes au jour métier (voir bucketVentesParJourMetier côté
+     * dashboard) — toute vente ultérieure de ce vendeur retombe sur ce très ancien jour métier.
+     * Dès que l'heure de clôture configurée (5h00 par défaut, réglable par le gérant) est passée,
+     * on force la fermeture de toute session encore ouverte depuis avant cette heure aujourd'hui.
+     */
+    private suspend fun autoCloseCaissesOubliees(
+        sessionCaisseDao: SessionCaisseDao,
+        infosDao: com.example.caisse.model.InfosDao,
+        logDao: LogDao
+    ) {
+        val heureCloture = infosDao.getInfos()?.heureClotureAuto ?: 5
+        val zone = java.time.ZoneId.systemDefault()
+        val cutoffToday = java.time.LocalDate.now(zone)
+            .atTime(heureCloture.coerceIn(0, 23), 0)
+            .atZone(zone)
+            .toInstant()
+            .toEpochMilli()
+
+        if (System.currentTimeMillis() < cutoffToday) return
+
+        val ouvertes = sessionCaisseDao.getOpenSessionsOnce()
+        for (session in ouvertes) {
+            if (session.dateOuverture >= cutoffToday) continue // ouverte après l'heure de clôture d'aujourd'hui : encore valide
+
+            sessionCaisseDao.closeSessionAt(session.id, cutoffToday)
+
+            val date = java.time.LocalDateTime.now().toString()
+            val description = "Fermeture automatique de la caisse (heure de clôture ${heureCloture}h00) | vendeur=${session.idVendeurOuverture}"
+            val contenu = "$date|${TypeEvenement.FERMETURE_SESSION.name}|$description|${session.idVendeurOuverture ?: ""}"
+            val empreinte = com.example.caisse.util.FiscalHashUtils.sha256(contenu)
+            logDao.insertLog(
+                com.example.caisse.data.LogTechnique(
+                    date = date,
+                    typeEvenement = TypeEvenement.FERMETURE_SESSION.name,
+                    description = description,
+                    idVendeur = session.idVendeurOuverture,
+                    empreinte = empreinte
+                )
+            )
+        }
+    }
+
+    private suspend fun pushDirtySessions(
+        cloud: FirebaseFirestore,
+        uid: String,
+        sessionCaisseDao: SessionCaisseDao
+    ) {
+        val list = sessionCaisseDao.getDirtySessions()
+        for (s in list) {
+            cloud.collection("users").document(uid)
+                .collection("sessions_caisse").document(s.id.toString())
+                .set(sessionToMap(s.copy(isDirty = false)) + serverStamp())
+                .await()
+            sessionCaisseDao.clearDirty(s.id, s.updatedAt)
         }
     }
 
@@ -651,6 +717,31 @@ class SyncWorker(
         }
     }
 
+    private suspend fun pullSessionsSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        sinceTs: Timestamp?,
+        sessionCaisseDao: SessionCaisseDao
+    ) {
+        val snap = pullSnapshot(cloud, uid, "sessions_caisse", sinceTs)
+
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val data = doc.data ?: continue
+                val remote = mapToSession(data)
+                val local = sessionCaisseDao.getSessionById(remote.id)
+                if (local == null || !local.isDirty) {
+                    // upsert : une session distante fermée (dateFermeture) doit remplacer la
+                    // version locale encore ouverte, et inversement si la locale est déjà dirty.
+                    sessionCaisseDao.upsert(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Session caisse invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
+            }
+        }
+    }
+
     private suspend fun pullCloturesSince(
         cloud: FirebaseFirestore,
         uid: String,
@@ -772,6 +863,7 @@ class SyncWorker(
         "passwordHash" to i.passwordHash,
         "passwordSalt" to i.passwordSalt,
         "devise" to i.devise,
+        "heureClotureAuto" to i.heureClotureAuto,
         "updatedAt" to i.updatedAt,
         "isDeleted" to i.isDeleted
         )
@@ -797,6 +889,7 @@ class SyncWorker(
                 ?: "",
 
         devise = m["devise"] as? String ?: "FCFA",
+        heureClotureAuto = (m["heureClotureAuto"] as? Number)?.toInt() ?: 5,
 
         // si tu as ces champs dans ShopInfos
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
@@ -920,6 +1013,8 @@ class SyncWorker(
         "id" to v.id.toString(),
         "nom" to v.nom,
         "prenom" to v.prenom,
+        "pinHash" to v.pinHash,
+        "pinSalt" to v.pinSalt,
         "updatedAt" to v.updatedAt,
         "isDeleted" to v.isDeleted
     )
@@ -935,8 +1030,29 @@ class SyncWorker(
         },
         nom = m["nom"] as String,
         prenom = m["prenom"] as String,
+        pinHash = m["pinHash"] as? String ?: "",
+        pinSalt = m["pinSalt"] as? String ?: "",
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDeleted = m["isDeleted"] as? Boolean ?: false,
+        isDirty = false
+    )
+
+    private fun sessionToMap(s: com.example.caisse.data.SessionCaisse) = mapOf(
+        "id" to s.id.toString(),
+        "dateOuverture" to s.dateOuverture,
+        "dateFermeture" to s.dateFermeture,
+        "jourMetier" to s.jourMetier,
+        "idVendeurOuverture" to s.idVendeurOuverture?.toString(),
+        "updatedAt" to s.updatedAt
+    )
+
+    private fun mapToSession(m: Map<String, Any?>) = com.example.caisse.data.SessionCaisse(
+        id = parseUuidOrNull(m["id"] as? String) ?: throw IllegalArgumentException("session.id invalide"),
+        dateOuverture = (m["dateOuverture"] as? Number)?.toLong() ?: 0L,
+        dateFermeture = (m["dateFermeture"] as? Number)?.toLong(),
+        jourMetier = m["jourMetier"] as? String ?: "",
+        idVendeurOuverture = parseUuidOrNull(m["idVendeurOuverture"] as? String),
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDirty = false
     )
 

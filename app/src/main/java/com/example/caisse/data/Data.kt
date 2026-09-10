@@ -84,6 +84,9 @@ data class Vendeur(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val nom: String,
     val prenom: String,
+    // PIN à 4 chiffres défini par le gérant pour la connexion du vendeur (vide = pas encore défini)
+    val pinHash: String = "",
+    val pinSalt: String = "",
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -160,13 +163,19 @@ data class VenteLigneWithProduit(
 data class VenteWithDetails(
     @Embedded val vente: Vente,
 
+    // NF525 : les lignes supprimées ne sont jamais effacées physiquement (traçabilité), donc
+    // cette relation Room (qui ne filtre pas isDeleted) peut renvoyer à la fois l'ancienne ligne
+    // supprimée et sa remplaçante après une correction de panier — d'où lignesActives ci-dessous.
     @Relation(
         entity = VenteLigne::class,
         parentColumn = "id",
         entityColumn = "venteId"
     )
     val lignes: List<VenteLigneWithProduit>
-)
+) {
+    val lignesActives: List<VenteLigneWithProduit>
+        get() = lignes.filter { !it.ligne.isDeleted }
+}
 
 data class AuthUiState(
     val email: String = "",
@@ -235,6 +244,8 @@ data class ShopInfos (
     val passwordHash: String,
     val passwordSalt: String,
     val devise : String,
+    // Heure (0-23) à laquelle une caisse vendeur encore ouverte est fermée automatiquement.
+    val heureClotureAuto: Int = 5,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -246,6 +257,8 @@ data class AppTable(
     @PrimaryKey val id: UUID = UUID.randomUUID(),
     val name: String,
     var active: Boolean = true,
+    // Vendeur propriétaire de la table (celui qui l'a créée ou qui l'a prise en premier)
+    val vendeurId: UUID? = null,
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -358,6 +371,34 @@ data class EtatCaisse(
     val idVendeurOuverture: UUID? = null
 )
 
+/**
+ * Historique des ouvertures/fermetures de caisse : permet de rattacher une vente au
+ * "jour métier" (jourMetier = date d'ouverture) plutôt qu'au jour calendaire, pour que les
+ * ventes réalisées après minuit tant que la caisse de la veille n'est pas fermée comptent
+ * pour la veille.
+ */
+@Entity(tableName = "session_caisse")
+data class SessionCaisse(
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val dateOuverture: Long, // epoch millis
+    val dateFermeture: Long? = null, // null tant que la session est ouverte
+    val jourMetier: String, // LocalDate.toString() du jour d'ouverture
+    val idVendeurOuverture: UUID? = null,
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = true
+)
+
 data class SalesData(val label: String, val amount: Double)
 data class ProductSale(val productName: String, val totalQuantity: Int)
+
+// Vue live du gérant : statut de la caisse de chaque vendeur + ses ventes en session.
+data class VendeurSuiviUi(
+    val vendeurId: UUID,
+    val nom: String,
+    val ouverte: Boolean,
+    val heureOuverture: Long?,
+    val heureFermeture: Long?,
+    val totalVentesSession: Double
+)
 

@@ -54,6 +54,7 @@ import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Ticket
 import com.example.caisse.model.AuthViewModel
+import com.example.caisse.session.CurrentUserViewModel
 import com.example.caisse.util.formatPrice
 import com.google.firebase.auth.auth
 import java.util.UUID
@@ -68,9 +69,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String, bluetoothViewModel: BluetoothViewModel,authVm: AuthViewModel){
+fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewModel, tableId: String, bluetoothViewModel: BluetoothViewModel,authVm: AuthViewModel, currentUserViewModel: CurrentUserViewModel){
     var selectedTab by remember { mutableIntStateOf(0) }
     val tables by menuViewModel.tables.collectAsState()
+    val currentUser by currentUserViewModel.currentUser.collectAsState()
+    val vendeurId = currentUser?.vendeur?.id
     val tableUuid = remember(tableId) { UUID.fromString(tableId) }
     val table = tables.find { it.id == tableUuid }
     val categories by menuViewModel.categories.collectAsState()
@@ -207,7 +210,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                                 Button(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
-                                        menuViewModel.payTable(tableUuid)
+                                        menuViewModel.payTable(tableUuid, vendeurId)
                                         navController.popBackStack()
                                         authVm.enqueueSync(context = ctx, tag = "sync")
                                     },
@@ -288,7 +291,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     ) {
                         items(products.filter { it.categoryId == selecredCategoryID }) { product ->
                             ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
-                                menuViewModel.addProductToTable(product.id, tableUuid)
+                                menuViewModel.addProductToTable(product.id, tableUuid, vendeurId)
                             }
                         }
                     }
@@ -349,7 +352,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         ) {
                             items(products.filter { it.categoryId == selecredCategoryID }) { product ->
                                 ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
-                                    menuViewModel.addProductToTable(product.id, tableUuid)
+                                    menuViewModel.addProductToTable(product.id, tableUuid, vendeurId)
                                 }
                             }
                         }
@@ -417,7 +420,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                             Button(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    menuViewModel.payTable(tableUuid)
+                                    menuViewModel.payTable(tableUuid, vendeurId)
                                     navController.popBackStack()
                                     authVm.enqueueSync(context = ctx, tag = "sync")
                                 },

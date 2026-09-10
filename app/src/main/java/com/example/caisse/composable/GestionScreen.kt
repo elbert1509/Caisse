@@ -28,7 +28,10 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.LogoDev
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PointOfSale
+import androidx.compose.material.icons.filled.SwitchAccount
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
@@ -46,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,16 +69,23 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.ShopInfos
+import com.example.caisse.session.CurrentUserViewModel
+import com.example.caisse.session.Role
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHome: Boolean){
+fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHome: Boolean, currentUserViewModel: CurrentUserViewModel){
     val context = LocalContext.current
-    var unlocked by rememberSaveable  { mutableStateOf(!fromHome) }
-    val infos = viewModel.getInfos()
+    val currentUser by currentUserViewModel.currentUser.collectAsState()
+    // Le mot de passe Gestion a déjà été saisi pour entrer en tant que Gérant : pas besoin de le
+    // redemander ici.
+    var unlocked by rememberSaveable  { mutableStateOf(!fromHome || currentUser?.role == Role.GERANT) }
+    // Flow réactif (Room, hors thread principal) au lieu d'un getInfos() runBlocking
+    // qui bloquait l'UI à chaque recomposition de cet écran.
+    val infos by viewModel.observeInfos().collectAsState(initial = null)
     var secretClickCount by remember { mutableIntStateOf(0) }
 
     if (secretClickCount >= 7 && !viewModel.isAdminMode) {
@@ -94,6 +105,16 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHo
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        currentUserViewModel.logout()
+                        navController.navigate("profil") {
+                            popUpTo("home") { inclusive = true }
+                        }
+                    }) {
+                        Icon(Icons.Default.SwitchAccount, contentDescription = "Changer de profil")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -159,6 +180,8 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHo
                     }
 
                     list.addAll(listOf(
+                        GestionTile("Vendeurs", Icons.Default.Person) { navController.navigate("vendeurs") },
+                        GestionTile("Suivi vendeurs", Icons.Default.Visibility) { navController.navigate("suivi_vendeurs") },
                         GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock") },
                         GestionTile("Dashboard", Icons.Default.Warehouse) { navController.navigate("Dashboard") },
                         GestionTile("Vente", Icons.Default.PointOfSale) { navController.navigate("vente") },

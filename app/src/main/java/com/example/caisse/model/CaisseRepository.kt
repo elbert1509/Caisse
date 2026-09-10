@@ -8,12 +8,14 @@ import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.LogDao
 import com.example.caisse.model.ProduitDao
+import com.example.caisse.model.SessionCaisseDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
 import com.example.caisse.util.FiscalHashUtils.calculateClotureHash
 import com.example.caisse.util.FiscalHashUtils.sha256
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -22,13 +24,14 @@ import java.util.UUID
 class CaisseRepository(
     private val categorieDao: CategorieDao,
     private val produitDao: ProduitDao,
-    private val vendeurDao: VendeurDao,
+    val vendeurDao: VendeurDao,
      val venteDao: VenteDao,
     private val tableDao: TableDao,
     private val invoiceDao: InvoiceDao,
     private val infosDao: InfosDao,
     private val logDao: LogDao,
-    private val clotureDao: ClotureDao
+    private val clotureDao: ClotureDao,
+    val sessionCaisseDao: SessionCaisseDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -50,6 +53,7 @@ class CaisseRepository(
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()
     suspend fun addVendeur(vendeur: Vendeur) = vendeurDao.insertVendeur(vendeur)
+    suspend fun updateVendeur(vendeur: Vendeur) = vendeurDao.updateVendeur(vendeur)
     suspend fun softDeleteVendeur(id: UUID) = vendeurDao.softDeleteVendeur(id)
 
     // --- VENTES ---
@@ -190,6 +194,10 @@ class CaisseRepository(
 
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun ouvrirCaisse(vendeurId: UUID) {
+        // Un vendeur ne peut pas ouvrir deux fois sa caisse ; plusieurs vendeurs peuvent en
+        // revanche avoir chacun une session ouverte en même temps.
+        if (sessionCaisseDao.getCurrentSessionForVendeur(vendeurId) != null) return
+
         // NF525 : vérifier que la caisse de la veille a bien été clôturée
         val hier = LocalDate.now().minusDays(1).toString()
         val clotureHier     = clotureDao.getClotureByDateAndType(hier, "JOURNALIERE")
@@ -203,8 +211,19 @@ class CaisseRepository(
             )
         }
 
-        venteDao.updateEtatCaisse(
-            EtatCaisse(isOuverte = true, dateOuverture = LocalDateTime.now().toString(), idVendeurOuverture = vendeurId)
+        // Premier vendeur à ouvrir dans la journée : on marque la caisse (shop) comme ouverte
+        // pour ne pas casser la logique de clôture NF525 existante, qui repose dessus.
+        if (venteDao.getEtatCaisse()?.isOuverte != true) {
+            venteDao.updateEtatCaisse(
+                EtatCaisse(isOuverte = true, dateOuverture = LocalDateTime.now().toString(), idVendeurOuverture = vendeurId)
+            )
+        }
+        sessionCaisseDao.insert(
+            SessionCaisse(
+                dateOuverture = System.currentTimeMillis(),
+                jourMetier = LocalDate.now().toString(),
+                idVendeurOuverture = vendeurId
+            )
         )
         loggerEvenement(
             type        = TypeEvenement.OUVERTURE_SESSION.name,
@@ -215,14 +234,15 @@ class CaisseRepository(
 
     suspend fun estCaisseOuverte(): Boolean = venteDao.getEtatCaisse()?.isOuverte ?: false
 
+    // Ferme uniquement la session de CE vendeur — n'affecte pas les caisses des autres
+    // vendeurs ni l'état fiscal global (piloté par executerClotureGlobale, gérant).
     @RequiresApi(Build.VERSION_CODES.O)
-    suspend fun fermerCaisse() {
-        venteDao.updateEtatCaisse(
-            EtatCaisse(id = 1, isOuverte = false, dateOuverture = null, idVendeurOuverture = null)
-        )
+    suspend fun fermerCaisse(vendeurId: UUID) {
+        sessionCaisseDao.closeCurrentForVendeur(vendeurId, System.currentTimeMillis())
         loggerEvenement(
             type        = TypeEvenement.FERMETURE_SESSION.name,
-            description = "Fermeture de session de caisse"
+            description = "Fermeture de session de caisse par le vendeur $vendeurId",
+            vendeurId   = vendeurId
         )
     }
 
@@ -230,12 +250,31 @@ class CaisseRepository(
         return venteDao.observeEtatCaisse().map { it?.isOuverte ?: false }
     }
 
+    fun observeSessionOuverte(vendeurId: UUID): Flow<Boolean> =
+        sessionCaisseDao.observeSessionOuverte(vendeurId)
+
+    fun observeOpenSessions(): Flow<List<SessionCaisse>> = sessionCaisseDao.getOpenSessionsFlow()
+
+    fun getLastSessionForVendeurFlow(vendeurId: UUID): Flow<SessionCaisse?> =
+        sessionCaisseDao.getLastSessionForVendeurFlow(vendeurId)
+
+    fun getTotalSalesForVendeurSince(vendeurId: UUID, start: Long): Flow<Double> =
+        venteDao.getTotalSalesForVendeurSince(vendeurId, start)
+
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun executerClotureGlobale(): Cloture {
+        val sessionsEncoreOuvertes = sessionCaisseDao.getOpenSessionsFlow().first()
+        if (sessionsEncoreOuvertes.isNotEmpty()) {
+            loggerEvenement(
+                type        = TypeEvenement.ERREUR_SYSTEME.name,
+                description = "Clôture lancée alors que ${sessionsEncoreOuvertes.size} caisse(s) vendeur sont encore ouvertes."
+            )
+        }
         val clotureResult = genererClotureJournaliere()
         venteDao.updateEtatCaisse(
             EtatCaisse(id = 1, isOuverte = false, dateOuverture = null, idVendeurOuverture = null)
         )
+        sessionCaisseDao.closeCurrent(System.currentTimeMillis())
         loggerEvenement(
             type        = TypeEvenement.CLOTURE_ET_FERMETURE.name,
             description = "Clôture Z n°${clotureResult.idCloture} générée et session fermée. " +

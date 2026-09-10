@@ -110,7 +110,7 @@ fun InvoiceScreen(
                                 return@IconButton
                             }
                             val vente = venteDetails ?: return@IconButton
-                            val tickets = vente.lignes.map { Ticket(it.produit, it.ligne.quantity) }
+                            val tickets = vente.lignesActives.map { Ticket(it.produit, it.ligne.quantity) }
                             bluetoothViewModel.printInvoice(
                                 tableItems     = tickets,
                                 total          = vente.vente.total,
@@ -173,7 +173,7 @@ fun InvoiceScreen(
         }
 
         val vente   = venteDetails ?: return@Scaffold
-        val tickets = vente.lignes.map { Ticket(it.produit, it.ligne.quantity) }
+        val tickets = vente.lignesActives.map { Ticket(it.produit, it.ligne.quantity) }
 
         val formattedDate = remember(vente.vente.date) {
             SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.FRANCE).format(Date(vente.vente.date))
@@ -185,7 +185,7 @@ fun InvoiceScreen(
 
         val montantTTC = vente.vente.total
         // NF525 : TVA calculée à partir des taux réels de chaque ligne
-        val montantTVA = vente.lignes.sumOf { l ->
+        val montantTVA = vente.lignesActives.sumOf { l ->
             l.ligne.sousTotal * l.ligne.tauxTVA / (100.0 + l.ligne.tauxTVA)
         }
         val montantHT  = montantTTC - montantTVA

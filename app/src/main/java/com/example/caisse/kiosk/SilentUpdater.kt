@@ -7,8 +7,10 @@ import android.content.pm.PackageInstaller
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -35,6 +37,9 @@ object SilentUpdater {
     private const val CONFIG_DOC = "app_android"
     private const val DEVICES_COLLECTION = "devices"
     private const val INSTALL_ACTION = "com.example.caisse.INSTALL_RESULT"
+
+    /** Dernière raison d'échec détaillée (téléchargement), pour un message d'erreur précis côté UI. */
+    private var lastDownloadError: String? = null
 
     data class UpdateInfo(
         val versionCode: Long,
@@ -120,16 +125,29 @@ object SilentUpdater {
      * (cas typique d'un lien Google Drive "/view" au lieu d'une URL directe).
      */
     suspend fun downloadApk(context: Context, url: String): File? = withContext(Dispatchers.IO) {
+        lastDownloadError = null
         try {
             val dest = File(context.cacheDir, "update.apk")
             if (dest.exists()) dest.delete()
 
             // Cas Firebase Storage : on résout l'URI gs:// (ou un lien firebasestorage) via le SDK.
             if (url.startsWith("gs://") || url.contains("firebasestorage")) {
-                FirebaseStorage.getInstance()
-                    .getReferenceFromUrl(url)
-                    .getFile(dest)
-                    .await()
+                try {
+                    FirebaseStorage.getInstance()
+                        .getReferenceFromUrl(url)
+                        .getFile(dest)
+                        .await()
+                } catch (e: StorageException) {
+                    val signedIn = FirebaseAuth.getInstance().currentUser != null
+                    lastDownloadError = if (e.errorCode == StorageException.ERROR_NOT_AUTHORIZED) {
+                        "Permission refusée par Firebase Storage (règles de sécurité) sur : $url" +
+                            if (!signedIn) " — aucun utilisateur connecté." else " — utilisateur connecté mais non autorisé par les règles."
+                    } else {
+                        "Erreur Firebase Storage (${e.errorCode}) : ${e.message}"
+                    }
+                    Log.e(TAG, lastDownloadError!!, e)
+                    return@withContext null
+                }
                 return@withContext validateApk(dest)
             }
 
@@ -270,8 +288,9 @@ object SilentUpdater {
             ?: return "Aucune mise à jour disponible."
 
         val apk = downloadApk(context, info.apkUrl)
-            ?: return "Échec du téléchargement : l'URL n'est pas un APK direct en HTTPS " +
-                "(évite les liens Google Drive /view, utilise Firebase Storage)."
+            ?: return lastDownloadError
+                ?: "Échec du téléchargement : l'URL n'est pas un APK direct en HTTPS " +
+                    "(évite les liens Google Drive /view, utilise Firebase Storage)."
 
         val integrityError = verifyBeforeInstall(context, apk, info.sha256)
         if (integrityError != null) {

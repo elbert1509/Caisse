@@ -48,10 +48,12 @@ import androidx.navigation.NavController
 import com.example.caisse.data.AppTable
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
+import com.example.caisse.session.CurrentUserViewModel
+import com.example.caisse.session.Role
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
-fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,authViewModel: AuthViewModel) {
+fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,authViewModel: AuthViewModel, currentUserViewModel: CurrentUserViewModel) {
 
     // Détecte l’orientation et la largeur pour fixer dynamiquement le nombre de colonnes
     val config = LocalConfiguration.current
@@ -59,7 +61,15 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
     val screenWidthDp = config.screenWidthDp
     var selectedTab by remember { mutableIntStateOf(0) }
     val tables by menuViewModel.tables.collectAsState()
-    val filteredTables = tables.filter { it.active }
+    val currentUser by currentUserViewModel.currentUser.collectAsState()
+    // Un vendeur ne voit que les tables libres et les siennes ; le gérant voit tout.
+    val filteredTables = tables.filter { table ->
+        table.active && (
+            currentUser?.role != Role.VENDEUR ||
+                table.vendeurId == null ||
+                table.vendeurId == currentUser?.vendeur?.id
+            )
+    }
     var showDialog by remember { mutableStateOf(false) }
     var tableName by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -151,7 +161,7 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
                             Button(
                                 onClick = {
                                     if (tableName.isNotBlank()) {
-                                        menuViewModel.addTable(tableName)
+                                        menuViewModel.addTable(tableName, currentUser?.vendeur?.id)
                                         // Pousser immédiatement la nouvelle table vers le cloud
                                         authViewModel.enqueueSync(context = ctx, tag = "sync")
                                         showDialog = false

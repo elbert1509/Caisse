@@ -10,9 +10,12 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.caisse.model.SessionCaisseDao
+import com.example.caisse.model.VendeurDao
 import com.example.caisse.model.VenteDao
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -20,11 +23,18 @@ import kotlinx.coroutines.flow.map
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
 
-class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
+class DashboardViewModel(
+    venteDao: VenteDao,
+    sessionCaisseDao: SessionCaisseDao,
+    vendeurDao: VendeurDao
+) : ViewModel() {
 
     // Get the start of the current week (Monday)
     private val startOfWeek: Long = run {
@@ -90,9 +100,25 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
 
 
 
+    // Le "jour" d'une vente est défini par la session de caisse (ouverture -> fermeture) dans
+    // laquelle elle tombe, pas par le jour calendaire : une vente après minuit tant que la
+    // caisse de la veille n'a pas été fermée compte pour la veille. On élargit la fenêtre de
+    // requête d'un jour en amont pour couvrir une session ouverte juste avant startOfWeek, et on
+    // ne garde ensuite que les jours métier appartenant réellement à la semaine affichée.
+    private val startOfWeekDate: LocalDate =
+        Instant.ofEpochMilli(startOfWeek).atZone(ZoneId.systemDefault()).toLocalDate()
+
     val weeklySales: StateFlow<List<SalesData>> =
-        venteDao.getSalesSince(startOfWeek)
-            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        combine(
+            venteDao.getVentesSince(startOfWeek - 24L * 60 * 60 * 1000),
+            sessionCaisseDao.getSessionsSince(startOfWeek - 24L * 60 * 60 * 1000)
+        ) { ventes, sessions ->
+            bucketVentesParJourMetier(ventes, sessions)
+                .filter { data ->
+                    val jour = runCatching { LocalDate.parse(data.label) }.getOrNull()
+                    jour != null && !jour.isBefore(startOfWeekDate) && jour.isBefore(startOfWeekDate.plusDays(7))
+                }
+        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val monthlySales: StateFlow<List<SalesData>> =
         venteDao.getSalesByMonth()
@@ -139,15 +165,79 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
         venteDao.getTotalSalesSince(getStartOfMonth())
             .stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
 
+    // Vue live du gérant : pour chaque vendeur, statut de sa caisse (ouverte/fermée), heures
+    // d'ouverture/fermeture de sa dernière session, et total de ses ventes sur cette session.
+    val suiviVendeurs: StateFlow<List<com.example.caisse.data.VendeurSuiviUi>> = combine(
+        vendeurDao.getAllVendeur(),
+        sessionCaisseDao.getSessionsSince(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000),
+        venteDao.getAllVentes()
+    ) { vendeurs, sessions, ventes ->
+        vendeurs.map { vendeur ->
+            val sessionsVendeur = sessions.filter { it.idVendeurOuverture == vendeur.id }
+            val sessionOuverte = sessionsVendeur.firstOrNull { it.dateFermeture == null }
+            val derniereSession = sessionsVendeur.maxByOrNull { it.dateOuverture }
+            val sessionAffichee = sessionOuverte ?: derniereSession
+            val totalSession = sessionAffichee?.let { s ->
+                ventes.filter {
+                    it.vendeurId == vendeur.id && !it.isDeleted &&
+                        it.date >= s.dateOuverture && (s.dateFermeture == null || it.date < s.dateFermeture)
+                }.sumOf { it.total }
+            } ?: 0.0
+            com.example.caisse.data.VendeurSuiviUi(
+                vendeurId = vendeur.id,
+                nom = "${vendeur.prenom} ${vendeur.nom}",
+                ouverte = sessionOuverte != null,
+                heureOuverture = sessionAffichee?.dateOuverture,
+                heureFermeture = sessionAffichee?.dateFermeture,
+                totalVentesSession = totalSession
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
 
     companion object {
         fun provideFactory(
-            venteDao: VenteDao
+            venteDao: VenteDao,
+            sessionCaisseDao: SessionCaisseDao,
+            vendeurDao: VendeurDao
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return DashboardViewModel(venteDao) as T
+                return DashboardViewModel(venteDao, sessionCaisseDao, vendeurDao) as T
             }
+        }
+
+        /**
+         * Rattache chaque vente au jour métier de la session de caisse dans laquelle elle
+         * tombe (dateOuverture <= vente.date < dateFermeture, ou "en cours" si la session est
+         * encore ouverte). Une vente qui ne tombe dans aucune session connue (données
+         * antérieures à l'introduction de cet historique, ou sans vendeur) retombe sur son
+         * jour calendaire.
+         *
+         * Depuis qu'un vendeur peut avoir sa propre caisse, plusieurs sessions peuvent être
+         * ouvertes EN MÊME TEMPS (un vendeur par caisse) : matcher uniquement sur la fenêtre de
+         * dates sans tenir compte du vendeur attribuait les ventes du jour à la session encore
+         * ouverte la plus ANCIENNE (première du tri par dateOuverture ASC), donc à un jour métier
+         * périmé — les ventes du jour disparaissaient du graphe de la semaine. On ne considère
+         * donc que les sessions ouvertes par LE MÊME vendeur que la vente.
+         */
+        private fun bucketVentesParJourMetier(
+            ventes: List<Vente>,
+            sessions: List<SessionCaisse>
+        ): List<SalesData> {
+            val now = System.currentTimeMillis()
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val sessionsParVendeur = sessions.groupBy { it.idVendeurOuverture }
+            val totaux = linkedMapOf<String, Double>()
+            for (vente in ventes) {
+                val session = vente.vendeurId
+                    ?.let { sessionsParVendeur[it] }
+                    ?.filter { s -> vente.date >= s.dateOuverture && vente.date < (s.dateFermeture ?: now) }
+                    ?.maxByOrNull { it.dateOuverture }
+                val jour = session?.jourMetier ?: sdf.format(Date(vente.date))
+                totaux[jour] = (totaux[jour] ?: 0.0) + vente.total
+            }
+            return totaux.map { (label, amount) -> SalesData(label, amount) }.sortedBy { it.label }
         }
     }
 

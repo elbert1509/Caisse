@@ -51,6 +51,11 @@ interface VenteDao {
     """)
     fun getSalesSince(startDate: Long): Flow<List<SalesData>>
 
+    // Ventes brutes (non agrégées) : utilisé pour rattacher chaque vente à son "jour métier"
+    // (session de caisse) plutôt qu'au jour calendaire — voir SessionCaisseDao.
+    @Query("SELECT * FROM Vente WHERE date >= :startDate AND isDeleted = 0")
+    fun getVentesSince(startDate: Long): Flow<List<Vente>>
+
     @Query("""
         SELECT strftime('%Y-%m', date / 1000, 'unixepoch','localtime') as label, SUM(total) as amount
         FROM Vente
@@ -96,6 +101,11 @@ interface VenteDao {
 
     @Query("SELECT COALESCE(SUM(total), 0) FROM vente WHERE date >= :start AND isDeleted = 0" )
     fun getTotalSalesSince(start: Long): Flow<Double>
+
+    // Total de ventes d'un vendeur depuis une date (utilisé pour le suivi live du gérant :
+    // total réalisé par ce vendeur depuis l'ouverture de sa session de caisse en cours).
+    @Query("SELECT COALESCE(SUM(total), 0) FROM vente WHERE vendeurId = :vendeurId AND date >= :start AND isDeleted = 0")
+    fun getTotalSalesForVendeurSince(vendeurId: UUID, start: Long): Flow<Double>
 
 
     @Query("SELECT COUNT(*) FROM Vente") suspend fun countVente(): Int

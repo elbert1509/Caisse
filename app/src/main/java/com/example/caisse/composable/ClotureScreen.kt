@@ -1,4 +1,5 @@
 package com.example.caisse.composable
+import android.content.Intent
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
@@ -42,13 +43,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.example.caisse.data.Cloture
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.TypeEvenement
 import com.example.caisse.data.Vente
+import com.example.caisse.util.PdfReportGenerator
+import com.example.caisse.util.formatPrice
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -60,12 +68,14 @@ import java.util.Locale
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
+    val context = LocalContext.current
     val ventes by viewModel.ventes.collectAsState()
-    val infos = viewModel.getInfos()
+    val infos by viewModel.observeInfos().collectAsState(initial = null)
     val devise = infos?.devise ?: "€"
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var isSharing by remember { mutableStateOf(false) }
 
     var isLoading by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
@@ -101,9 +111,51 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                     }
                 },
                 actions = {
-                    // Bouton paratge
-                    IconButton(onClick = { /*TODO*/ }) {
-                        Icon(Icons.Default.Share, contentDescription = "exporter ")
+                    IconButton(
+                        enabled = !isSharing,
+                        onClick = {
+                            scope.launch {
+                                isSharing = true
+                                try {
+                                    val startOfDay = today.atStartOfDay(ZoneId.systemDefault())
+                                        .toInstant().toEpochMilli()
+                                    val endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault())
+                                        .toInstant().toEpochMilli()
+                                    val items = viewModel.repository.venteDao
+                                        .getProductReportBetween(startOfDay, endOfDay).first()
+
+                                    val file = withContext(Dispatchers.IO) {
+                                        PdfReportGenerator.generateRapportProduits(
+                                            destDir = context.cacheDir,
+                                            infos = infos,
+                                            title = "Clôture du ${today.format(formatter)}",
+                                            items = items,
+                                            total = totalJour
+                                        )
+                                    }
+                                    val uri = FileProvider.getUriForFile(
+                                        context, "${context.packageName}.fileprovider", file
+                                    )
+                                    val share = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/pdf"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        putExtra(Intent.EXTRA_SUBJECT, "Clôture du ${today.format(formatter)}")
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(share, "Partager le détail de clôture")
+                                    )
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar(
+                                        "Échec du partage : ${e.message ?: "inconnue"}"
+                                    )
+                                } finally {
+                                    isSharing = false
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Partager le détail")
                     }
                 }
             )
@@ -154,7 +206,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
 
                     ResumeLine(
                         label = "Chiffre d'affaires du jour",
-                        value = formatCurrency(totalJour, devise)
+                        value = formatPrice(totalJour, devise)
                     )
                 }
             }
@@ -184,11 +236,11 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                         ResumeLine("Type", derniereCloture!!.type)
                         ResumeLine(
                             "CA brut",
-                            formatCurrency(derniereCloture!!.chiffreAffaireBrut, devise)
+                            formatPrice(derniereCloture!!.chiffreAffaireBrut, devise)
                         )
                         ResumeLine(
                             "TVA",
-                            formatCurrency(derniereCloture!!.totalTVA, devise)
+                            formatPrice(derniereCloture!!.totalTVA, devise)
                         )
                         ResumeLine(
                             "Compteur ventes",
@@ -196,7 +248,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                         )
                         ResumeLine(
                             "Grand total cumulé",
-                            formatCurrency(derniereCloture!!.grandTotalCumule, devise)
+                            formatPrice(derniereCloture!!.grandTotalCumule, devise)
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -283,7 +335,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Date : ${today.format(formatter)}")
                     Text("Ventes : ${ventesDuJour.size}")
-                    Text("Montant : ${formatCurrency(totalJour, devise)}")
+                    Text("Montant : ${formatPrice(totalJour, devise)}")
                     Text(
                         "Cette opération doit figer les données journalières pour créer un état comptable durable."
                     )

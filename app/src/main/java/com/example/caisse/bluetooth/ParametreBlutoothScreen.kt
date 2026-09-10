@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -84,6 +85,8 @@ import androidx.work.WorkManager
 import com.example.caisse.R
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
+import com.example.caisse.session.CurrentUserViewModel
+import com.example.caisse.session.Role
 import com.example.caisse.ui.theme.Accent500
 import com.example.caisse.ui.theme.SemanticGreen
 import com.google.firebase.auth.auth
@@ -113,13 +116,17 @@ fun ParametreBluetooothScreen(
     viewModel: BluetoothViewModel,
     navController: NavController,
     authVm: AuthViewModel,
-    menuViewModel: MenuViewModel
+    menuViewModel: MenuViewModel,
+    currentUserViewModel: CurrentUserViewModel
 ) {
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val isConnected   by viewModel.isConnected.collectAsState()
     val info = menuViewModel.getInfos()
+    val currentUser by currentUserViewModel.currentUser.collectAsState()
+    val isGerant = currentUser?.role == Role.GERANT
 
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showHeureClotureDialog by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -418,14 +425,26 @@ fun ParametreBluetooothScreen(
                         { CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp) }
                     } else null
                 )
-                HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
-                SettingItem(
-                    icon     = Icons.Filled.Store,
-                    iconTint = Accent500,
-                    title    = "Informations boutique",
-                    subtitle = "Nom, adresse, SIRET, devise…",
-                    onClick  = { navController.navigate("infosStart") }
-                )
+                // Les informations boutique (nom, SIRET, mot de passe Gestion…) sont réservées
+                // au gérant — un vendeur ne doit pas pouvoir les modifier.
+                if (isGerant) {
+                    HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
+                    SettingItem(
+                        icon     = Icons.Filled.Store,
+                        iconTint = Accent500,
+                        title    = "Informations boutique",
+                        subtitle = "Nom, adresse, SIRET, devise…",
+                        onClick  = { navController.navigate("infosStart") }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
+                    SettingItem(
+                        icon     = Icons.Filled.Schedule,
+                        iconTint = Accent500,
+                        title    = "Heure de clôture automatique",
+                        subtitle = "Ferme une caisse vendeur oubliée ouverte à ${info?.heureClotureAuto ?: 5}h00",
+                        onClick  = { showHeureClotureDialog = true }
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -537,6 +556,44 @@ fun ParametreBluetooothScreen(
                     TextButton(onClick = { showLogoutDialog = false }) {
                         Text(stringResource(R.string.text_annuler))
                     }
+                }
+            )
+        }
+
+        // ================================================================
+        // Dialog heure de clôture automatique (gérant)
+        // ================================================================
+        if (showHeureClotureDialog) {
+            var heureText by remember { mutableStateOf((info?.heureClotureAuto ?: 5).toString()) }
+            AlertDialog(
+                onDismissRequest = { showHeureClotureDialog = false },
+                icon = { Icon(Icons.Filled.Schedule, null) },
+                title = { Text("Heure de clôture automatique") },
+                text = {
+                    Column {
+                        Text("Une caisse vendeur oubliée ouverte sera fermée automatiquement à cette heure chaque jour.")
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.OutlinedTextField(
+                            value = heureText,
+                            onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) heureText = it },
+                            label = { Text("Heure (0-23)") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val heure = heureText.toIntOrNull()?.coerceIn(0, 23) ?: 5
+                        menuViewModel.updateHeureClotureAuto(heure)
+                        showHeureClotureDialog = false
+                    }) { Text("Enregistrer") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showHeureClotureDialog = false }) { Text(stringResource(R.string.text_annuler)) }
                 }
             )
         }

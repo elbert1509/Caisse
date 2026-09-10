@@ -39,6 +39,8 @@ import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Ticket
 import com.example.caisse.data.VenteWithDetails
+import com.example.caisse.session.CurrentUserViewModel
+import com.example.caisse.session.Role
 import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,10 +50,20 @@ import java.util.Locale
 @Composable
 fun HistoriqueScreen(
     navController: NavController,
-    menuViewModel: MenuViewModel
+    menuViewModel: MenuViewModel,
+    currentUserViewModel: CurrentUserViewModel
 ) {
-    val invoicesWithDetails by menuViewModel.ventesTablesWithDetails.collectAsState()
-    val ventesWithDetails by menuViewModel.ventesWithDetails.collectAsState()
+    val currentUser by currentUserViewModel.currentUser.collectAsState()
+    val vendeurs by menuViewModel.vendeurs.collectAsState()
+    val allInvoicesWithDetails by menuViewModel.ventesTablesWithDetails.collectAsState()
+    val allVentesWithDetails by menuViewModel.ventesWithDetails.collectAsState()
+    // Un vendeur ne voit que son propre historique ; le gérant voit tout.
+    val invoicesWithDetails = remember(allInvoicesWithDetails, currentUser) {
+        allInvoicesWithDetails.filter { currentUser?.role != Role.VENDEUR || it.vente.vendeurId == currentUser?.vendeur?.id }
+    }
+    val ventesWithDetails = remember(allVentesWithDetails, currentUser) {
+        allVentesWithDetails.filter { currentUser?.role != Role.VENDEUR || it.vente.vendeurId == currentUser?.vendeur?.id }
+    }
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
@@ -100,7 +112,10 @@ fun HistoriqueScreen(
             if (selectedTab == 0) {
                 LazyColumn {
                     items(invoicesWithDetails) { venteDetails ->
+                        val vendeurNom = vendeurs.find { it.id == venteDetails.vente.vendeurId }
+                            ?.let { "${it.prenom} ${it.nom}" }
                         VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.getInfos()?.devise ?: "",
+                            vendeurNom = vendeurNom,
                             onVenteClick = {
                                 navController.navigate("ticket/${venteDetails.vente.id}")
                             }
@@ -132,6 +147,7 @@ fun VenteCard(
     venteDetails: VenteWithDetails,
     title: String,
     devise: String,
+    vendeurNom: String? = null,
     onVenteClick: () -> Unit = {}
 ) {
     val formattedDate = remember(venteDetails.vente.date) {
@@ -139,10 +155,10 @@ fun VenteCard(
             .format(Date(venteDetails.vente.date))
     }
 
-    val totalArticles = venteDetails.lignes.sumOf { it.ligne.quantity }
+    val totalArticles = venteDetails.lignesActives.sumOf { it.ligne.quantity }
     val isTable = venteDetails.vente.tableId != null
-    val previewLines = venteDetails.lignes.take(3)
-    val hasMoreLines = venteDetails.lignes.size > 3
+    val previewLines = venteDetails.lignesActives.take(3)
+    val hasMoreLines = venteDetails.lignesActives.size > 3
 
     Card(
         modifier = Modifier
@@ -177,6 +193,14 @@ fun VenteCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    if (vendeurNom != null) {
+                        Text(
+                            text = "Servie par $vendeurNom",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Surface(
@@ -244,7 +268,7 @@ fun VenteCard(
             if (hasMoreLines) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "+ ${venteDetails.lignes.size - 3} autre(s) article(s)",
+                    text = "+ ${venteDetails.lignesActives.size - 3} autre(s) article(s)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium

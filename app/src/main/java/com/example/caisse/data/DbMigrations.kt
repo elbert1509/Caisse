@@ -120,3 +120,51 @@ val MIGRATIONS_TO_13: Array<Migration> = arrayOf(
         override fun migrate(db: SupportSQLiteDatabase) = migrateToUuidIds(db)
     },
 )
+
+/**
+ * Historique des ouvertures/fermetures de caisse (session_caisse), utilisé pour rattacher
+ * les ventes au "jour métier" plutôt qu'au jour calendaire. Nouvelle table, aucune donnée à
+ * migrer : les sessions antérieures à cette version ne sont pas connues (fallback calendaire
+ * appliqué côté lecture pour les ventes qui ne tombent dans aucune session).
+ */
+val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `session_caisse` (" +
+                "`id` TEXT NOT NULL, `dateOuverture` INTEGER NOT NULL, `dateFermeture` INTEGER, " +
+                "`jourMetier` TEXT NOT NULL, `idVendeurOuverture` TEXT, PRIMARY KEY(`id`))"
+        )
+    }
+}
+
+/**
+ * Profils Gérant/Vendeur : chaque vendeur se connecte désormais avec un PIN (défini par le
+ * gérant) et une table est rattachée au vendeur qui l'a créée ou prise en premier.
+ */
+val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vendeur ADD COLUMN pinHash TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE vendeur ADD COLUMN pinSalt TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE app_table ADD COLUMN vendeurId TEXT")
+    }
+}
+
+/**
+ * session_caisse n'était jamais synchronisée entre appareils (pas de colonnes de suivi) : le
+ * gérant ne voyait donc pas les heures d'ouverture/fermeture des vendeurs sur un autre appareil
+ * que celui où la session a été ouverte. isDirty=1 par défaut : les sessions déjà présentes
+ * localement sont repoussées au cloud une fois après la migration.
+ */
+val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE session_caisse ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE session_caisse ADD COLUMN isDirty INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
+/** Heure de clôture automatique des caisses vendeur oubliées ouvertes (réglable par le gérant). */
+val MIGRATION_16_17: Migration = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE ShopInfos ADD COLUMN heureClotureAuto INTEGER NOT NULL DEFAULT 5")
+    }
+}

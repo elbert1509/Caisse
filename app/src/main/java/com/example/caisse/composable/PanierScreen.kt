@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
+import com.example.caisse.session.CurrentUserViewModel
 import com.example.caisse.util.formatPrice
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,10 +44,12 @@ import com.example.caisse.util.formatPrice
 fun PanierScreen(
     navController: NavController,
     menuViewModel: MenuViewModel,
-    authVm: AuthViewModel
+    authVm: AuthViewModel,
+    currentUserViewModel: CurrentUserViewModel
 ) {
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
+    val currentUser by currentUserViewModel.currentUser.collectAsState()
     val ctx = navController.context
 
     var paiementText by remember { mutableStateOf("") }
@@ -130,7 +133,7 @@ fun PanierScreen(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
-                    menuViewModel.confirmerVente()
+                    menuViewModel.confirmerVente(currentUser?.vendeur?.id)
                     navController.navigate("home")
                     authVm.enqueueSync(
                         context = ctx,

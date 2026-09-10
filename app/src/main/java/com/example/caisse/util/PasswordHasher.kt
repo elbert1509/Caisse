@@ -14,6 +14,10 @@ object PasswordHasher {
     // que ce hash est synchronisé dans Firestore. SHA1 (et pas SHA256) car dispo dès minSdk 23 ;
     // avec ce nombre d'itérations et une sortie de 256 bits, c'est l'état de l'art mobile.
     private const val PBKDF2_ITERATIONS = 120_000
+    // Un PIN à 4 chiffres n'a que 10 000 combinaisons possibles : un coût PBKDF2 élevé ne change
+    // presque rien à la résistance au brute-force (l'espace de clés est déjà minuscule) mais rend
+    // chaque connexion vendeur perceptiblement lente ("ça mouline"). Coût réduit en conséquence.
+    private const val PIN_PBKDF2_ITERATIONS = 10_000
     private const val PBKDF2_PREFIX = "pbkdf2"
 
     fun generateSalt(): String {
@@ -25,6 +29,10 @@ object PasswordHasher {
     /** Format produit : "pbkdf2:<itérations>:<base64>". */
     fun hash(password: String, salt: String): String =
         pbkdf2(password, salt, PBKDF2_ITERATIONS)
+
+    /** Comme [hash], mais avec un coût réduit adapté à un PIN à 4 chiffres. */
+    fun hashPin(pin: String, salt: String): String =
+        pbkdf2(pin, salt, PIN_PBKDF2_ITERATIONS)
 
     private fun pbkdf2(password: String, salt: String, iterations: Int): String {
         val spec = javax.crypto.spec.PBEKeySpec(

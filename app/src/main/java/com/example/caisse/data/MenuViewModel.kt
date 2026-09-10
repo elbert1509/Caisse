@@ -146,6 +146,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     /** Fiche magasin en continu : émet dès que la sync l'importe (cas du nouvel appareil). */
     fun observeInfos() = repository.observeInfos()
 
+    /** Gérant : heure (0-23) à laquelle une caisse vendeur oubliée ouverte est fermée automatiquement. */
+    fun updateHeureClotureAuto(heure: Int) {
+        viewModelScope.launch {
+            val existing = repository.getInfos() ?: return@launch
+            repository.updateInfos(existing.copy(heureClotureAuto = heure.coerceIn(0, 23), updatedAt = now(), isDirty = true))
+            loggerEvenement(TypeEvenement.MODIF_CONFIG.name, "Heure de clôture automatique modifiée : ${heure}h00")
+        }
+    }
+
     fun supdatePassword(passwordHash: String, passwordSalt: String) {
         viewModelScope.launch {
             val existing = repository.getInfos() ?: return@launch
@@ -168,6 +177,20 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             repository.softDeleteVendeur(vendeur.id)
             loggerEvenement(TypeEvenement.SUPPRESSION_VENDEUR.name, "Vendeur supprimé : ${vendeur.nom} (id=${vendeur.id})")
+        }
+    }
+
+    /** Gérant : définit ou réinitialise le PIN à 4 chiffres d'un vendeur. */
+    fun setVendeurPin(vendeur: Vendeur, pin: String) {
+        viewModelScope.launch {
+            val salt = PasswordHasher.generateSalt()
+            val hash = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                PasswordHasher.hashPin(pin, salt)
+            }
+            repository.updateVendeur(
+                vendeur.copy(pinHash = hash, pinSalt = salt, updatedAt = now(), isDirty = true)
+            )
+            loggerEvenement(TypeEvenement.MODIF_MOT_DE_PASSE.name, "PIN du vendeur ${vendeur.nom} redéfini (id=${vendeur.id})")
         }
     }
 
@@ -338,9 +361,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     // réactif (Room Flow), aucun rechargement manuel n'est nécessaire.
     fun loadTables() { /* no-op : `tables` est un flux réactif */ }
 
-    fun addTable(name: String) {
+    fun addTable(name: String, vendeurId: UUID? = null) {
         viewModelScope.launch {
-            repository.addTable(AppTable(name = name).copy(updatedAt = now(), isDirty = true))
+            repository.addTable(AppTable(name = name, vendeurId = vendeurId).copy(updatedAt = now(), isDirty = true))
             loggerEvenement(TypeEvenement.OUVERTURE_TABLE.name, "Table ouverte : $name")
             _tableItems.value = emptyList()
             loadTables()
@@ -371,8 +394,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
-    fun addProductToTable(productId: UUID, tableId: UUID) {
+    fun addProductToTable(productId: UUID, tableId: UUID, vendeurId: UUID? = null) {
         viewModelScope.launch {
+            // Claim automatique : le premier vendeur à ajouter un produit à une table libre
+            // (créée sans propriétaire, ou par un autre vendeur/le gérant) en devient propriétaire.
+            val table = tables.value.find { it.id == tableId }
+            if (vendeurId != null && table != null && table.vendeurId == null) {
+                repository.updateTable(table.copy(vendeurId = vendeurId, updatedAt = now(), isDirty = true))
+            }
+
             val existingItem = repository.getTableItems(tableId).find { it.productId == productId }
             if (existingItem != null) {
                 repository.updateProductInTable(
@@ -417,7 +447,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun getTableById(id: UUID): AppTable? {
         return tables.value.find { it.id == id }
     }
-    fun payTable(tableId: UUID) {
+    fun payTable(tableId: UUID, vendeurId: UUID? = null) {
         viewModelScope.launch {
             val itemsToPay = _tableItems.value
             if (itemsToPay.isEmpty()) return@launch
@@ -426,7 +456,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             val ts      = now()
             val vente = Vente(
                 id        = venteId,
-                vendeurId = null,
+                vendeurId = vendeurId ?: tables.value.find { it.id == tableId }?.vendeurId,
                 total     = itemsToPay.sumOf { it.produit.prix * it.quantity },
                 date      = ts,
                 tableId   = tableId,
@@ -559,12 +589,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-    // On observe l'état de la caisse en temps réel
-    val caisseOuverte: StateFlow<Boolean> = repository.observeEtatCaisse()
+    // On observe l'état de la caisse en temps réel.
+    // initialValue = null (état "en cours de chargement") pour éviter d'afficher
+    // brièvement l'écran "caisse fermée" avant que la vraie valeur en base soit lue.
+    val caisseOuverte: StateFlow<Boolean?> = repository.observeEtatCaisse()
+        .map<Boolean, Boolean?> { it }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
+            initialValue = null
         )
 
     // Fonction pour ouvrir la caisse (déjà discutée, à ajouter si absente)
@@ -575,13 +608,17 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-    // Fonction pour fermer la caisse
+    // Fonction pour fermer la caisse d'un vendeur (fin de session, distinct de la clôture
+    // fiscale globale gérée par ClotureScreen/executerClotureGlobale).
     @RequiresApi(Build.VERSION_CODES.O)
-    fun fermerCaisse() {
+    fun fermerCaisseVendeur(vendeurId: UUID) {
         viewModelScope.launch {
-            repository.fermerCaisse()
+            repository.fermerCaisse(vendeurId)
         }
     }
+
+    /** Caisse ouverte ou non pour CE vendeur (plusieurs vendeurs peuvent être ouverts en même temps). */
+    fun observeSessionOuverte(vendeurId: UUID) = repository.observeSessionOuverte(vendeurId)
 
     // Dans MenuViewModel.kt
     fun exportVentesToCSV(context: Context) {
@@ -721,7 +758,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                         database.invoiceDao(),
                         database.infosDao(),
                         database.logDao(),
-                        database.clotureDao()
+                        database.clotureDao(),
+                        database.sessionCaisseDao()
                     )
                     MenuViewModel(repository)
                 }

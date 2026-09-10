@@ -1,5 +1,6 @@
 package com.example.caisse.composable
 
+import android.app.Application
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import com.example.caisse.data.DashboardViewModel
 import com.example.caisse.data.HomeActionButton
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.model.AuthViewModel
+import com.example.caisse.session.CurrentUserViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -29,13 +31,20 @@ fun AppNavigation() {
         factory = MenuViewModel.provideFactory(context = LocalContext.current)
     )
     val bluetoothViewModel: BluetoothViewModel = viewModel(
-        factory = BluetoothViewModel.provideFactory()
+        factory = BluetoothViewModel.provideFactory(
+            application = LocalContext.current.applicationContext as Application
+        )
     )
     val navController = rememberNavController()
     val dashboardViewModel: DashboardViewModel = viewModel(
-        factory = DashboardViewModel.provideFactory(venteDao = menuViewModel.repository.venteDao)
+        factory = DashboardViewModel.provideFactory(
+            venteDao = menuViewModel.repository.venteDao,
+            sessionCaisseDao = menuViewModel.repository.sessionCaisseDao,
+            vendeurDao = menuViewModel.repository.vendeurDao
+        )
     )
     val authViewModel = remember { AuthViewModel() }
+    val currentUserViewModel: CurrentUserViewModel = viewModel()
     val isSignedIn = remember { FirebaseAuth.getInstance().currentUser != null }
     val appContext = LocalContext.current
 
@@ -50,8 +59,16 @@ fun AppNavigation() {
 
 
     NavHost(navController,
-        startDestination = if (isSignedIn) "home" else "login"
+        startDestination = if (isSignedIn) "profil" else "login"
     ) {
+        composable("profil") {
+            ProfilSelectionScreen(
+                navController = navController,
+                menuViewModel = menuViewModel,
+                currentUserViewModel = currentUserViewModel,
+                authViewModel = authViewModel
+            )
+        }
         composable("home") { HomeScreen(
             onAction = { action ->
                 when(action){
@@ -73,7 +90,8 @@ fun AppNavigation() {
                 }
             },
             navController = navController,
-            viewModel = menuViewModel
+            viewModel = menuViewModel,
+            currentUserViewModel = currentUserViewModel
         ) }
         composable("categorie") { CategoriesScreen( navController = navController, modifier = Modifier,
             viewModelcategories = menuViewModel
@@ -82,8 +100,8 @@ fun AppNavigation() {
             viewModel = menuViewModel
         ) }
         composable("prendre_commande") { PrendreCommandeScreen(navController = navController, menuViewModel = menuViewModel,bluetoothViewModel = bluetoothViewModel) }
-        composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel, authVm = authViewModel) }
-        composable("table") { TableScreen(navController = navController, menuViewModel = menuViewModel, authViewModel = authViewModel) }
+        composable("panier") { PanierScreen(navController = navController, menuViewModel = menuViewModel, authVm = authViewModel, currentUserViewModel = currentUserViewModel) }
+        composable("table") { TableScreen(navController = navController, menuViewModel = menuViewModel, authViewModel = authViewModel, currentUserViewModel = currentUserViewModel) }
         composable(
             "table_details/{tableId}",
             arguments = listOf(navArgument("tableId") { type = NavType.StringType })
@@ -93,12 +111,13 @@ fun AppNavigation() {
                 menuViewModel = menuViewModel,
                 tableId = backStackEntry.arguments?.getString("tableId") ?: "",
                 bluetoothViewModel = bluetoothViewModel,
-                authVm = authViewModel
+                authVm = authViewModel,
+                currentUserViewModel = currentUserViewModel
             )
         }
-        composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel) }
+        composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel, currentUserViewModel = currentUserViewModel) }
         composable("donnee") { Donnee(navController = navController, menuViewModel = menuViewModel) }
-        composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel) }
+        composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel, currentUserViewModel = currentUserViewModel) }
         composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel, menuViewModel = menuViewModel) }
         composable("stock") { StockScreen(navController = navController, viewModel = menuViewModel) }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
@@ -135,8 +154,15 @@ fun AppNavigation() {
             GestionScreen(
                 navController = navController,
                 viewModel = menuViewModel,
-                fromHome = fromHome
+                fromHome = fromHome,
+                currentUserViewModel = currentUserViewModel
             )
+        }
+        composable("suivi_vendeurs") {
+            SuiviVendeursScreen(navController = navController, viewModel = dashboardViewModel, authViewModel = authViewModel, menuViewModel = menuViewModel)
+        }
+        composable("vendeurs") {
+            VendeursScreen(navController = navController, viewModel = menuViewModel)
         }
         composable("vente") { VenteScreen(navController = navController, viewModel = menuViewModel) }
         composable("log") {

@@ -4,8 +4,8 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,19 +46,22 @@ import com.example.caisse.data.Produit
 import com.example.caisse.data.Vendeur
 import com.example.caisse.data.sampleCategories
 import com.example.caisse.data.sampleCategoriesBertrand
+import com.example.caisse.data.sampleCategoriesBoma
 import com.example.caisse.data.sampleCategoriesCeny
 import com.example.caisse.data.sampleCategoriesSo
 import com.example.caisse.data.sampleProducts
 import com.example.caisse.data.sampleProductsBertrand
+import com.example.caisse.data.sampleProductsBoma
 import com.example.caisse.data.sampleProductsCeny
 import com.example.caisse.data.sampleProductsSo
 import com.example.caisse.data.sampleVendeurs
 import com.example.caisse.data.sampleVendeursBertrand
+import com.example.caisse.data.sampleVendeursBoma
 import com.example.caisse.data.sampleVendeursCeny
 import com.example.caisse.data.sampleVendeursSo
 
 @RequiresApi(Build.VERSION_CODES.O)
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun Donnee(navController: NavController, menuViewModel: MenuViewModel) {
     var showConfirmClear by remember { mutableStateOf(false) }
@@ -110,9 +113,10 @@ fun Donnee(navController: NavController, menuViewModel: MenuViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         DataSetButton("Données Mont CENY") {
                             addSampleData(
@@ -144,6 +148,15 @@ fun Donnee(navController: NavController, menuViewModel: MenuViewModel) {
                                 sampleCategoriesSo,
                                 sampleProductsSo,
                                 sampleVendeursSo
+                            )
+                        }
+
+                        DataSetButton("boma") {
+                            addSampleData(
+                                menuViewModel,
+                                sampleCategoriesBoma,
+                                sampleProductsBoma,
+                                sampleVendeursBoma
                             )
                         }
                     }
@@ -218,11 +231,11 @@ fun Donnee(navController: NavController, menuViewModel: MenuViewModel) {
 }
 
 @Composable
-private fun RowScope.DataSetButton(label: String, onClick: () -> Unit) {
+private fun DataSetButton(label: String, onClick: () -> Unit) {
     FilledTonalButton(
         onClick = onClick,
         modifier = Modifier
-            .weight(1f)
+            .width(160.dp)
             .height(72.dp)
     ) {
         Text(label, textAlign = TextAlign.Center)

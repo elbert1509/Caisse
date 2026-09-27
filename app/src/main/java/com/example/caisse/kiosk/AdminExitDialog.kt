@@ -12,6 +12,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ fun AdminExitDialog(
     var updateStatus by remember { mutableStateOf<String?>(null) }
     var updating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val installResult by SilentUpdater.installResult.collectAsState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -69,6 +71,7 @@ fun AdminExitDialog(
                         onClick = {
                             updating = true
                             updateStatus = "Vérification…"
+                            SilentUpdater.clearInstallResult()
                             scope.launch {
                                 updateStatus = SilentUpdater.runUpdate(context)
                                 updating = false
@@ -76,6 +79,10 @@ fun AdminExitDialog(
                         }
                     ) { Text(if (updating) "Mise à jour…" else "Vérifier les mises à jour") }
                     updateStatus?.let { Text(it) }
+                    // Résultat réel de l'installation, rapporté de façon asynchrone par
+                    // InstallResultReceiver (le commit PackageInstaller est immédiat mais
+                    // l'installation se termine plus tard).
+                    installResult?.let { Text(it) }
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

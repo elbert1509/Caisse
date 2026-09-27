@@ -10,6 +10,9 @@ import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -35,6 +38,23 @@ object SilentUpdater {
     private const val CONFIG_DOC = "app_android"
     private const val DEVICES_COLLECTION = "devices"
     private const val INSTALL_ACTION = "com.example.caisse.INSTALL_RESULT"
+
+    /**
+     * Résultat asynchrone de l'installation, rapporté par [InstallResultReceiver]
+     * (le commit de la session PackageInstaller est instantané, mais l'installation
+     * réelle se termine plus tard — l'UI de maintenance observe ce flow pour refléter
+     * le vrai résultat au lieu de rester bloquée sur "Installation en cours…").
+     */
+    private val _installResult = MutableStateFlow<String?>(null)
+    val installResult: StateFlow<String?> = _installResult.asStateFlow()
+
+    fun reportInstallResult(message: String) {
+        _installResult.value = message
+    }
+
+    fun clearInstallResult() {
+        _installResult.value = null
+    }
 
     data class UpdateInfo(
         val versionCode: Long,

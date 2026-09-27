@@ -20,20 +20,25 @@ class InstallResultReceiver : BroadcastReceiver() {
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
 
         when (status) {
-            PackageInstaller.STATUS_SUCCESS ->
+            PackageInstaller.STATUS_SUCCESS -> {
                 Log.i("InstallResultReceiver", "Mise à jour installée avec succès.")
+                SilentUpdater.reportInstallResult("Mise à jour installée avec succès. Redémarrage de l'app…")
+            }
 
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 // Ne devrait pas arriver en Device Owner. Au cas où, on relance l'intent de confirmation.
                 Log.w("InstallResultReceiver", "Action utilisateur requise (pas en mode silencieux ?).")
+                SilentUpdater.reportInstallResult("Confirmation utilisateur requise pour installer la mise à jour.")
                 @Suppress("DEPRECATION")
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 confirm?.let { runCatching { context.startActivity(it) } }
             }
 
-            else ->
+            else -> {
                 Log.e("InstallResultReceiver", "Échec de l'installation ($status) : $message")
+                SilentUpdater.reportInstallResult("Échec de l'installation ($status)${message?.let { " : $it" } ?: ""}.")
+            }
         }
     }
 }

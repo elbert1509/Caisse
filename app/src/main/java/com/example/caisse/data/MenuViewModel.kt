@@ -15,8 +15,10 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.caisse.util.PasswordHasher
 import com.example.caisse.util.formatTimestampToDate
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -705,6 +707,83 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 }
             }
         }
+    }
+
+    // ---- Import de catalogue client depuis Firestore ----
+    // Permet d'ajouter un nouveau client (catégories + produits + vendeurs, images en URL
+    // distante) sans recompiler/redéployer l'app : il suffit d'ajouter un document dans la
+    // collection Firestore "catalogues".
+    data class CatalogueClient(val id: String, val label: String)
+
+    data class CatalogueImportResult(
+        val categories: List<Category>,
+        val produits: List<Produit>,
+        val vendeurs: List<Vendeur>
+    )
+
+    /** Liste les clients disponibles dans Firestore (collection "catalogues"). */
+    suspend fun listCataloguesClients(): List<CatalogueClient> {
+        val snap = FirebaseFirestore.getInstance().collection("catalogues").get().await()
+        return snap.documents.map { doc ->
+            CatalogueClient(id = doc.id, label = doc.getString("label") ?: doc.id)
+        }
+    }
+
+    /**
+     * Récupère et parse le catalogue Firestore `catalogues/{clientId}` :
+     *   - categories: [{ key, name, description? }]
+     *   - produits:   [{ nom, prix, categoryKey, stock?, imageUrl?, description? }]
+     *   - vendeurs:   [{ nom, prenom }]
+     * `key`/`categoryKey` ne sont que des identifiants locaux au document, utilisés pour
+     * relier chaque produit à sa catégorie ; de vrais UUID sont générés à l'import.
+     */
+    suspend fun fetchCatalogue(clientId: String): CatalogueImportResult {
+        val doc = FirebaseFirestore.getInstance()
+            .collection("catalogues")
+            .document(clientId)
+            .get()
+            .await()
+        val data = doc.data ?: throw IllegalStateException("Catalogue introuvable : $clientId")
+
+        @Suppress("UNCHECKED_CAST")
+        val categoriesRaw = data["categories"] as? List<Map<String, Any?>> ?: emptyList()
+        val categoryIdByKey = mutableMapOf<String, UUID>()
+        val categories = categoriesRaw.mapNotNull { c ->
+            val key = c["key"] as? String ?: return@mapNotNull null
+            val id = UUID.randomUUID()
+            categoryIdByKey[key] = id
+            Category(
+                id = id,
+                name = c["name"] as? String ?: key,
+                description = c["description"] as? String
+            )
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val produitsRaw = data["produits"] as? List<Map<String, Any?>> ?: emptyList()
+        val produits = produitsRaw.mapNotNull { p ->
+            val categoryId = (p["categoryKey"] as? String)?.let { categoryIdByKey[it] }
+                ?: return@mapNotNull null
+            Produit(
+                nom = p["nom"] as? String ?: return@mapNotNull null,
+                prix = (p["prix"] as? Number)?.toDouble() ?: 0.0,
+                image = p["imageUrl"] as? String,
+                categoryId = categoryId,
+                stock = (p["stock"] as? Number)?.toInt() ?: 0,
+                description = p["description"] as? String
+            )
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val vendeursRaw = data["vendeurs"] as? List<Map<String, Any?>> ?: emptyList()
+        val vendeurs = vendeursRaw.map { v ->
+            Vendeur(
+                nom = v["nom"] as? String ?: "",
+                prenom = v["prenom"] as? String ?: ""
+            )
+        }
+
+        return CatalogueImportResult(categories, produits, vendeurs)
     }
 
     companion object {

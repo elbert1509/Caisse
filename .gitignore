@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Script d'upload de catalogues (scripts/upload-catalogue)
+scripts/upload-catalogue/node_modules
+scripts/upload-catalogue/service-account.json
+

@@ -4,7 +4,7 @@ Procédure complète pour configurer un nouveau pad : installation, passage en *
 
 - **App** : `com.example.caisse`
 - **Admin component** : `com.example.caisse/.kiosk.KioskAdminReceiver`
-- **Android cible** : 8.1+ (testé sur MediaTek)
+- **Android cible** : 8.1+ (testé sur MediaTek) — `minSdk = 26` (Android 8.0) depuis la 1.15, requis par l'usage de `java.time.*` dans le code (ouverture de caisse, clôture, JET...). Un pad en dessous d'Android 8.0 refusera l'installation (`INSTALL_FAILED_OLDER_SDK`) au lieu de planter à l'usage.
 
 ---
 
@@ -159,22 +159,46 @@ L'app se met à jour seule via Firestore + Firebase Storage (privilège Device O
 
 > La mise à jour ne se déclenche que si `targetVersionCode > versionCode installé` (pas de downgrade automatique). Même signature obligatoire.
 
+> ⚠️ **Piège vécu** : `INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match`. Arrive si le pad a une build **debug** installée (signée avec le keystore debug auto-généré par Android Studio) et qu'on pousse une build **release** (keystore de prod) — Android refuse toute mise à jour dont le certificat diffère. Toujours vérifier que le pad tourne une build release signée avec le même keystore que le pipeline OTA avant de chercher un bug côté code. Le vrai résultat de l'installation (succès/échec/erreur précise) s'affiche maintenant dans l'écran de maintenance après « Vérifier les mises à jour » (avant, l'UI restait bloquée sur « Installation en cours… » même en cas d'échec).
+
 ### Règles de sécurité
 
 **Firestore** (Console → Firestore → Règles) :
 ```
-match /config/{doc}  { allow read: if true; allow write: if false; }
-match /devices/{doc} { allow read: if true; allow write: if false; }
+match /config/{doc}     { allow read: if true; allow write: if false; }
+match /devices/{doc}    { allow read: if true; allow write: if false; }
+match /catalogues/{doc} { allow read: if true; allow write: if false; }
 ```
 
 **Storage** (Console → Storage → Règles) :
 ```
-match /app-release.apk { allow read: if true; allow write: if false; }
+match /app-release.apk         { allow read: if true; allow write: if false; }
+match /catalogues/{allPaths=**} { allow read: if true; allow write: if false; }
 ```
+
+> Ces deux chemins doivent rester en lecture publique (`if true`) : l'app n'est jamais authentifiée via Firebase Auth sur l'écran de maintenance ou l'écran admin « Données » (le déverrouillage se fait par PIN local). Une règle `if request.auth != null` sur `app-release.apk` ou `catalogues/**` casse silencieusement l'OTA ou l'import de catalogue (pas d'erreur visible : le téléchargement échoue, ou l'image ne s'affiche juste pas).
 
 ---
 
-## 6. Checklist de validation d'un nouveau pad
+## 6. Catalogues clients (import dynamique, sans recompilation)
+
+Depuis le 2026-09-27, ajouter/modifier le catalogue (catégories, produits, vendeurs) d'un client ne nécessite **plus** de recompiler ni redéployer l'app — y compris sur des pads déjà en production.
+
+- **Firestore** : un document par client dans `catalogues/{clientId}` (`label`, `categories[]`, `produits[]`, `vendeurs[]`). Consommé par `MenuViewModel.fetchCatalogue()` / `listCataloguesClients()`.
+- **App** : écran admin « Données » (PIN requis, `menuViewModel.isAdminMode`) → section « Nouveau client (Firebase) » → liste déroulante (rafraîchissable) des clients Firestore → « Importer ce client ».
+- **Outil d'upload** : `scripts/upload-catalogue/` (Node.js + `firebase-admin`, hors build Android). Nécessite une clé de compte de service Firebase (`scripts/upload-catalogue/service-account.json`, **jamais commitée**) et `npm install` une première fois.
+  ```bash
+  cd scripts/upload-catalogue
+  node upload-catalogue.js catalogues/<client>.json
+  ```
+- **Images produit** : deux cas.
+  - **Image déjà embarquée dans l'app** (ancien produit migré depuis un `SampleData*.kt`) : `"image": "android.resource://com.example.caisse/drawable/<nom>"` — fonctionne uniquement si le drawable existe déjà dans l'APK installé (nécessite recompilation pour en ajouter un nouveau).
+  - **Image distante (recommandé pour tout nouveau produit)** : uploader le fichier dans Firebase Storage sous `catalogues/images/<fichier>` (dossier partagé entre tous les clients), puis dans le JSON juste `"image": "<fichier>"` — le script reconstruit automatiquement l'URL de téléchargement. Coil (chargement d'image dans l'app) lit cette URL `https://` à l'exécution : **aucune recompilation ni redéploiement requis**, y compris sur un pad déjà en prod.
+- Les anciens boutons codés en dur (`SampleData*.kt` + boutons fixes dans `Donnee.kt`) ont été supprimés — tout nouveau catalogue passe désormais par ce mécanisme.
+
+---
+
+## 7. Checklist de validation d'un nouveau pad
 
 - [ ] App installée et signée (keystore de prod)
 - [ ] Device Owner posé (`Success: Device owner set`)
@@ -185,6 +209,7 @@ match /app-release.apk { allow read: if true; allow write: if false; }
 - [ ] Reboot → retour direct dans l'app
 - [ ] Document `devices/{ANDROID_ID}` créé dans Firestore
 - [ ] Test « Vérifier les mises à jour »
+- [ ] Écran « Données » → « Nouveau client (Firebase) » liste bien les clients et importe correctement un catalogue
 - [ ] Apps inutiles désactivées + animations réduites
 
 ---

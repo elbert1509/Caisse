@@ -1,0 +1,13 @@
+{
+  "name": "upload-catalogue",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Upload d'un catalogue client (categories/produits/vendeurs) vers Firestore, pour l'ecran Donnee.kt de l'app Caisse.",
+  "type": "commonjs",
+  "scripts": {
+    "upload": "node upload-catalogue.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.1.0"
+  }
+}

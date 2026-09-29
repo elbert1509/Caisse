@@ -343,10 +343,10 @@ data class Cloture(
     val isDeleted: Boolean = false
 )
 object AppConfig {
-    const val VERSION_LOGICIEL = "1.3"
+    const val VERSION_LOGICIEL = "1.17"
     const val NOM_LOGICIEL = "MaCaissePro"
     const val EDITEUR = "Ogooué Infos"
-    const val NUMERO = "0667724958"
+    const val NUMERO = "077488096"
     const val NUM_CERTIFICAT = "NF525-EN COURS" // À remplacer par le numéro fourni par l'organisme certificateur
 }
 

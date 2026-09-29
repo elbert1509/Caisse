@@ -29,7 +29,9 @@ fun AppNavigation() {
         factory = MenuViewModel.provideFactory(context = LocalContext.current)
     )
     val bluetoothViewModel: BluetoothViewModel = viewModel(
-        factory = BluetoothViewModel.provideFactory()
+        factory = BluetoothViewModel.provideFactory(
+            application = LocalContext.current.applicationContext as android.app.Application
+        )
     )
     val navController = rememberNavController()
     val dashboardViewModel: DashboardViewModel = viewModel(

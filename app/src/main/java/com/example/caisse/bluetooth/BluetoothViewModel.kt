@@ -1,6 +1,7 @@
 package com.example.caisse.bluetooth
 
 import android.Manifest
+import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
@@ -10,6 +11,7 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -35,7 +37,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-class BluetoothViewModel : ViewModel() {
+class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
 
     private val bluetoothAdapter  : BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket : BluetoothSocket? = null
@@ -56,6 +58,35 @@ class BluetoothViewModel : ViewModel() {
 
     // Police normale (reset si besoin)
     private val FONT_RESET = "$ESC!0"
+
+    // ---- Reconnexion automatique au dernier appareil Bluetooth appairé ----
+    // Évite de devoir repasser par Paramètres > Bluetooth à chaque lancement de l'app.
+    private val btPrefs = application.getSharedPreferences("bluetooth_prefs", Context.MODE_PRIVATE)
+    private val KEY_LAST_DEVICE_ADDRESS = "last_device_address"
+
+    init {
+        tryAutoConnect()
+    }
+
+    private fun tryAutoConnect() {
+        val ctx = getApplication<Application>()
+        val savedAddress = btPrefs.getString(KEY_LAST_DEVICE_ADDRESS, null) ?: return
+
+        val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
+        } else true
+        if (!hasPermission) return
+
+        try {
+            val device = bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == savedAddress }
+            if (device != null) {
+                connecToDevice(device, ctx)
+            }
+        } catch (e: SecurityException) {
+            Log.e("BluetoothViewModel", "Permission manquante pour la reconnexion automatique", e)
+        }
+    }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun loadPairedDevices() {
@@ -88,13 +119,29 @@ class BluetoothViewModel : ViewModel() {
                 outputStream = socket?.outputStream
 
                 _isConnected.value = true
+                btPrefs.edit().putString(KEY_LAST_DEVICE_ADDRESS, device.address).apply()
             } catch (e: SecurityException) {
                 e.printStackTrace()
+                closeFailedSocket()
                 _isConnected.value = false
             } catch (e: Exception) {
                 e.printStackTrace()
+                closeFailedSocket()
                 _isConnected.value = false
             }
+        }
+    }
+
+    // Referme proprement une connexion ratée : sans ça, un socket/outputStream à moitié
+    // initialisé reste en mémoire et peut faire échouer silencieusement la prochaine
+    // tentative (manuelle ou reconnexion auto au démarrage).
+    private fun closeFailedSocket() {
+        try {
+            socket?.close()
+        } catch (_: Exception) {
+        } finally {
+            socket = null
+            outputStream = null
         }
     }
 
@@ -145,30 +192,19 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("Adresse: ${infos?.address ?: ""}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
                 sb.append("Date: $dateHeure\r\n")
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("NOTE PROVISOIRE\r\n")
                 sb.append("(Ceci n'est pas un ticket)\r\n")
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 if (invoiceId != null){
                     sb.append("FACTURE CLIENT N°: $invoiceNo\r\n")
-                    sb.append(sepLine())
+                    sb.append(sepLine55())
                 }else {
                     sb.append("FACTURE CLIENT \r\n")
-                    sb.append(sepLine())
+                    sb.append(sepLine55())
                 }
                 sb.append("\u001B\u0061\u0000") // Alignement à gauche
 
-                sb.append(
-                    formatLine58(
-                        article = "Article",
-                        qty = "Qte",
-                        price = "Prix",
-                        total = "Total"
-                    )
-                )
-                sb.append(sepLine())
-
-                // Colonnes 58mm -> on serre un peu
                 tableItems.forEach { ticket ->
 
                     val article = ticket.produit.nom.replace("\n", " ")
@@ -177,7 +213,7 @@ class BluetoothViewModel : ViewModel() {
                     val totalLine = (ticket.produit.prix * ticket.quantity).toInt().toString().replace(" ", "")
 
                     sb.append(
-                        formatLine58(
+                        formatItemLine55(
                             article = article,
                             qty = qty,
                             price = price,
@@ -187,10 +223,12 @@ class BluetoothViewModel : ViewModel() {
                 }
 
 
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("TOTAL: ${formatPrice(total, infos?.devise)}\r\n")
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("Merci pour votre confiance\r\n")
+                sb.append("\u001B\u0061\u0001")
+                sb.append("Contact Rody: ${AppConfig.NUMERO}\r\n")
                 sb.append("\r\n\r\n\r\n")
 
                 // Remplacement EUR et nettoyage des accents pour la compatibilité POS
@@ -242,20 +280,10 @@ class BluetoothViewModel : ViewModel() {
                 sb.append("SIRET: ${infos?.siret ?: "000 000 000"}\r\n")
                 sb.append("Tel: ${infos?.phone ?: ""}\r\n")
                 sb.append("Date: $dateHeure\r\n")
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("TICKET N°: $invoiceNo\r\n")
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("\u001B\u0061\u0000") // Alignement à gauche
-
-                sb.append(
-                    formatLine58(
-                        article = "Article",
-                        qty = "Qte",
-                        price = "Prix",
-                        total = "Total"
-                    )
-                )
-                sb.append(sepLine())
 
                 tableItems.forEach { ticket ->
                     val article = ticket.produit.nom.replace("\n", " ")
@@ -264,7 +292,7 @@ class BluetoothViewModel : ViewModel() {
                     val totalLine = formatPriceShort(ticket.produit.prix * ticket.quantity)
 
                     sb.append(
-                        formatLine58(
+                        formatItemLine55(
                             article = article,
                             qty = qty,
                             price = price,
@@ -273,7 +301,7 @@ class BluetoothViewModel : ViewModel() {
                     )
                 }
 
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("TOTAL TTC: ${formatPrice(total, infos?.devise)}\r\n")
                 sb.append("TVA (5%): ${formatPrice(montantTVA, infos?.devise)}\r\n")
                 sb.append("TOTAL HT : ${formatPrice(montantHT, infos?.devise)}\r\n")
@@ -283,11 +311,13 @@ class BluetoothViewModel : ViewModel() {
                     sb.append("Signature: $displayHash\r\n")
                 }
 
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("${AppConfig.NOM_LOGICIEL} v${AppConfig.VERSION_LOGICIEL}\r\n")
                 sb.append("${AppConfig.NUM_CERTIFICAT}\r\n")
-                sb.append(sepLine())
+                sb.append(sepLine55())
                 sb.append("Merci de votre visite !\r\n")
+                sb.append("\u001B\u0061\u0001")
+                sb.append(" Contact : Rody ${AppConfig.NUMERO} !\r\n")
                 sb.append("\r\n\r\n\r\n")
 
                 val text = StripAccents(sb.toString().replace("€", "EUR"))
@@ -320,22 +350,26 @@ class BluetoothViewModel : ViewModel() {
         return "$a$q$p$t\r\n"
     }
 
-    private val LINE_CHARS_58 = 42
-    private fun sepLine(): String = "-".repeat(LINE_CHARS_58) + "\r\n"
-    private fun formatLine58(article: String, qty: String, price: String, total: String): String {
-        val aW = 20
-        val qW = 4
-        val pW = 7
-        val tW = 8
+    // Ticket 55mm (printInvoice / printProforma) : largeur RÉELLE mesurée sur l'imprimante
+    // = 32 caractères/ligne (identique en Font A et Font B — cette imprimante ignore la
+    // commande de sélection de police). Confirmée par une impression de règle physique.
+    private val LINE_CHARS_55 = 32
+    private fun sepLine55(): String = "-".repeat(LINE_CHARS_55) + "\r\n"
 
-        fun cut(s: String, w: Int) = if (s.length <= w) s else s.take(w)
-
-        val a = cut(article, aW).padEnd(aW, ' ')
-        val q = cut(qty, qW).padStart(qW, ' ')
-        val p = cut(price, pW).padStart(pW, ' ')
-        val t = cut(total, tW).padStart(tW, ' ')
-
-        return "$a $q $p $t\r\n" // 20+1+4+1+7+1+8 = 42
+    // Format "reçu" pro sur deux lignes par article : le nom sur sa propre ligne
+    // (jamais tronqué au milieu, sauf s'il dépasse vraiment 32 caractères), puis
+    // "qte x prix" à gauche et le total de la ligne aligné à droite. Si les deux ne
+    // tiennent pas ensemble (gros montants), le total passe sur sa propre ligne
+    // plutôt que de déborder et faire un retour à la ligne mal placé.
+    private fun formatItemLine55(article: String, qty: String, price: String, total: String): String {
+        val name = if (article.length <= LINE_CHARS_55) article else article.take(LINE_CHARS_55)
+        val detail = "$qty x $price"
+        return if (detail.length + total.length < LINE_CHARS_55) {
+            val spaces = LINE_CHARS_55 - detail.length - total.length
+            "$name\r\n$detail${" ".repeat(spaces)}$total\r\n"
+        } else {
+            "$name\r\n$detail\r\n${total.padStart(LINE_CHARS_55, ' ')}\r\n"
+        }
     }
 
 
@@ -387,11 +421,11 @@ class BluetoothViewModel : ViewModel() {
         }
     }
     companion object {
-        fun provideFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+        fun provideFactory(application: Application): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 if (modelClass.isAssignableFrom(BluetoothViewModel::class.java)) {
-                    return BluetoothViewModel() as T
+                    return BluetoothViewModel(application) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
             }

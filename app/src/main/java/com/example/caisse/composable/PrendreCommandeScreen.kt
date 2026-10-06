@@ -10,7 +10,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -30,6 +35,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,6 +67,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +78,7 @@ import com.example.caisse.bluetooth.BluetoothViewModel
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Ticket
+import com.example.caisse.util.FavorisPrefs
 import com.example.caisse.util.drawableUri
 import com.example.caisse.util.formatPrice
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -87,8 +96,28 @@ fun PrendreCommandeScreen(
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
     val shopInfos = menuViewModel.getInfos()
+    val context = LocalContext.current
 
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id) }
+
+    // Onglet "Favoris" : affiché avant les catégories, produits ajoutés par appui long
+    // sur leur carte (voir ProductItem). Stockage local au pad (FavorisPrefs), pas de synchro.
+    var showFavoris by remember { mutableStateOf(false) }
+    var favoriIds by remember { mutableStateOf(FavorisPrefs.getFavoris(context)) }
+    val toggleFavori: (Produit) -> Unit = { product ->
+        val nowFavori = FavorisPrefs.toggleFavori(context, product.id)
+        favoriIds = FavorisPrefs.getFavoris(context)
+        Toast.makeText(
+            context,
+            if (nowFavori) "${product.nom} ajouté aux favoris" else "${product.nom} retiré des favoris",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    val displayedProducts = remember(products, showFavoris, selectedCategoryId, favoriIds) {
+        if (showFavoris) products.filter { favoriIds.contains(it.id.toString()) }
+        else products.filter { it.categoryId == selectedCategoryId }
+    }
 
     LaunchedEffect(categories) {
         if (selectedCategoryId == null || categories.none { it.id == selectedCategoryId }) {
@@ -201,12 +230,18 @@ fun PrendreCommandeScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
 
                     if (categories.isNotEmpty()) {
-                        val selectedIndex = categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+                        val selectedIndex = if (showFavoris) 0
+                            else categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0) + 1
                         ScrollableTabRow(selectedTabIndex = selectedIndex) {
+                            Tab(
+                                selected = showFavoris,
+                                onClick = { showFavoris = true },
+                                text = { Text("★ Favoris") }
+                            )
                             categories.forEach { category ->
                                 Tab(
-                                    selected = category.id == selectedCategoryId,
-                                    onClick = { selectedCategoryId = category.id },
+                                    selected = !showFavoris && category.id == selectedCategoryId,
+                                    onClick = { showFavoris = false; selectedCategoryId = category.id },
                                     text = { Text(category.name) }
                                 )
                             }
@@ -220,10 +255,27 @@ fun PrendreCommandeScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(products.filter { it.categoryId == selectedCategoryId }) { product ->
-                            ProductItem(product = product, devise = shopInfos?.devise ?: "") {
-                                menuViewModel.addToCart(product)
+                        if (showFavoris && displayedProducts.isEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    "Aucun favori pour l'instant — appui long sur un produit pour l'ajouter.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp)
+                                )
                             }
+                        }
+                        items(displayedProducts) { product ->
+                            ProductItem(
+                                product = product,
+                                devise = shopInfos?.devise ?: "",
+                                isFavori = favoriIds.contains(product.id.toString()),
+                                onProductClick = { menuViewModel.addToCart(product) },
+                                onToggleFavori = { toggleFavori(product) }
+                            )
                         }
                     }
 
@@ -279,12 +331,18 @@ fun PrendreCommandeScreen(
 
                     Column(modifier = Modifier.weight(0.6f)) {
                         if (categories.isNotEmpty()) {
-                            val selectedIndex = categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+                            val selectedIndex = if (showFavoris) 0
+                                else categories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0) + 1
                             ScrollableTabRow(selectedTabIndex = selectedIndex) {
+                                Tab(
+                                    selected = showFavoris,
+                                    onClick = { showFavoris = true },
+                                    text = { Text("★ Favoris") }
+                                )
                                 categories.forEach { category ->
                                     Tab(
-                                        selected = category.id == selectedCategoryId,
-                                        onClick = { selectedCategoryId = category.id },
+                                        selected = !showFavoris && category.id == selectedCategoryId,
+                                        onClick = { showFavoris = false; selectedCategoryId = category.id },
                                         text = { Text(category.name) }
                                     )
                                 }
@@ -297,10 +355,27 @@ fun PrendreCommandeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(products.filter { it.categoryId == selectedCategoryId }) { product ->
-                                ProductItem(product = product, devise = shopInfos?.devise ?: "") {
-                                    menuViewModel.addToCart(product)
+                            if (showFavoris && displayedProducts.isEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Text(
+                                        "Aucun favori pour l'instant — appui long sur un produit pour l'ajouter.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp)
+                                    )
                                 }
+                            }
+                            items(displayedProducts) { product ->
+                                ProductItem(
+                                    product = product,
+                                    devise = shopInfos?.devise ?: "",
+                                    isFavori = favoriIds.contains(product.id.toString()),
+                                    onProductClick = { menuViewModel.addToCart(product) },
+                                    onToggleFavori = { toggleFavori(product) }
+                                )
                             }
                         }
                     }
@@ -377,10 +452,17 @@ fun PrendreCommandeScreen(
 }
 
 @Composable
-fun ProductItem(product: Produit, devise: String, onProductClick: () -> Unit) {
-    var scale by remember { mutableStateOf(1f) }
+fun ProductItem(
+    product: Produit,
+    devise: String,
+    isFavori: Boolean = false,
+    onProductClick: () -> Unit,
+    onToggleFavori: (() -> Unit)? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
     val animatedScale by animateFloatAsState(
-        targetValue = scale,
+        targetValue = if (isPressed) 0.94f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -393,49 +475,61 @@ fun ProductItem(product: Produit, devise: String, onProductClick: () -> Unit) {
             .fillMaxWidth()
             .height(130.dp)
             .scale(animatedScale)
-            .pointerInteropFilter { event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN  -> { scale = 0.94f; true }
-                    MotionEvent.ACTION_UP    -> { scale = 1f; onProductClick(); true }
-                    MotionEvent.ACTION_CANCEL -> { scale = 1f; true }
-                    else -> false
-                }
-            },
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onProductClick,
+                onLongClick = onToggleFavori
+            ),
         elevation = cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.large,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            AsyncImage(
-                model = product.image ?: drawableUri("placeholder_image"),
-                contentDescription = product.nom,
-                modifier = Modifier.size(64.dp),
-                contentScale = ContentScale.Fit
-            )
-            Text(
-                text = product.nom,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.small
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
+                AsyncImage(
+                    model = product.image ?: drawableUri("placeholder_image"),
+                    contentDescription = product.nom,
+                    modifier = Modifier.size(64.dp),
+                    contentScale = ContentScale.Fit
+                )
                 Text(
-                    text = formatPrice(product.prix, devise),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Bold
+                    text = product.nom,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = formatPrice(product.prix, devise),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (onToggleFavori != null) {
+                Icon(
+                    imageVector = if (isFavori) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = if (isFavori) "Retirer des favoris (appui long)" else "Ajouter aux favoris (appui long)",
+                    tint = if (isFavori) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(18.dp)
                 )
             }
         }

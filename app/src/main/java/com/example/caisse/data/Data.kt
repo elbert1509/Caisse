@@ -26,6 +26,7 @@ enum class HomeActionButton{
     DASHBOARD,
     STOCK,
     GESTION,
+    CLOTURE,
     }
 
 @Immutable
@@ -343,7 +344,7 @@ data class Cloture(
     val isDeleted: Boolean = false
 )
 object AppConfig {
-    const val VERSION_LOGICIEL = "1.17"
+    const val VERSION_LOGICIEL = "1.19"
     const val NOM_LOGICIEL = "MaCaissePro"
     const val EDITEUR = "Ogooué Infos"
     const val NUMERO = "077488096"

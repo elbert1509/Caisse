@@ -54,25 +54,51 @@ import kotlin.math.max
 private const val LOW_STOCK_THRESHOLD = 10
 private val LowStockRed = Color(0xFFDC2626)
 
+/**
+ * Écran Stock, avec deux présentations selon le point d'entrée :
+ *  - depuis Gestion (showRevenue = true) : vue complète d'origine — CA potentiel,
+ *    KPI, liste triée par CA, barre de total en bas.
+ *  - depuis l'accueil (showRevenue = false) : vue simplifiée lecture seule — juste
+ *    les produits groupés par catégorie avec leur stock, sans aucune donnée de CA.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
+fun StockScreen(navController: NavController, viewModel: MenuViewModel, showRevenue: Boolean = true) {
 
     val produits by viewModel.produits.collectAsState() // Liste des produits (prix, stock, etc.)
+    val categories by viewModel.categories.collectAsState()
+
     val lignes = remember(produits) {
         produits
             .filter { it.isActive } // on n’affiche que les produits actifs
             .map { it.toUiRow() }
-            // Stock faible (≤ 10) d'abord, puis CA potentiel décroissant
-            .sortedWith(
-                compareByDescending<UiRow> { it.stock <= LOW_STOCK_THRESHOLD }
-                    .thenByDescending { it.revenue }
-            )
+    }
+
+    // --- Vue complète (Gestion) : triée par stock faible puis CA décroissant ---
+    val lignesParRevenu = remember(lignes) {
+        lignes.sortedWith(
+            compareByDescending<UiRow> { it.stock <= LOW_STOCK_THRESHOLD }
+                .thenByDescending { it.revenue }
+        )
+    }
+    val totalRevenue = remember(lignes) { lignes.sumOf { it.revenue } }
+    val maxRevenue = remember(lignes) { lignes.maxOfOrNull { it.revenue } ?: 0.0 }
+
+    // --- Vue simplifiée (Accueil) : groupée par catégorie, stock faible puis alphabétique ---
+    val groupes = remember(lignes, categories) {
+        val nomParCategorie = categories.associate { it.id to it.name }
+        lignes
+            .groupBy { nomParCategorie[it.categoryId] ?: "Sans catégorie" }
+            .toSortedMap()
+            .mapValues { (_, rows) ->
+                rows.sortedWith(
+                    compareByDescending<UiRow> { it.stock <= LOW_STOCK_THRESHOLD }
+                        .thenBy { it.name }
+                )
+            }
     }
 
     val totalUnits = remember(lignes) { lignes.sumOf { it.stock } }
-    val totalRevenue = remember(lignes) { lignes.sumOf { it.revenue } }
-    val maxRevenue = remember(lignes) { lignes.maxOfOrNull { it.revenue } ?: 0.0 }
     val shopInfos = viewModel.getInfos()
     val context = LocalContext.current
 
@@ -82,7 +108,11 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
                 title = {
                     Column {
                         Text("Stock produits", style = MaterialTheme.typography.titleLarge, color = Slate900)
-                        Text("Inventaire & CA potentiel", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                        Text(
+                            if (showRevenue) "Inventaire & CA potentiel" else "Inventaire",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate500
+                        )
                     }
                 },
                 actions = {
@@ -95,7 +125,9 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
         },
         containerColor = Slate100,
         bottomBar = {
-            BottomTotalBar(total = totalRevenue, devise = shopInfos?.devise ?: "")
+            if (showRevenue) {
+                BottomTotalBar(total = totalRevenue, devise = shopInfos?.devise ?: "")
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -106,7 +138,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // KPIs (compte produits, unités en stock, CA potentiel)
+            // KPIs (compte produits, unités en stock, CA potentiel si showRevenue)
             item {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -128,54 +160,104 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
                         isMoney = false,
                         devise = shopInfos?.devise ?: ""
                     )
-                    KpiCard(
-                        title = "CA potentiel",
-                        value = totalRevenue,
-                        gradient = Brush.linearGradient(listOf(Slate700, Slate900)),
-                        modifier = Modifier.weight(1f),
-                        devise = shopInfos?.devise ?: ""
-                    )
+                    if (showRevenue) {
+                        KpiCard(
+                            title = "CA potentiel",
+                            value = totalRevenue,
+                            gradient = Brush.linearGradient(listOf(Slate700, Slate900)),
+                            modifier = Modifier.weight(1f),
+                            devise = shopInfos?.devise ?: ""
+                        )
+                    }
                 }
             }
 
-            // Liste Stock par produit
-            item {
-                Card(
-                    elevation = cardElevation(6.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(
-                            "Stock par produit",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Slate900
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "CA potentiel = stock × prix unitaire",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
-                        )
-                        Spacer(Modifier.height(12.dp))
+            if (showRevenue) {
+                // --- Liste Stock par produit (vue complète, Gestion) ---
+                item {
+                    Card(
+                        elevation = cardElevation(6.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(
+                                "Stock par produit",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Slate900
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "CA potentiel = stock × prix unitaire",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate500
+                            )
+                            Spacer(Modifier.height(12.dp))
 
-                        if (lignes.isEmpty()) {
+                            if (lignesParRevenu.isEmpty()) {
+                                Text(
+                                    "Aucun produit actif ou pas de données.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Slate500
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    lignesParRevenu.forEach { row ->
+                                        StockRowRevenue(
+                                            name = row.name,
+                                            price = row.price,
+                                            stock = row.stock,
+                                            revenue = row.revenue,
+                                            ratio = if (maxRevenue > 0.0) (row.revenue / maxRevenue).toFloat() else 0f,
+                                            devise = shopInfos?.devise ?: ""
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // --- Liste Stock par catégorie (vue simplifiée, Accueil) ---
+                if (groupes.isEmpty()) {
+                    item {
+                        Card(
+                            elevation = cardElevation(6.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text(
                                 "Aucun produit actif ou pas de données.",
+                                modifier = Modifier.padding(14.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Slate500
                             )
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                lignes.forEach { row ->
-                                    StockRow(
-                                        name = row.name,
-                                        price = row.price,
-                                        stock = row.stock,
-                                        revenue = row.revenue,
-                                        ratio = if (maxRevenue > 0.0) (row.revenue / maxRevenue).toFloat() else 0f,
-                                        devise = shopInfos?.devise ?: ""
+                        }
+                    }
+                } else {
+                    groupes.forEach { (categorie, rows) ->
+                        item {
+                            Card(
+                                elevation = cardElevation(6.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Text(
+                                        categorie,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Slate900
                                     )
+                                    Spacer(Modifier.height(12.dp))
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        rows.forEach { row ->
+                                            StockRowSimple(
+                                                name = row.name,
+                                                stock = row.stock
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -191,7 +273,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel) {
 /* ------------------------------ UI components ------------------------------ */
 
 @Composable
-private fun BottomTotalBar(total: Double, devise: String ) {
+private fun BottomTotalBar(total: Double, devise: String) {
     Surface(
         tonalElevation = 2.dp,
         shadowElevation = 8.dp,
@@ -205,7 +287,7 @@ private fun BottomTotalBar(total: Double, devise: String ) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("Chiffre d'affaires total potentiel", color = Slate500, style = MaterialTheme.typography.bodyMedium)
-            Text(formatPrice(total,devise), color = Slate900, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(formatPrice(total, devise), color = Slate900, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -251,8 +333,9 @@ private fun KpiCard(
     }
 }
 
+/** Ligne complète (nom, prix, stock, CA, barre de progression) — vue Gestion. */
 @Composable
-private fun StockRow(
+private fun StockRowRevenue(
     name: String,
     price: Double,
     stock: Int,
@@ -300,13 +383,44 @@ private fun StockRow(
     }
 }
 
+/** Ligne simplifiée (nom + stock uniquement) — vue Accueil. */
+@Composable
+private fun StockRowSimple(
+    name: String,
+    stock: Int
+) {
+    val isLow = stock <= LOW_STOCK_THRESHOLD
+    val primaryTextColor = if (isLow) LowStockRed else Slate900
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            name,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleSmall,
+            color = primaryTextColor,
+            fontWeight = if (isLow) FontWeight.SemiBold else null
+        )
+        Text(
+            "Stock: $stock",
+            style = MaterialTheme.typography.titleSmall,
+            color = primaryTextColor,
+            fontWeight = if (isLow) FontWeight.SemiBold else null
+        )
+    }
+}
+
 /* ------------------------------ Mapping & utils ------------------------------ */
 
 private data class UiRow(
     val name: String,
     val price: Double,
     val stock: Int,
-    val revenue: Double
+    val revenue: Double,
+    val categoryId: java.util.UUID
 )
 
 private fun Produit.toUiRow(): UiRow =
@@ -314,7 +428,8 @@ private fun Produit.toUiRow(): UiRow =
         name = nom,
         price = prix,
         stock = max(0, stock),
-        revenue = prix * max(0, stock)
+        revenue = prix * max(0, stock),
+        categoryId = categoryId
     )
 
 

@@ -45,13 +45,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.caisse.data.Cloture
+import com.example.caisse.data.EtatCaisse
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.data.TypeEvenement
 import com.example.caisse.data.Vente
+import com.example.caisse.util.formatPrice
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -63,6 +66,23 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
     val ventes by viewModel.ventes.collectAsState()
     val infos = viewModel.getInfos()
     val devise = infos?.devise ?: "€"
+
+    val etatCaisse by produceState<EtatCaisse?>(initialValue = null) {
+        value = try {
+            viewModel.repository.venteDao.getEtatCaisse()
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val heureOuverture = remember(etatCaisse) {
+        etatCaisse?.dateOuverture?.let { raw ->
+            try {
+                LocalDateTime.parse(raw).format(DateTimeFormatter.ofPattern("HH:mm"))
+            } catch (_: Exception) {
+                raw
+            }
+        } ?: "—"
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -154,7 +174,11 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
 
                     ResumeLine(
                         label = "Chiffre d'affaires du jour",
-                        value = formatCurrency(totalJour, devise)
+                        value = formatPrice(totalJour, devise)
+                    )
+                    ResumeLine(
+                        label = "Heure d'ouverture",
+                        value = heureOuverture
                     )
                 }
             }
@@ -283,7 +307,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Date : ${today.format(formatter)}")
                     Text("Ventes : ${ventesDuJour.size}")
-                    Text("Montant : ${formatCurrency(totalJour, devise)}")
+                    Text("Montant : ${formatPrice(totalJour,devise)}")
                     Text(
                         "Cette opération doit figer les données journalières pour créer un état comptable durable."
                     )

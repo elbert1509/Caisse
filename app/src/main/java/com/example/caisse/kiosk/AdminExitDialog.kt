@@ -59,6 +59,7 @@ fun AdminExitDialog(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Kiosk désactivé. Vous pouvez configurer l'appareil.")
                     Text("ID de ce pad : ${SilentUpdater.deviceId(context)}")
+                    Text("Version de l'app : ${SilentUpdater.currentVersionName(context)}")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)

@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
@@ -56,8 +58,10 @@ import com.example.caisse.data.HomeTileData
 import com.example.caisse.data.MenuViewModel
 import com.example.caisse.ui.theme.Accent500
 import com.example.caisse.ui.theme.Brand600
+import com.example.caisse.ui.theme.Indigo
 import com.example.caisse.ui.theme.SemanticGreen
 import com.example.caisse.ui.theme.SemanticOrange
+import com.example.caisse.ui.theme.SemanticRed
 import com.example.caisse.ui.theme.Slate700
 import com.google.firebase.auth.FirebaseAuth
 import java.util.UUID
@@ -229,6 +233,8 @@ private fun defaultHomeButton(): List<HomeTileData> = listOf(
     HomeTileData("Historique",        Icons.Default.History,          color = Accent500,      HomeActionButton.HISTORIQUE_COMMANDES),
     HomeTileData("Exporter",          Icons.Default.Share,            color = SemanticGreen,  HomeActionButton.EXPORTER),
     HomeTileData("Table",             Icons.Default.TableRestaurant,  color = SemanticOrange, HomeActionButton.TABLE),
+    HomeTileData("Stock",             Icons.Default.Inventory2,       color = Indigo,         HomeActionButton.STOCK),
+    HomeTileData("Fermer la caisse",  Icons.Default.Close,            color = SemanticRed,    HomeActionButton.CLOTURE),
     HomeTileData("Gestion",           Icons.Default.Edit,             color = Slate700,       HomeActionButton.GESTION),
 )
 

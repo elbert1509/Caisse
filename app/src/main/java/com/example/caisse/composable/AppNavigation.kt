@@ -67,7 +67,8 @@ fun AppNavigation() {
                     HomeActionButton.TABLE -> navController.navigate("table")
                     HomeActionButton.DONNES ->   navController.navigate("donnee")
                     HomeActionButton.DASHBOARD -> navController.navigate("dashboard")
-                    HomeActionButton.STOCK ->  navController.navigate("stock")
+                    HomeActionButton.STOCK ->  navController.navigate("stock?showRevenue=false")
+                    HomeActionButton.CLOTURE -> navController.navigate("cloture")
                     HomeActionButton.GESTION ->  {
                         navController.navigate("gestion?fromHome=true")
                         menuViewModel.loggerEvenement("Entrée dans Gestion ", "Gestion depuis l'accueil")
@@ -102,7 +103,18 @@ fun AppNavigation() {
         composable("donnee") { Donnee(navController = navController, menuViewModel = menuViewModel) }
         composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel) }
         composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel, menuViewModel = menuViewModel) }
-        composable("stock") { StockScreen(navController = navController, viewModel = menuViewModel) }
+        composable(
+            route = "stock?showRevenue={showRevenue}",
+            arguments = listOf(
+                navArgument("showRevenue") {
+                    type = NavType.BoolType
+                    defaultValue = true
+                }
+            )
+        ) { backStackEntry ->
+            val showRevenue = backStackEntry.arguments?.getBoolean("showRevenue") ?: true
+            StockScreen(navController = navController, viewModel = menuViewModel, showRevenue = showRevenue)
+        }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
         composable("rapport") { RapportData(navController = navController, viewModel = menuViewModel, dashboardViewModel = dashboardViewModel)}
         composable(

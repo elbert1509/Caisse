@@ -585,6 +585,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
+    //Heure d'ouverture
+
+
     // Dans MenuViewModel.kt
     fun exportVentesToCSV(context: Context) {
         viewModelScope.launch {

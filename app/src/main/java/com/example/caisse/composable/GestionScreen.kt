@@ -159,7 +159,7 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHo
                     }
 
                     list.addAll(listOf(
-                        GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock") },
+                        GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock?showRevenue=true") },
                         GestionTile("Dashboard", Icons.Default.Warehouse) { navController.navigate("Dashboard") },
                         GestionTile("Vente", Icons.Default.PointOfSale) { navController.navigate("vente") },
                         GestionTile("Entreprise", Icons.Default.AlternateEmail) { navController.navigate("infos") },

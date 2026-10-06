@@ -82,6 +82,10 @@ object SilentUpdater {
             @Suppress("DEPRECATION") pInfo.versionCode.toLong()
     }
 
+    /** versionName actuellement installé (ex. "1.15"), affiché en écran de maintenance. */
+    fun currentVersionName(context: Context): String =
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+
     /**
      * Vérifie sur Firestore s'il existe une version cible pour CE pad.
      *

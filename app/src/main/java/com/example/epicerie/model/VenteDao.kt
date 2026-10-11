@@ -1,0 +1,237 @@
+package com.example.epicerie.model
+
+import androidx.room.*
+import com.example.epicerie.data.Cloture
+import com.example.epicerie.data.EtatCaisse
+import com.example.epicerie.data.ProductReport
+import com.example.epicerie.data.ProductSale
+import com.example.epicerie.data.SalesData
+import com.example.epicerie.data.Vente
+import com.example.epicerie.data.VenteLigne
+import com.example.epicerie.util.SecurityUtils
+import kotlinx.coroutines.flow.Flow
+import java.util.*
+
+@Dao
+interface VenteDao {
+
+    // ---- VENTES ----
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertVente(vente: Vente)
+
+    // NF525 Axe A : pas de suppression physique — soft delete uniquement
+    @Query("UPDATE Vente SET isDeleted = 1, isDirty = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDeleteVente(id: UUID, ts: Long = System.currentTimeMillis())
+
+    @Query("SELECT * FROM Vente ORDER BY date DESC")
+    fun getAllVentes(): Flow<List<Vente>>
+
+    @Update
+    suspend fun updateLigne(ligne: VenteLigne)
+
+    // ---- LIGNES DE VENTE ----
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertLigne(ligne: VenteLigne)
+
+    @Query("SELECT * FROM VenteLigne WHERE venteId = :venteId")
+    fun getLignesForVente(venteId: UUID): Flow<List<VenteLigne>>
+
+    // NF525 Axe A : pas de suppression physique des lignes
+    @Query("UPDATE VenteLigne SET isDeleted = 1, isDirty = 1, updatedAt = :ts WHERE venteId = :venteId")
+    suspend fun softDeleteLignesForVente(venteId: UUID, ts: Long = System.currentTimeMillis())
+
+    // ---- STATS ----
+    @Query("""
+        SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch','localtime') as label, SUM(total) as amount
+        FROM Vente
+        WHERE date >= :startDate AND isDeleted = 0
+        GROUP BY label
+        ORDER BY label ASC
+    """)
+    fun getSalesSince(startDate: Long): Flow<List<SalesData>>
+
+    @Query("""
+        SELECT strftime('%Y-%m', date / 1000, 'unixepoch','localtime') as label, SUM(total) as amount
+        FROM Vente
+        WHERE isDeleted = 0
+        GROUP BY label
+        ORDER BY label ASC
+    """)
+    fun getSalesByMonth(): Flow<List<SalesData>>
+
+    @Query("""
+    SELECT COALESCE(c.name, 'Sans catégorie') AS label,
+           COALESCE(SUM(vl.quantity * vl.prixUnitaire), 0) AS amount
+    FROM VenteLigne vl
+    INNER JOIN Vente v
+        ON v.id = vl.venteId AND v.isDeleted = 0
+    INNER JOIN Produit p
+        ON CAST(vl.produitId AS TEXT) = CAST(p.id AS TEXT)
+       AND p.isDeleted = 0
+    LEFT JOIN category c
+        ON CAST(p.categoryId AS TEXT) = CAST(c.id AS TEXT)
+    WHERE vl.isDeleted = 0
+    GROUP BY COALESCE(c.name, 'Sans catégorie')
+    ORDER BY amount DESC
+""")
+    fun getSalesByCategory(): Flow<List<SalesData>>
+
+    @Query("""
+    SELECT COALESCE(p.nom, 'Produit inconnu') AS productName,
+           COALESCE(SUM(vl.quantity), 0)      AS totalQuantity
+    FROM VenteLigne vl
+    LEFT JOIN Produit p
+      ON CAST(vl.produitId AS TEXT) = CAST(p.id AS TEXT)
+       AND p.isDeleted = 0
+    WHERE vl.isDeleted = 0
+    GROUP BY COALESCE(p.nom, 'Produit inconnu')
+    ORDER BY totalQuantity DESC
+    LIMIT 10
+""")
+    fun getTopSellingProducts(): Flow<List<ProductSale>>
+
+    @Query("SELECT SUM(total) FROM Vente WHERE date >= :startDate AND date < :endDate AND isDeleted = 0")
+    fun getTotalSalesBetween(startDate: Long, endDate: Long): Flow<Double>
+
+    @Query("SELECT COALESCE(SUM(total), 0) FROM vente WHERE date >= :start AND isDeleted = 0" )
+    fun getTotalSalesSince(start: Long): Flow<Double>
+
+
+    @Query("SELECT COUNT(*) FROM Vente") suspend fun countVente(): Int
+    @Query("SELECT COUNT(*) FROM VenteLigne") suspend fun countVenteLigne(): Int
+    @Query("SELECT COUNT(*) FROM Produit") suspend fun countProduit(): Int
+    @Query("SELECT COUNT(*) FROM category") suspend fun countCategory(): Int
+
+    @Query("""
+    SELECT COUNT(*)
+    FROM VenteLigne vl
+    LEFT JOIN Produit p
+         ON CAST(vl.produitId AS TEXT) = CAST(p.id AS TEXT)
+""")
+    suspend fun countJoinVLProduit(): Int
+
+    @Query("""
+    SELECT COUNT(*)
+    FROM Produit p
+    LEFT JOIN category c
+         ON CAST(p.categoryId AS TEXT) = CAST(c.id AS TEXT)
+""")
+    suspend fun countJoinProduitCategory(): Int
+
+
+    @Transaction
+    suspend fun insertVenteWithLignes(vente: Vente, lignes: List<VenteLigne>) {
+        insertVente(vente)
+        for (l in lignes) insertLigne(l)
+    }
+    @Query("""
+    SELECT p.nom AS productName,
+           SUM(vl.quantity) AS totalQuantity,
+           p.stock AS productStock,
+           SUM(vl.quantity * vl.prixUnitaire) AS revenue
+    FROM VenteLigne vl
+    JOIN Produit p ON vl.produitId = p.id AND p.isDeleted = 0
+    JOIN Vente v   ON vl.venteId = v.id AND v.isDeleted = 0
+    WHERE vl.isDeleted = 0 AND v.date >= :start AND v.date < :end
+    GROUP BY p.nom,p.stock
+    ORDER BY revenue DESC
+""")
+    fun getProductReportBetween(start: Long, end: Long): Flow<List<ProductReport>>
+
+    @Query("""
+    SELECT COALESCE(SUM(vl.quantity * vl.prixUnitaire), 0)
+    FROM VenteLigne vl
+    INNER JOIN Vente v ON vl.venteId = v.id AND v.isDeleted = 0
+    WHERE v.date >= :start AND v.date < :end
+""")
+    fun getTotalRevenueBetween(start: Long, end: Long): Flow<Double>
+
+    @Update
+    suspend fun updateVente(vente: Vente)
+
+
+
+    @Query("SELECT * FROM Vente")
+    suspend fun getAllVentesOnce(): List<Vente>
+
+    @Query("SELECT * FROM Vente WHERE id = :id")
+    suspend fun getVenteById(id: UUID): Vente?
+
+    @Query("SELECT * FROM VenteLigne")
+    suspend fun getAllVenteLignesOnce(): List<VenteLigne>
+
+    @Query("SELECT * FROM VenteLigne WHERE id = :id")
+    suspend fun getVenteLigneById(id: UUID): VenteLigne?
+
+    // Requête directe (suspend, pas Flow) pour un historique fiable sans dépendre du timing du Flow.
+    @Query("SELECT * FROM VenteLigne WHERE venteId = :venteId AND isDeleted = 0")
+    suspend fun getLignesForVenteOnce(venteId: UUID): List<VenteLigne>
+
+    @Query("SELECT * FROM vente ORDER BY date DESC LIMIT 1")
+    suspend fun getLastVente(): Vente?
+
+    /**
+     * NF525 Axe B — Transaction atomique garantissant la cohérence de la chaîne de hash
+     * et la séquence ininterrompue des tickets.
+     */
+    @Transaction
+    suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>): Vente {
+        val lastVente = getLastVente()
+        val prevHash = lastVente?.hash ?: "0000000000000000"
+        val nextSeq  = (lastVente?.sequenceNumber ?: 0L) + 1L
+
+        val venteAvecLien = vente.copy(previousHash = prevHash, sequenceNumber = nextSeq)
+        val finalHash     = SecurityUtils.calculateHash(venteAvecLien, lignes)
+        val venteSignee   = venteAvecLien.copy(hash = finalHash)
+
+        insertVente(venteSignee)
+        for (l in lignes) insertLigne(l)
+        return venteSignee
+    }
+
+    /** NF525 — Vérifie la cohérence de toute la chaîne de hash. Retourne les IDs rompus. */
+    @Transaction
+    suspend fun verifierIntegriteChaineVentes(): List<UUID> {
+        val toutes = getAllVentesOnce().sortedBy { it.sequenceNumber }
+        val brisees = mutableListOf<UUID>()
+        var prevHash = "0000000000000000"
+        for (v in toutes) {
+            if (v.isDeleted) continue
+            if (v.previousHash != prevHash) brisees.add(v.id)
+            prevHash = v.hash
+        }
+        return brisees
+    }
+
+    /**
+     * Récupère toutes les ventes d'une journée spécifique pour le calcul du Z de caisse.
+     * NF525 : Nécessaire pour l'intégrité des calculs de clôture.
+     */
+    @Query("SELECT * FROM vente WHERE date LIKE :date || '%' AND isDeleted = 0")
+    suspend fun getVentesByDate(date: String): List<Vente>
+
+    @Query("""
+    SELECT * FROM Vente
+    WHERE date >= :startOfDay
+      AND date < :endOfDay
+      AND isDeleted = 0
+""")
+    suspend fun getVentesByPeriod(startOfDay: Long, endOfDay: Long): List<Vente>
+
+    @Query("SELECT * FROM etat_caisse WHERE id = 1")
+    suspend fun getEtatCaisse(): EtatCaisse?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateEtatCaisse(etat: EtatCaisse)
+
+    @Query("SELECT * FROM etat_caisse WHERE id = 1")
+    fun observeEtatCaisse(): Flow<EtatCaisse?>
+
+    // Sync : ne baisse le flag dirty QUE si la ligne n'a pas été modifiée depuis sa lecture
+    // (sinon une modification faite pendant le push serait perdue sans jamais être poussée).
+    @Query("UPDATE Vente SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearVenteDirty(id: UUID, updatedAt: Long)
+
+    @Query("UPDATE VenteLigne SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearLigneDirty(id: UUID, updatedAt: Long)
+}

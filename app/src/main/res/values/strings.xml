@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Cosmoparc Piece Auto</string>
+    <string name="app_name">Epicerie</string>
     <string name="boisson"> Boisson </string>
     <string name="Prendrecommande"> Prendre commande</string>
 
@@ -14,6 +14,7 @@
     <string name="tile_voiture"> Voitures </string>
     <string name="tile_gestion">Gestion</string>
     <string name="tile_recherche">Recherche</string>
+    <string name="tile_stock">Stock</string>
     <string name="tile_parametres">Paramètres</string>
     <string name="tile_bluetooth">Bluetooth</string>
     <string name="tile_compte_connecte">Compte connecté</string>

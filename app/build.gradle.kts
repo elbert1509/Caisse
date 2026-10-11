@@ -7,18 +7,23 @@ plugins {
 }
 
 android {
-    namespace = "com.example.piece"
+    namespace = "com.example.epicerie"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.piece"
-        minSdk = 23
+        applicationId = "com.example.epicerie"
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.1"
         vectorDrawables.useSupportLibrary = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // NF525 : export du schéma Room pour traçabilité des évolutions de base de données
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
     }
 
     buildTypes {
@@ -68,6 +73,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation("com.google.firebase:firebase-storage") // requis par la MAJ silencieuse (SilentUpdater)
+    implementation(libs.io.coil.kt) // chargement d'images par URI (catalogue produit, MAJ silencieuse)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)

@@ -48,6 +48,7 @@ fun InfosScreen(
     var email by remember { mutableStateOf("") }
     var siret by remember { mutableStateOf("") }
     var devise by remember { mutableStateOf("") }
+    var heureFermetureAuto by remember { mutableStateOf("05:00") }
     var expanded by remember { mutableStateOf(false) }
     val listDevise = listOf("FCFA", "€", "£", "US$")
     var showChangePassword by remember { mutableStateOf(false) }
@@ -81,6 +82,7 @@ fun InfosScreen(
                     email = info.email
                     devise = info.devise
                     siret = info.siret
+                    heureFermetureAuto = info.heureFermetureAuto
                 }
             } else {
                 // Pas d’infos -> mode édition
@@ -90,7 +92,8 @@ fun InfosScreen(
     }
 
     val pwdOk = existing != null || (initialPwd.length >= 4 && initialPwd == initialPwdConfirm)
-    val canSave = name.isNotBlank() && email.isNotBlank() && pwdOk
+    val heureValide = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(heureFermetureAuto)
+    val canSave = name.isNotBlank() && email.isNotBlank() && pwdOk && heureValide
 
     Scaffold(
         topBar = {
@@ -129,7 +132,8 @@ fun InfosScreen(
                                         siret = siret,
                                         logo = null,
                                         devise = devise,
-                                        initialPassword = initialPwd.trim()
+                                        initialPassword = initialPwd.trim(),
+                                        heureFermetureAuto = heureFermetureAuto
                                     )
                                 } else {
                                     viewModel.updateInfos(
@@ -139,7 +143,8 @@ fun InfosScreen(
                                         email = email.trim(),
                                         siret = siret,
                                         logo = null,
-                                        devise = devise
+                                        devise = devise,
+                                        heureFermetureAuto = heureFermetureAuto
                                     )
                                 }
                                 navController.popBackStack()
@@ -262,6 +267,23 @@ fun InfosScreen(
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = heureFermetureAuto,
+                                onValueChange = { heureFermetureAuto = it },
+                                label = { Text("Fermeture automatique (HH:mm)") },
+                                supportingText = {
+                                    Text(
+                                        if (heureValide) "La caisse se clôture seule si elle est encore ouverte à cette heure."
+                                        else "Format attendu : HH:mm (ex. 05:00)",
+                                        color = if (heureValide) Slate500 else MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                isError = !heureValide,
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             if (existing == null) {
                                 Spacer(Modifier.height(10.dp))
                                 OutlinedTextField(
@@ -308,7 +330,8 @@ fun InfosScreen(
                                                     siret = siret,
                                                     logo = null,
                                                     devise = devise,
-                                                    initialPassword = initialPwd.trim()
+                                                    initialPassword = initialPwd.trim(),
+                                                    heureFermetureAuto = heureFermetureAuto
                                                 )
                                             } else {
                                                 viewModel.updateInfos(
@@ -318,7 +341,8 @@ fun InfosScreen(
                                                     email = email.trim(),
                                                     siret = siret,
                                                     logo = null,
-                                                    devise = devise
+                                                    devise = devise,
+                                                    heureFermetureAuto = heureFermetureAuto
                                                 )
                                             }
                                             navController.popBackStack()
@@ -357,6 +381,7 @@ fun InfosScreen(
                             ReadOnlyRow("Téléphone", existing!!.phone)
                             ReadOnlyRow("Email", existing!!.email)
                             ReadOnlyRow("devise", existing!!.devise)
+                            ReadOnlyRow("Fermeture automatique", existing!!.heureFermetureAuto)
 
                             Spacer(Modifier.height(16.dp))
                             Row(

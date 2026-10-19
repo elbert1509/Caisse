@@ -143,6 +143,35 @@ data class VenteLigne(
     val isDeleted: Boolean = false
 )
 
+/**
+ * Journal append-only des mouvements de stock saisis manuellement (ajout/ajustement via
+ * Produits ou Inventaire) — les ventes ne sont PAS dupliquées ici : elles sont déjà tracées
+ * via VenteLigne/Vente et recalculées à la demande pour l'écran de détail stock.
+ * delta > 0 = ajout de stock, delta < 0 = ajustement (perte, casse, correction).
+ */
+@Entity(
+    tableName = "mouvements_stock",
+    foreignKeys = [
+        ForeignKey(
+            entity = Produit::class,
+            parentColumns = ["id"],
+            childColumns = ["produitId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("produitId"), Index("date")]
+)
+data class MouvementStock(
+    @PrimaryKey val id: UUID = UUID.randomUUID(),
+    val produitId: UUID,
+    val date: Long = System.currentTimeMillis(),
+    val delta: Int,
+    val motif: String = "",
+    // sync
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDirty: Boolean = true,
+    val isDeleted: Boolean = false
+)
 
 data class Ticket(
     val produit: Produit,
@@ -236,6 +265,9 @@ data class ShopInfos (
     val passwordHash: String,
     val passwordSalt: String,
     val devise : String,
+    // Fermeture automatique de caisse (NF525 : filet de sécurité si le gérant oublie de
+    // clôturer) — format "HH:mm", configurable par le gérant. "05:00" par défaut.
+    val heureFermetureAuto: String = "05:00",
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,

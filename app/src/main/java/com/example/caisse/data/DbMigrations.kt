@@ -120,3 +120,28 @@ val MIGRATIONS_TO_13: Array<Migration> = arrayOf(
         override fun migrate(db: SupportSQLiteDatabase) = migrateToUuidIds(db)
     },
 )
+
+// Écran "Détail stock" (Gestion > Stock > produit) : journal des ajouts/ajustements manuels,
+// utilisé pour reconstituer Stock/Ajout/Vente/Reste par jour sur les 7 derniers jours.
+val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `mouvements_stock` (" +
+                "`id` TEXT NOT NULL, `produitId` TEXT NOT NULL, `date` INTEGER NOT NULL, " +
+                "`delta` INTEGER NOT NULL, `motif` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                "`isDirty` INTEGER NOT NULL, `isDeleted` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`id`), " +
+                "FOREIGN KEY(`produitId`) REFERENCES `Produit`(`id`) ON DELETE CASCADE)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_mouvements_stock_produitId` ON `mouvements_stock` (`produitId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_mouvements_stock_date` ON `mouvements_stock` (`date`)")
+    }
+}
+
+// Fermeture automatique de caisse configurable par le gérant (filet de sécurité NF525 en
+// cas d'oubli de clôture).
+val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE ShopInfos ADD COLUMN heureFermetureAuto TEXT NOT NULL DEFAULT '05:00'")
+    }
+}

@@ -115,6 +115,17 @@ fun AppNavigation() {
             val showRevenue = backStackEntry.arguments?.getBoolean("showRevenue") ?: true
             StockScreen(navController = navController, viewModel = menuViewModel, showRevenue = showRevenue)
         }
+        composable(
+            route = "stock_detail/{produitId}",
+            arguments = listOf(navArgument("produitId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val produitId = backStackEntry.arguments?.getString("produitId")?.let {
+                java.util.UUID.fromString(it)
+            }
+            if (produitId != null) {
+                StockDetailScreen(navController = navController, viewModel = menuViewModel, produitId = produitId)
+            }
+        }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
         composable("rapport") { RapportData(navController = navController, viewModel = menuViewModel, dashboardViewModel = dashboardViewModel)}
         composable(

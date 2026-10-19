@@ -7,6 +7,7 @@ import com.example.caisse.model.ClotureDao
 import com.example.caisse.model.InfosDao
 import com.example.caisse.model.InvoiceDao
 import com.example.caisse.model.LogDao
+import com.example.caisse.model.MouvementStockDao
 import com.example.caisse.model.ProduitDao
 import com.example.caisse.model.TableDao
 import com.example.caisse.model.VendeurDao
@@ -28,7 +29,8 @@ class CaisseRepository(
     private val invoiceDao: InvoiceDao,
     private val infosDao: InfosDao,
     private val logDao: LogDao,
-    private val clotureDao: ClotureDao
+    private val clotureDao: ClotureDao,
+    private val mouvementStockDao: MouvementStockDao
 ) {
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
@@ -46,6 +48,69 @@ class CaisseRepository(
     suspend fun updateProduit(produit: Produit) = produitDao.updateProduit(produit)
     suspend fun getAllProduitsOnce(): List<Produit> = produitDao.getAllProduitsOnce()
     suspend fun insertProduit(produit: Produit) = produitDao.insertProduit(produit)
+
+    // ----- DÉTAIL STOCK (Gestion > Stock > produit) -----
+    suspend fun enregistrerMouvementStock(produitId: UUID, delta: Int, motif: String) {
+        if (delta == 0) return
+        mouvementStockDao.insert(
+            MouvementStock(produitId = produitId, delta = delta, motif = motif, isDirty = true)
+        )
+    }
+
+    data class JourStockDetail(
+        val dateDebutJour: Long,
+        val stockDebut: Int,
+        val ajout: Int,
+        val vente: Int,
+        val ajustementNegatif: Int,
+        val reste: Int
+    )
+
+    /**
+     * Reconstitue Stock/Ajout/Vente/Reste pour les [nbJours] derniers jours (index 0 = aujourd'hui).
+     * Les ventes sont recalculées depuis VenteLigne/Vente (toujours exactes). Les ajouts/ajustements
+     * manuels viennent du journal `mouvements_stock`. On part du stock LIVE du produit (= "Reste"
+     * du jour en cours) et on remonte le temps jour par jour : Reste(j-1) = Stock(j).
+     */
+    suspend fun getDetailStockProduit(produitId: UUID, nbJours: Int = 7): List<JourStockDetail> {
+        val produit = produitDao.getProduitById(produitId) ?: return emptyList()
+        val cal = java.util.Calendar.getInstance()
+        var resteCourant = produit.stock
+        val jours = mutableListOf<JourStockDetail>()
+
+        for (i in 0 until nbJours) {
+            cal.timeInMillis = System.currentTimeMillis()
+            cal.add(java.util.Calendar.DAY_OF_YEAR, -i)
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            val startOfDay = cal.timeInMillis
+            val endOfDay = startOfDay + 24L * 60 * 60 * 1000
+
+            val vente = venteDao.getQuantiteVendue(produitId, startOfDay, endOfDay)
+            val mouvements = mouvementStockDao.getMouvementsForPeriod(produitId, startOfDay, endOfDay)
+            val ajout = mouvements.filter { it.delta > 0 }.sumOf { it.delta }
+            val ajustementNegatif = mouvements.filter { it.delta < 0 }.sumOf { -it.delta }
+
+            val reste = resteCourant
+            // Reste = StockDébut + Ajout - Vente - Ajustement  ⇒  StockDébut = Reste - Ajout + Vente + Ajustement
+            val stockDebut = reste - ajout + vente + ajustementNegatif
+
+            jours.add(
+                JourStockDetail(
+                    dateDebutJour = startOfDay,
+                    stockDebut = stockDebut,
+                    ajout = ajout,
+                    vente = vente,
+                    ajustementNegatif = ajustementNegatif,
+                    reste = reste
+                )
+            )
+            resteCourant = stockDebut // chaînage : le "Reste" d'hier = le "Stock" d'aujourd'hui
+        }
+        return jours
+    }
 
     // ----- VENDEURS -----
     fun getAllVendeurs(): Flow<List<Vendeur>> = vendeurDao.getAllVendeur()

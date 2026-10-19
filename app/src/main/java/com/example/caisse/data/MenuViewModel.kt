@@ -96,16 +96,31 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val newProduit = Produit(nom = name, prix = price, categoryId = categoryId, stock = stock, image = imageUri).copy(updatedAt = now(), isDirty = true)
             repository.addProduit(newProduit)
+            if (stock != 0) {
+                repository.enregistrerMouvementStock(newProduit.id, stock, "Stock initial")
+            }
             loggerEvenement(TypeEvenement.AJOUT_PRODUIT.name, "Produit ajouté : $name | prix=$price | cat=$categoryId")
         }
     }
 
     fun updateProduit(produit: Produit) {
         viewModelScope.launch {
+            val ancien = repository.getProduitById(produit.id)
             repository.updateProduit(produit.copy(updatedAt = now(), isDirty = true))
+            val delta = produit.stock - (ancien?.stock ?: produit.stock)
+            if (delta != 0) {
+                repository.enregistrerMouvementStock(
+                    produit.id, delta,
+                    if (delta > 0) "Ajout manuel" else "Ajustement manuel"
+                )
+            }
             loggerEvenement(TypeEvenement.MODIF_PRODUIT.name, "Produit modifié : ${produit.nom} (id=${produit.id}) | prix=${produit.prix}")
         }
     }
+
+    /** Détail stock (Gestion > Stock > produit) : Stock/Ajout/Vente/Reste sur les 7 derniers jours. */
+    suspend fun getDetailStockProduit(produitId: UUID): List<CaisseRepository.JourStockDetail> =
+        repository.getDetailStockProduit(produitId)
 
     fun deleteProduit(produit: Produit) {
         viewModelScope.launch {
@@ -116,7 +131,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // Infos
 
-    fun addInfos(name: String, address: String, phone: String, siret : String,   email: String, logo: Int? = null,devise : String,initialPassword: String) {
+    fun addInfos(name: String, address: String, phone: String, siret : String,   email: String, logo: Int? = null,devise : String,initialPassword: String, heureFermetureAuto: String = "05:00") {
         viewModelScope.launch {
             // PBKDF2 (120k itérations) : plusieurs secondes de calcul, jamais sur le thread UI
             val salt = PasswordHasher.generateSalt()
@@ -126,15 +141,22 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             // isDirty = true : sans ce flag, la fiche magasin n'était JAMAIS poussée vers le
             // cloud (pushInfos n'envoie que le dirty) -> les nouveaux appareils ne recevaient
             // ni les infos ni le mot de passe gestion.
-            repository.insertInfos(ShopInfos(1,name, address, phone, email, siret = siret, logo, passwordHash = hash, passwordSalt = salt, devise = devise, updatedAt = now(), isDirty = true))
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, siret = siret, logo, passwordHash = hash, passwordSalt = salt, devise = devise, heureFermetureAuto = heureFermetureAuto, updatedAt = now(), isDirty = true))
         }
     }
-    fun updateInfos(name: String, address: String, phone: String, email: String, siret: String, logo: Int? = null, devise: String) {
+    fun updateInfos(name: String, address: String, phone: String, email: String, siret: String, logo: Int? = null, devise: String, heureFermetureAuto: String? = null) {
         viewModelScope.launch {
             val existing = repository.getInfos() ?: return@launch
             // isDirty = true + updatedAt : une édition de la fiche doit se propager aux autres
             // appareils (elle restait locale auparavant).
-            repository.updateInfos(existing.copy(name = name, address = address, phone = phone, email = email, siret = siret, logo = logo, devise = devise, updatedAt = now(), isDirty = true))
+            repository.updateInfos(
+                existing.copy(
+                    name = name, address = address, phone = phone, email = email, siret = siret,
+                    logo = logo, devise = devise,
+                    heureFermetureAuto = heureFermetureAuto ?: existing.heureFermetureAuto,
+                    updatedAt = now(), isDirty = true
+                )
+            )
             loggerEvenement(TypeEvenement.MODIF_CONFIG.name, "Configuration mise à jour : name=$name | siret=$siret | devise=$devise")
         }
     }
@@ -803,7 +825,8 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                         database.invoiceDao(),
                         database.infosDao(),
                         database.logDao(),
-                        database.clotureDao()
+                        database.clotureDao(),
+                        database.mouvementStockDao()
                     )
                     MenuViewModel(repository)
                 }

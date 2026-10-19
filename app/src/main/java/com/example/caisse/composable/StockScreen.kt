@@ -1,6 +1,7 @@
 package com.example.caisse.composable
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -209,7 +210,10 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel, showReve
                                             stock = row.stock,
                                             revenue = row.revenue,
                                             ratio = if (maxRevenue > 0.0) (row.revenue / maxRevenue).toFloat() else 0f,
-                                            devise = shopInfos?.devise ?: ""
+                                            devise = shopInfos?.devise ?: "",
+                                            // Détail stock (historique Ajout/Vente/Reste) : accessible
+                                            // uniquement depuis cette vue (Gestion), pas depuis l'Accueil.
+                                            onClick = { navController.navigate("stock_detail/${row.id}") }
                                         )
                                     }
                                 }
@@ -341,13 +345,14 @@ private fun StockRowRevenue(
     stock: Int,
     revenue: Double,
     ratio: Float,
-    devise: String
+    devise: String,
+    onClick: () -> Unit = {}
 ) {
     val isLow = stock <= LOW_STOCK_THRESHOLD
     val primaryTextColor = if (isLow) LowStockRed else Slate900
     val secondaryTextColor = if (isLow) LowStockRed else Slate500
 
-    Column {
+    Column(Modifier.clickable { onClick() }) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -416,6 +421,7 @@ private fun StockRowSimple(
 /* ------------------------------ Mapping & utils ------------------------------ */
 
 private data class UiRow(
+    val id: java.util.UUID,
     val name: String,
     val price: Double,
     val stock: Int,
@@ -425,6 +431,7 @@ private data class UiRow(
 
 private fun Produit.toUiRow(): UiRow =
     UiRow(
+        id = id,
         name = nom,
         price = prix,
         stock = max(0, stock),

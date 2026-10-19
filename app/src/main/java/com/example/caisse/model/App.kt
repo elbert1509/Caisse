@@ -12,6 +12,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         schedulePeriodicSync()
+        schedulePeriodicAutoCloture()
     }
 
     /**
@@ -33,6 +34,23 @@ class App : Application() {
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "sync_periodic",
             ExistingPeriodicWorkPolicy.KEEP, // garde la planification existante au redémarrage
+            request
+        )
+    }
+
+    /**
+     * Vérifie toutes les 15 minutes (minimum WorkManager) si l'heure de fermeture automatique
+     * configurée par le gérant est dépassée et la caisse encore ouverte — ne nécessite pas le
+     * réseau, c'est une opération purement locale.
+     */
+    private fun schedulePeriodicAutoCloture() {
+        val request = PeriodicWorkRequestBuilder<AutoClotureWorker>(15, TimeUnit.MINUTES)
+            .addTag("auto_cloture")
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "auto_cloture_periodic",
+            ExistingPeriodicWorkPolicy.KEEP,
             request
         )
     }

@@ -254,6 +254,16 @@ interface VenteDao {
 
 
 
+    /** Détail stock (Gestion > Stock > produit) : quantité vendue d'un produit sur une période. */
+    @Query("""
+        SELECT COALESCE(SUM(vl.quantity), 0)
+        FROM VenteLigne vl
+        INNER JOIN Vente v ON vl.venteId = v.id AND v.isDeleted = 0
+        WHERE vl.produitId = :produitId AND vl.isDeleted = 0
+          AND v.date >= :start AND v.date < :end
+    """)
+    suspend fun getQuantiteVendue(produitId: UUID, start: Long, end: Long): Int
+
     @Query("SELECT * FROM etat_caisse WHERE id = 1")
     suspend fun getEtatCaisse(): EtatCaisse?
 

@@ -50,7 +50,7 @@ fun PanierScreen(
     val ctx = navController.context
 
     var paiementText by remember { mutableStateOf("") }
-    val shopInfos = menuViewModel.getInfos()
+    val shopInfos = menuViewModel.infos.collectAsState().value
 
 
 

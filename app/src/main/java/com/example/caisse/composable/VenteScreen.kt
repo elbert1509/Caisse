@@ -70,7 +70,7 @@ fun VenteScreen(
                                     description = "Demande annulation ticket seq=${v.sequenceNumber} montant=${v.total}"
                                 )
                             },
-                            devise = viewModel.getInfos()?.devise ?: ""
+                            devise = viewModel.infos.collectAsState().value?.devise ?: ""
                         )
                     }
                 }

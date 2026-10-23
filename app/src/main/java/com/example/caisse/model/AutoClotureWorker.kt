@@ -18,6 +18,10 @@ import java.util.Calendar
  * se déclenche donc avec jusqu'à ~15 min de retard sur l'heure configurée, ce qui est
  * acceptable pour ce cas d'usage (pas besoin de précision à la minute).
  *
+ * Seule une session ouverte AVANT l'heure configurée du jour est clôturée : une caisse
+ * ouverte à 10:00 avec une fermeture réglée à 05:00 reste ouverte jusqu'au lendemain 05:00
+ * (sinon elle était clôturée dans les 15 min suivant son ouverture).
+ *
  * Pas de déclenchement en double : `genererClotureJournaliere()` refuse une 2e clôture pour
  * la même date (exception avalée ici), donc une fermeture manuelle plus tôt dans la journée,
  * ou une réouverture suivie d'une activité après l'heure configurée, ne provoque pas de
@@ -60,7 +64,14 @@ class AutoClotureWorker(
                 set(Calendar.MILLISECOND, 0)
             }
 
-            if (maintenant.timeInMillis >= cible.timeInMillis) {
+            // Date d'ouverture absente ou illisible : session ouverte par une ancienne version,
+            // donc forcément avant l'heure de fermeture du jour -> on la traite comme telle.
+            val ouvertureMillis = repository.venteDao.getEtatCaisse()?.dateOuverture
+                ?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() }
+                ?.atZone(java.time.ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+            val ouverteAvantCible = ouvertureMillis == null || ouvertureMillis < cible.timeInMillis
+
+            if (maintenant.timeInMillis >= cible.timeInMillis && ouverteAvantCible) {
                 try {
                     val cloture = repository.executerClotureGlobale()
                     Log.i("AutoClotureWorker", "Fermeture automatique exécutée (heure configurée=${infos.heureFermetureAuto}, cloture=${cloture.idCloture})")

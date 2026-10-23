@@ -1,8 +1,14 @@
 package com.example.caisse.model
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.caisse.data.AuthUiState
@@ -56,27 +62,55 @@ class AuthViewModel : ViewModel() {
         _ui.value = _ui.value.copy(isSignedIn = false)
     }
 
-    /** Lance une synchro ponctuelle et renvoie l'ID du travail pour pouvoir l'observer (spinner, toast). */
-    fun enqueueSync(context: Context, tag: String = "sync"): java.util.UUID {
-        val req = OneTimeWorkRequestBuilder<SyncWorker>().addTag(tag).build()
-        WorkManager.getInstance(context).enqueue(req)
-        return req.id
-    }
-
     /**
-     * Synchro UNIQUE pour les déclencheurs répétitifs (polling de l'écran Tables) : si une synchro
-     * est déjà en cours/en file, on n'en empile pas une autre (ExistingWorkPolicy.KEEP). Évite de
-     * multiplier les workers quand périodique + polling + événements se chevauchent.
+     * Synchro ponctuelle (création de table, vente, ouverture d'app…). Une seule à la fois et
+     * uniquement avec réseau : sans Internet, Firestore ne confirme jamais un envoi et la synchro
+     * restait bloquée ; à chaque action une nouvelle s'empilait. Si une synchro est déjà en cours
+     * ou en attente du réseau, on n'en ajoute pas (les données restent `isDirty` et partiront
+     * avec elle ou avec la suivante).
      */
-    fun enqueueSyncUnique(context: Context, name: String = "sync_unique") {
-        val req = OneTimeWorkRequestBuilder<SyncWorker>().addTag("sync").build()
+    fun enqueueSync(context: Context, tag: String = "sync") {
         WorkManager.getInstance(context).enqueueUniqueWork(
-            name,
-            androidx.work.ExistingWorkPolicy.KEEP,
-            req
+            SYNC_WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            syncRequest(tag)
         )
     }
 
+    /** Alias conservé pour le polling de l'écran Tables : même file unique que [enqueueSync]. */
+    fun enqueueSyncUnique(context: Context) = enqueueSync(context)
 
+    /**
+     * Synchro demandée explicitement (bouton « Synchroniser ») : s'enchaîne APRÈS celle en cours
+     * au lieu de tourner en parallèle, et renvoie un ID observable (spinner, toast).
+     */
+    fun requestSyncNow(context: Context): java.util.UUID {
+        val req = syncRequest("sync")
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            SYNC_WORK_NAME,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            req
+        )
+        return req.id
+    }
 
+    companion object {
+        /** File unique de toutes les synchros ponctuelles (la périodique a la sienne). */
+        const val SYNC_WORK_NAME = "sync_unique"
+
+        /** Vrai si un réseau avec accès Internet est disponible pour l'app. */
+        fun isNetworkAvailable(context: Context): Boolean {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+
+        fun syncRequest(tag: String = "sync"): OneTimeWorkRequest =
+            OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                )
+                .addTag(tag)
+                .build()
+    }
 }

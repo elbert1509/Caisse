@@ -57,7 +57,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel,
     val salesToday      by viewModel.salesToday.collectAsState()
     val salesThisWeek   by viewModel.salesThisWeek.collectAsState()
     val salesThisMonth  by viewModel.salesThisMonth.collectAsState()
-    val shopInfos = menuViewModel.getInfos()
+    val shopInfos = menuViewModel.infos.collectAsState().value
 
     Log.d("DashboardScreen", "salesByCategory: ${salesByCategory.size}")
 

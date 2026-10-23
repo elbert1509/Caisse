@@ -4,7 +4,7 @@ Procédure complète pour configurer un nouveau pad : installation, passage en *
 
 - **App** : `com.example.caisse`
 - **Admin component** : `com.example.caisse/.kiosk.KioskAdminReceiver`
-- **Android cible** : 8.1+ (testé sur MediaTek) — `minSdk = 26` (Android 8.0) depuis la 1.15, requis par l'usage de `java.time.*` dans le code (ouverture de caisse, clôture, JET...). Un pad en dessous d'Android 8.0 refusera l'installation (`INSTALL_FAILED_OLDER_SDK`) au lieu de planter à l'usage.
+- **Android cible** : 7.0+ (terminaux Android 7 en 4G/3G, pads MediaTek 8.1). `minSdk = 23` dans `app/build.gradle.kts` (`java.time.*` est couvert par le desugaring). Le blocage réseau (VPN permanent, section 2 bis) nécessite **Android 7.0 (API 24)** minimum.
 
 ---
 
@@ -52,6 +52,75 @@ Au lancement de l'app :
 - L'app devient le **launcher HOME** persistant → au reboot, retour direct dans l'app.
 
 > Si le toast « This app can't be unpinned » apparaît, c'est que l'app est en mode PINNED (pas LOCKED). Vérifier que le Device Owner est bien posé (étape ci-dessus).
+
+---
+
+## 2 bis. Blocage réseau : seule la caisse consomme des données
+
+### Activer / désactiver depuis Firestore
+
+Le blocage se pilote à distance, comme `paused` pour les mises à jour : **il est désactivé tant que le champ n'est pas mis à `true`**. Le pad écoute Firestore en temps réel (`NetworkBlockController`) : le changement s'applique en quelques secondes, sans redémarrage ni nouvelle version.
+
+| Champ (booléen) | Où | Effet |
+|---|---|---|
+| `vpnBlocking` | `devices/{ANDROID_ID}` (prioritaire) ou `config/app_android` (tous les pads) | `true` = seule la caisse a le réseau. `false` ou absent = pas de blocage. |
+| `vpnLockdown` | idem | Mode lockdown du VPN. Absent = constante `KioskManager.VPN_LOCKDOWN` (`false`). |
+
+Exemples :
+- Tester sur un seul pad : `devices/{ANDROID_ID}` → `vpnBlocking = true`.
+- Généraliser : `config/app_android` → `vpnBlocking = true`. Un pad peut s'en exclure avec `vpnBlocking = false` dans son `devices/{id}`.
+- Couper d'urgence : repasser à `false`. La caisse étant exclue du VPN, elle relit toujours Firestore et lève le blocage.
+
+L'état appliqué est affiché dans l'écran de maintenance (« Blocage réseau : actif / inactif »). Sans réseau au démarrage, le pad garde le dernier état posé (le système le mémorise).
+
+> ⚠️ Même piège que `targetVersionCode` : nom de champ exact, sans espace, et de type **booléen** (pas la chaîne `"true"`).
+
+### Politiques posées
+
+Au lancement en Device Owner, `KioskManager.applyKioskPolicies()` pose toujours les verrous ci-dessous ; le VPN, lui, suit `vpnBlocking` :
+
+| Politique | Effet |
+|---|---|
+| VPN permanent `BlockingVpnService` (`setAlwaysOnVpnPackage`, API 24+), **si `vpnBlocking = true`** | VPN local « trou noir » : tout le trafic des autres applis (Play Services, Play Store, synchros système…) est capté et jeté. La caisse est exclue du VPN et garde le réseau normal. Vaut pour la 4G/3G **et** le WiFi. |
+| `DISALLOW_CONFIG_VPN` | Impossible de retirer ou changer le VPN dans les Réglages. |
+| `DISALLOW_CONFIG_TETHERING` | Pas de partage de connexion. |
+| `DISALLOW_CONFIG_MOBILE_NETWORKS` | Réglages réseau mobile (APN, données) verrouillés, **y compris en maintenance**. Configurer l'APN **avant** `set-device-owner`. |
+| Play Store masqué (`setApplicationHidden`) | `com.android.vending` invisible et inactif. |
+| Mises à jour système reportées (`createPostponeInstallPolicy`) | Pas d'OTA constructeur automatique (report de 30 jours renouvelé par le système). |
+
+**Mode lockdown** : champ Firestore `vpnLockdown`, sinon constante `KioskManager.VPN_LOCKDOWN` (`false` par défaut).
+- `false` : si le VPN s'arrête, les autres applis retrouvent le réseau jusqu'à son redémarrage automatique.
+- `true` : le système bloque tout trafic hors VPN, même VPN arrêté. Sur Android 7, l'appli propriétaire du VPN permanent est normalement exemptée du blocage, **à vérifier sur terminal** avant de passer à `true` en production (voir tests ci-dessous). Grâce au champ `vpnLockdown`, ce test se fait sur un pad sans recompiler.
+
+> ⚠️ Conséquences : WhatsApp, Gmail ou toute autre appli n'a plus de réseau. Le partage d'un rapport vers WhatsApp/e-mail ouvre l'appli mais l'envoi restera en attente. La synchro de l'heure par Internet (NTP, faite par le système) est aussi bloquée : garder **« Date/heure automatique » fournie par le réseau mobile** (NITZ) et vérifier l'heure du pad (horodatage NF525).
+
+### Vérifier sur le terminal
+
+```bash
+# 1. Le VPN permanent est posé et actif
+adb shell dumpsys connectivity | grep -i -E "VPN|tun0"
+#    -> un réseau de type VPN (interface tun0) doit apparaître, avec "Caisse - blocage réseau"
+adb shell settings get secure always_on_vpn_app        # -> com.example.caisse
+adb shell settings get secure always_on_vpn_lockdown   # -> 0 (ou 1 si VPN_LOCKDOWN = true)
+adb shell ip addr show tun0                             # -> 10.0.0.2/32
+adb logcat -d -s BlockingVpnService KioskManager        # -> "VPN trou noir actif."
+
+# 2. La caisse a toujours le réseau
+#    Dans l'app : maintenance -> « Vérifier les mises à jour » doit répondre (Firestore joint),
+#    ou importer un catalogue depuis « Données ». Côté système :
+adb shell pm list packages -U com.example.caisse         # -> uid:10xxx
+adb shell dumpsys netstats detail | grep -A4 "uid=10xxx"  # -> rxBytes/txBytes en hausse sur l'interface mobile (ccmni*/rmnet*)
+
+# 3. Une autre appli n'a plus de réseau
+#    Le shell adb (uid 2000) passe lui aussi par le VPN : un ping/DNS doit échouer.
+adb shell ping -c 3 8.8.8.8                             # -> 100% packet loss
+adb shell ping -c 3 google.com                          # -> unknown host
+#    Navigateur (sortir en maintenance d'abord, sinon le LockTask l'empêche) :
+adb shell am start -a android.intent.action.VIEW -d https://www.google.com
+#    -> page en erreur (ERR_NAME_NOT_RESOLVED / pas de connexion)
+```
+
+> Tester d'abord avec `vpnLockdown = false`, puis refaire les 3 vérifications avec `vpnLockdown = true` dans `devices/{id}` et un redémarrage du pad : si la caisse perd le réseau en lockdown, remettre `false` (la caisse ne pouvant alors plus lire Firestore, retirer le VPN par ADB : voir « Désinstallation »).
 
 ---
 
@@ -166,7 +235,7 @@ L'app se met à jour seule via Firestore + Firebase Storage (privilège Device O
 **Firestore** (Console → Firestore → Règles) :
 ```
 match /config/{doc}     { allow read: if true; allow write: if false; }
-match /devices/{doc}    { allow read: if true; allow write: if false; }
+match /devices/{doc}    { allow read: if true; allow write: if false; }   // aussi vpnBlocking / vpnLockdown
 match /catalogues/{doc} { allow read: if true; allow write: if false; }
 ```
 
@@ -207,6 +276,9 @@ Depuis le 2026-09-27, ajouter/modifier le catalogue (catégories, produits, vend
 - [ ] WiFi / Bluetooth accessibles en maintenance
 - [ ] Impression Bluetooth fonctionnelle
 - [ ] Reboot → retour direct dans l'app
+- [ ] `vpnBlocking = true` posé dans Firestore, « Blocage réseau : actif » en maintenance
+- [ ] VPN de blocage actif (`dumpsys connectivity`), caisse connectée, `adb shell ping 8.8.8.8` en échec
+- [ ] Heure du pad correcte (date/heure automatique par le réseau mobile)
 - [ ] Document `devices/{ANDROID_ID}` créé dans Firestore
 - [ ] Test « Vérifier les mises à jour »
 - [ ] Écran « Données » → « Nouveau client (Firebase) » liste bien les clients et importe correctement un catalogue
@@ -216,9 +288,16 @@ Depuis le 2026-09-27, ajouter/modifier le catalogue (catégories, produits, vend
 
 ## Désinstallation / Réinitialisation du kiosk
 
+Le code `KioskManager.clearDeviceOwner()` lève proprement le VPN permanent, arrête le VPN, retire les restrictions réseau, ré-affiche le Play Store puis retire le Device Owner. Via ADB uniquement, le VPN permanent disparaît avec le Device Owner ; si besoin :
+
 ```bash
 # Retirer le Device Owner
 adb shell dpm remove-active-admin com.example.caisse/.kiosk.KioskAdminReceiver
+# Si le VPN permanent est resté posé
+adb shell settings put secure always_on_vpn_app ""
+adb shell settings put secure always_on_vpn_lockdown 0
+# Ré-afficher le Play Store
+adb shell pm unhide com.android.vending   # peut exiger root selon le constructeur
 # Réactiver les apps désactivées si besoin (pm enable <paquet>)
 # Remettre les animations
 adb shell settings put global window_animation_scale 1

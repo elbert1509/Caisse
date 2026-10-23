@@ -355,7 +355,11 @@ enum class TypeEvenement {
     MODIF_CONFIG,
     MODIF_MOT_DE_PASSE,
     OUVERTURE_TABLE,
-    FERMETURE_TABLE
+    FERMETURE_TABLE,
+    CRASH_APPLICATION,
+    GEL_APPLICATION,
+    ANNULATION_ARTICLE,
+    ANNULATION_FACTURE
 }
 
 @Entity(tableName = "clotures",
@@ -376,7 +380,7 @@ data class Cloture(
     val isDeleted: Boolean = false
 )
 object AppConfig {
-    const val VERSION_LOGICIEL = "1.19"
+    const val VERSION_LOGICIEL = "1.21"
     const val NOM_LOGICIEL = "MaCaissePro"
     const val EDITEUR = "Ogooué Infos"
     const val NUMERO = "077488096"

@@ -11,8 +11,30 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Crashs et gels de l'interface -> journal des événements (JET).
+        com.example.caisse.util.CrashJournal.install(this)
+        cancelLegacySyncWork()
         schedulePeriodicSync()
         schedulePeriodicAutoCloture()
+    }
+
+    /**
+     * Une seule fois après la mise à jour : annule les synchros ponctuelles créées par les
+     * anciennes versions (sans contrainte réseau, non uniques). Hors connexion elles restaient
+     * bloquées et s'accumulaient ; WorkManager les relançait même après un redémarrage.
+     * La périodique, aussi taguée "sync", est annulée avec elles puis replanifiée juste après
+     * (KEEP ré-enfile un travail annulé ; WorkManager exécute ces opérations dans l'ordre).
+     * Les données non envoyées restent `isDirty` en base : rien n'est perdu.
+     */
+    private fun cancelLegacySyncWork() {
+        val prefs = getSharedPreferences("sync", MODE_PRIVATE)
+        if (prefs.getBoolean(LEGACY_SYNC_CANCELLED, false)) return
+        WorkManager.getInstance(this).cancelAllWorkByTag("sync")
+        prefs.edit().putBoolean(LEGACY_SYNC_CANCELLED, true).apply()
+    }
+
+    private companion object {
+        const val LEGACY_SYNC_CANCELLED = "legacySyncWorkCancelled"
     }
 
     /**

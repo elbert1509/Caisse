@@ -65,7 +65,7 @@ fun InvoiceScreen(
     bluetoothViewModel: BluetoothViewModel
 ) {
     val context = LocalContext.current
-    val infos   = viewModel.getInfos()
+    val infos   = viewModel.infos.collectAsState().value
     val devise  = infos?.devise ?: ""
 
     val venteUuid    = remember(venteId) { UUID.fromString(venteId) }

@@ -179,7 +179,7 @@ fun TableScreen (navController: NavController, menuViewModel: MenuViewModel,auth
                         confirmButton = {
                             TextButton(onClick = {
                                 tableToDelete?.let { t ->
-                                    menuViewModel.deleteTable(t.id) // active=false, isDirty=true, updatedAt=now()
+                                    menuViewModel.annulerTable(t.id) // journalise les articles non encaissés, puis active=false
                                     // Propager immédiatement la suppression vers le cloud
                                     authViewModel.enqueueSync(context = ctx, tag = "sync")
                                 }

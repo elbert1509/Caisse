@@ -64,10 +64,9 @@ fun InfosScreenStart(
         // lecture unique) pour afficher la fiche dès son import — et éviter que l'utilisateur
         // en recrée une par-dessus celle du cloud.
         androidx.work.WorkManager.getInstance(navController.context).enqueueUniqueWork(
-            "sync_unique",
+            com.example.caisse.model.AuthViewModel.SYNC_WORK_NAME,
             androidx.work.ExistingWorkPolicy.KEEP,
-            androidx.work.OneTimeWorkRequestBuilder<com.example.caisse.model.SyncWorker>()
-                .addTag("sync").build()
+            com.example.caisse.model.AuthViewModel.syncRequest()
         )
         viewModel.observeInfos().collect { info ->
             val hadNone = existing == null

@@ -13,6 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+*.apk
+/app/release/app-release.apk
 
 # Script d'upload de catalogues (scripts/upload-catalogue)
 scripts/upload-catalogue/node_modules

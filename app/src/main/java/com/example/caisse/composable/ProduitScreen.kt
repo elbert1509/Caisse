@@ -200,7 +200,7 @@ fun ProductScreen(
                             editImage = product.image
                         },
                         onDelete = { deleteTarget = product },
-                        devise = viewModel.getInfos()?.devise ?: ""
+                        devise = viewModel.infos.collectAsState().value?.devise ?: ""
                     )
                 }
             }

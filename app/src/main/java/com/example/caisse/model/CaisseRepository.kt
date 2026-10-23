@@ -32,6 +32,17 @@ class CaisseRepository(
     private val clotureDao: ClotureDao,
     private val mouvementStockDao: MouvementStockDao
 ) {
+    companion object {
+        /** Repository hors ViewModel (workers, journal des crashs). */
+        fun create(context: android.content.Context): CaisseRepository {
+            val db = CaisseDataBase.getDatabase(context)
+            return CaisseRepository(
+                db.categorieDao(), db.produitDao(), db.vendeurDao(), db.venteDao(), db.tableDao(),
+                db.invoiceDao(), db.infosDao(), db.logDao(), db.clotureDao(), db.mouvementStockDao()
+            )
+        }
+    }
+
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
     suspend fun addCategory(category: Category) = categorieDao.addCategory(category)

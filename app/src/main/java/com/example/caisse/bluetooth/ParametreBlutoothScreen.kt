@@ -117,7 +117,7 @@ fun ParametreBluetooothScreen(
 ) {
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val isConnected   by viewModel.isConnected.collectAsState()
-    val info = menuViewModel.getInfos()
+    val info = menuViewModel.infos.collectAsState().value
 
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -410,8 +410,17 @@ fun ParametreBluetooothScreen(
                     enabled  = !isSyncing,
                     onClick  = {
                         if (!isSyncing) {
-                            isSyncing = true
-                            syncWorkId = authVm.enqueueSync(context = context, tag = "sync")
+                            if (!AuthViewModel.isNetworkAvailable(context)) {
+                                // Sans réseau la synchro attendrait indéfiniment : on prévient plutôt.
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Pas de connexion Internet : la synchronisation se fera au retour du réseau.",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                isSyncing = true
+                                syncWorkId = authVm.requestSyncNow(context)
+                            }
                         }
                     },
                     trailing = if (isSyncing) {

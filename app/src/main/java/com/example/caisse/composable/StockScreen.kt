@@ -100,7 +100,7 @@ fun StockScreen(navController: NavController, viewModel: MenuViewModel, showReve
     }
 
     val totalUnits = remember(lignes) { lignes.sumOf { it.stock } }
-    val shopInfos = viewModel.getInfos()
+    val shopInfos = viewModel.infos.collectAsState().value
     val context = LocalContext.current
 
     Scaffold(

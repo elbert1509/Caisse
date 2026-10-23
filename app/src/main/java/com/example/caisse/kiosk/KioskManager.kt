@@ -3,10 +3,12 @@ package com.example.caisse.kiosk
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
+import android.app.admin.SystemUpdatePolicy
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.UserManager
 import android.provider.Settings
 import android.util.Log
 
@@ -52,6 +54,18 @@ object KioskManager {
         "com.example.caisse",
         "com.android.settings" // permet d'ouvrir WiFi/Bluetooth pendant la maintenance
     )
+
+    /**
+     * Mode « lockdown » par défaut du VPN permanent [BlockingVpnService], utilisé quand le
+     * champ Firestore `vpnLockdown` est absent (voir [NetworkBlockController]).
+     * - false : si le VPN tombe, les autres applis retrouvent le réseau le temps qu'il redémarre.
+     * - true  : le système bloque tout trafic hors VPN, même quand le VPN est arrêté.
+     * À valider sur Android 7 : vérifier que la caisse garde bien le réseau avant de passer à true.
+     */
+    const val VPN_LOCKDOWN = false
+
+    /** Play Store, masqué sur les pads (inutile en kiosk, consommateur de données). */
+    private const val PLAY_STORE_PACKAGE = "com.android.vending"
 
     private fun dpm(context: Context): DevicePolicyManager =
         context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -101,6 +115,78 @@ object KioskManager {
         }
         val home = android.content.ComponentName(activity, "com.example.caisse.MainActivity")
         dpm.addPersistentPreferredActivity(admin, filter, home)
+
+        applyNetworkPolicies(dpm, admin)
+    }
+
+    /**
+     * Active ou lève le VPN permanent « trou noir » (API 24+). Piloté à distance par
+     * [NetworkBlockController] (champ Firestore `vpnBlocking`). Retourne true si appliqué.
+     * Activé, le système démarre BlockingVpnService et le relance au boot.
+     */
+    fun setNetworkBlocking(context: Context, enabled: Boolean, lockdown: Boolean): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isDeviceOwner(context)) return false
+        val dpm = dpm(context)
+        val admin = KioskAdminReceiver.getComponentName(context)
+        return try {
+            if (enabled) {
+                dpm.setAlwaysOnVpnPackage(admin, context.packageName, lockdown)
+            } else {
+                dpm.setAlwaysOnVpnPackage(admin, null, false)
+                context.stopService(Intent(context, BlockingVpnService::class.java))
+            }
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            Log.e(TAG, "VPN permanent : paquet introuvable", e)
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "VPN permanent : échec", e)
+            false
+        }
+    }
+
+    /**
+     * Verrous réseau associés au blocage (le VPN lui-même est piloté par [setNetworkBlocking]).
+     * Chaque étape est isolée pour qu'un échec n'empêche ni les autres ni le LockTask.
+     */
+    private fun applyNetworkPolicies(dpm: DevicePolicyManager, admin: android.content.ComponentName) {
+        // Empêcher de retirer le VPN, de partager la connexion ou de toucher aux réseaux mobiles.
+        try {
+            dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN)
+            dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_TETHERING)
+            dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS)
+        } catch (e: Exception) {
+            Log.e(TAG, "Restrictions réseau : échec", e)
+        }
+
+        try {
+            dpm.setApplicationHidden(admin, PLAY_STORE_PACKAGE, true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Masquage du Play Store : échec", e)
+        }
+
+        // Reporter les mises à jour système (OTA constructeur) : pas de gros téléchargements.
+        try {
+            dpm.setSystemUpdatePolicy(admin, SystemUpdatePolicy.createPostponeInstallPolicy())
+        } catch (e: Exception) {
+            Log.e(TAG, "Politique de mise à jour système : échec", e)
+        }
+    }
+
+    /** Lève le VPN permanent et arrête le VPN (avant déprovisionnement du Device Owner). */
+    private fun removeNetworkPolicies(context: Context) {
+        val dpm = dpm(context)
+        val admin = KioskAdminReceiver.getComponentName(context)
+        setNetworkBlocking(context, enabled = false, lockdown = false)
+        try {
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN)
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_TETHERING)
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS)
+            dpm.setApplicationHidden(admin, PLAY_STORE_PACKAGE, false)
+            dpm.setSystemUpdatePolicy(admin, null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Levée des politiques réseau : échec", e)
+        }
     }
 
     /**
@@ -165,6 +251,7 @@ object KioskManager {
      */
     fun clearDeviceOwner(context: Context) {
         if (isDeviceOwner(context)) {
+            removeNetworkPolicies(context)
             dpm(context).clearDeviceOwnerApp(context.packageName)
         }
     }

@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.caisse"
         minSdk = 23
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.20"
+        versionCode = 20
+        versionName = "1.21"
         vectorDrawables.useSupportLibrary = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

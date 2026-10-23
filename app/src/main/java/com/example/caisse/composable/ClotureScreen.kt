@@ -64,7 +64,7 @@ import java.util.Locale
 @Composable
 fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
     val ventes by viewModel.ventes.collectAsState()
-    val infos = viewModel.getInfos()
+    val infos = viewModel.infos.collectAsState().value
     val devise = infos?.devise ?: "€"
 
     val etatCaisse by produceState<EtatCaisse?>(initialValue = null) {

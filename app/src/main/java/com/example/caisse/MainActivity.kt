@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.caisse.composable.AppNavigation
 import com.example.caisse.kiosk.KioskManager
+import com.example.caisse.kiosk.NetworkBlockController
 import com.example.caisse.ui.theme.CaisseTheme
 
 class MainActivity : AppCompatActivity() {
@@ -20,6 +21,8 @@ class MainActivity : AppCompatActivity() {
         // Applique les politiques Device Owner (whitelist LockTask, launcher HOME, restrictions).
         // Sans effet si l'app n'est pas encore Device Owner.
         KioskManager.applyKioskPolicies(this)
+        // Blocage réseau (VPN) activé/désactivé à distance via Firestore (`vpnBlocking`).
+        NetworkBlockController.start(this)
 
         setContent {
             AppNavigation()

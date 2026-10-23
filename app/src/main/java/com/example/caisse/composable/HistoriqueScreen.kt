@@ -100,7 +100,7 @@ fun HistoriqueScreen(
             if (selectedTab == 0) {
                 LazyColumn {
                     items(invoicesWithDetails) { venteDetails ->
-                        VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.getInfos()?.devise ?: "",
+                        VenteCard(venteDetails, title = "Vente Table",devise = menuViewModel.infos.collectAsState().value?.devise ?: "",
                             onVenteClick = {
                                 navController.navigate("ticket/${venteDetails.vente.id}")
                             }
@@ -113,7 +113,7 @@ fun HistoriqueScreen(
                         VenteCard(
                             venteDetails,
                             title = "Comptoir",
-                            devise = menuViewModel.getInfos()?.devise ?: "",
+                            devise = menuViewModel.infos.collectAsState().value?.devise ?: "",
                             onVenteClick = {
                                 navController.navigate("ticket/${venteDetails.vente.id}")
                             }

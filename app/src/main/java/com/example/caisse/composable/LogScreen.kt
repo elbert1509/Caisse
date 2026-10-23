@@ -86,7 +86,8 @@ fun LogItem(log: LogTechnique) {
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 color = when(log.typeEvenement) {
-                    "Erreur" -> Color.Red
+                    "Erreur", "ERREUR_SYSTEME", "CRASH_APPLICATION", "GEL_APPLICATION" -> Color.Red
+                    "ANNULATION_ARTICLE", "ANNULATION_FACTURE", "VENTE_ANNULEE" -> Color(0xFFE65100)
                     "OUVERTURE_SESSION" -> Color(0xFF388E3C)
                     else -> Color.Black
                 }

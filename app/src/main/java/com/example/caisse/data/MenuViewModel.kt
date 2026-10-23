@@ -28,7 +28,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.UUID
 
@@ -161,11 +162,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-   fun getInfos(): ShopInfos? {
-        return runBlocking {
-            repository.getInfos()
-        }
-    }
+    /**
+     * Fiche magasin en mémoire, tenue à jour par Room. Dans un écran Compose, lire
+     * `infos.collectAsState().value` pour être recomposé quand elle change.
+     */
+    val infos: StateFlow<ShopInfos?> = repository.observeInfos()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Dernière fiche magasin connue, sans bloquer le thread appelant. */
+    fun getInfos(): ShopInfos? = infos.value
 
     /** Fiche magasin en continu : émet dès que la sync l'importe (cas du nouvel appareil). */
     fun observeInfos() = repository.observeInfos()
@@ -374,9 +379,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun loadTableItems(tableId: UUID) {
         viewModelScope.launch {
             val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
-            val tickets = items.mapNotNull { item ->
-                repository.getProduitById(item.productId)?.let { product ->
-                    Ticket(product, item.quantity)
+            // Une seule ligne par produit, même si d'anciens doublons existent en base.
+            val tickets = items.groupBy { it.productId }.mapNotNull { (productId, rows) ->
+                repository.getProduitById(productId)?.let { product ->
+                    Ticket(product, rows.sumOf { it.quantity })
                 }
             }
             _tableItems.value = tickets
@@ -385,6 +391,31 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun clearTableItems() {
         _tableItems.value = emptyList()
     }
+    /**
+     * Suppression d'une table par l'utilisateur. Si des articles n'ont pas été encaissés, la
+     * facture est annulée : on la trace dans le JET avant de fermer la table.
+     */
+    fun annulerTable(tableId: UUID) {
+        viewModelScope.launch {
+            val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
+            if (items.isNotEmpty()) {
+                val lignes = items.groupBy { it.productId }.map { (productId, rows) ->
+                    val produit = repository.getProduitById(productId)
+                    val quantite = rows.sumOf { it.quantity }
+                    Triple(produit?.nom ?: productId.toString(), quantite, (produit?.prix ?: 0.0) * quantite)
+                }
+                val tableName = repository.getTableById(tableId)?.name ?: tableId.toString()
+                loggerEvenement(
+                    type = TypeEvenement.ANNULATION_FACTURE.name,
+                    description = "Table $tableName supprimée sans encaissement : " +
+                        lignes.joinToString(", ") { "${it.second}x ${it.first}" } +
+                        " | total=${lignes.sumOf { it.third }}"
+                )
+            }
+            deleteTable(tableId)
+        }
+    }
+
     fun deleteTable(tableId: UUID) {
         viewModelScope.launch {
             val table = tables.value.find { it.id == tableId }
@@ -395,44 +426,55 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
-    fun addProductToTable(productId: UUID, tableId: UUID) {
+    // Sérialise les modifications de quantité : deux appuis rapides ne doivent ni se perdre
+    // ni créer deux lignes pour le même produit.
+    private val tableItemsMutex = Mutex()
+
+    fun addProductToTable(productId: UUID, tableId: UUID) =
+        changeTableItemQuantity(productId, tableId, +1)
+
+    /**
+     * Ajoute [delta] à la quantité d'un produit sur une table, à partir de la base (et non de
+     * l'affichage). Une ligne retombée à 0 est marquée supprimée (soft-delete) ; si le produit
+     * est rajouté ensuite, la ligne est réactivée. Les doublons hérités sont fusionnés.
+     */
+    fun changeTableItemQuantity(productId: UUID, tableId: UUID, delta: Int) {
         viewModelScope.launch {
-            val existingItem = repository.getTableItems(tableId).find { it.productId == productId }
-            if (existingItem != null) {
-                repository.updateProductInTable(
-                    existingItem.copy(quantity = existingItem.quantity + 1, updatedAt = now(), isDirty = true)
-                )
-            } else {
-                repository.addProductToTable(
-                    TableItem(tableId = tableId, productId = productId, quantity = 1).copy(updatedAt = now(), isDirty = true)
-                )
-            }
-            loadTableItems(tableId)
-        }
-    }
-
-
-
-    fun updateTableItemQuantity(productId: UUID, tableId: UUID, newQuantity: Int) {
-        viewModelScope.launch {
-            if (newQuantity > 0) {
-                val item = repository.getTableItems(tableId).find { it.productId == productId }
-                item?.let {
-                    repository.updateProductInTable(it.copy(quantity = newQuantity, updatedAt = now(), isDirty = true))
-                }
-            } else {
-                val item = repository.getTableItems(tableId).find { it.productId == productId }
-                item?.let {
-                    repository.updateProductInTable(
-                        it.copy(
-                            quantity = 0,
-                            updatedAt = now(),
-                            isDirty = true,
-                            isDeleted = true
+            tableItemsMutex.withLock {
+                val rows = repository.getTableItems(tableId).filter { it.productId == productId }
+                val active = rows.filter { !it.isDeleted && it.quantity > 0 }
+                val newQuantity = (active.sumOf { it.quantity } + delta).coerceAtLeast(0)
+                val ts = now()
+                val keep = active.firstOrNull() ?: rows.firstOrNull()
+                if (keep == null) {
+                    if (newQuantity > 0) {
+                        repository.addProductToTable(
+                            TableItem(tableId = tableId, productId = productId, quantity = newQuantity)
+                                .copy(updatedAt = ts, isDirty = true)
                         )
+                    }
+                } else {
+                    repository.updateProductInTable(
+                        keep.copy(quantity = newQuantity, isDeleted = newQuantity == 0, updatedAt = ts, isDirty = true)
+                    )
+                    active.filter { it.id != keep.id }.forEach { duplicate ->
+                        repository.updateProductInTable(
+                            duplicate.copy(quantity = 0, isDeleted = true, updatedAt = ts, isDirty = true)
+                        )
+                    }
+                }
+                val oldQuantity = active.sumOf { it.quantity }
+                if (newQuantity < oldQuantity) {
+                    val produit = repository.getProduitById(productId)
+                    val tableName = repository.getTableById(tableId)?.name ?: tableId.toString()
+                    val retire = oldQuantity - newQuantity
+                    loggerEvenement(
+                        type = TypeEvenement.ANNULATION_ARTICLE.name,
+                        description = "Table $tableName : ${produit?.nom ?: productId} x$oldQuantity -> x$newQuantity" +
+                            (if (newQuantity == 0) " (retiré de la facture)" else "") +
+                            " | montant retiré=${(produit?.prix ?: 0.0) * retire}"
                     )
                 }
-               // repository.deleteProductFromTable(tableId, productId)
             }
             loadTableItems(tableId)
         }

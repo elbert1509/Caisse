@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +75,7 @@ import kotlinx.coroutines.withContext
 fun GestionScreen(navController: NavController, viewModel: MenuViewModel, fromHome: Boolean){
     val context = LocalContext.current
     var unlocked by rememberSaveable  { mutableStateOf(!fromHome) }
-    val infos = viewModel.getInfos()
+    val infos = viewModel.infos.collectAsState().value
     var secretClickCount by remember { mutableIntStateOf(0) }
 
     if (secretClickCount >= 7 && !viewModel.isAdminMode) {

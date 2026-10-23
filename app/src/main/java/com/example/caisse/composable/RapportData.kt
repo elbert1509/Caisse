@@ -65,7 +65,7 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
     val revWeek     by dashboardViewModel.salesThisWeek.collectAsState()
     val revMonth    by dashboardViewModel.salesThisMonth.collectAsState()
     val weeklySales by dashboardViewModel.weeklySales.collectAsState()
-    val devise = viewModel.getInfos()
+    val devise = viewModel.infos.collectAsState().value
 
 
 

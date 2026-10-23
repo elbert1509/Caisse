@@ -34,9 +34,9 @@ import java.net.URL
 object SilentUpdater {
 
     private const val TAG = "SilentUpdater"
-    private const val CONFIG_COLLECTION = "config"
-    private const val CONFIG_DOC = "app_android"
-    private const val DEVICES_COLLECTION = "devices"
+    internal const val CONFIG_COLLECTION = "config"
+    internal const val CONFIG_DOC = "app_android"
+    internal const val DEVICES_COLLECTION = "devices"
     private const val INSTALL_ACTION = "com.example.caisse.INSTALL_RESULT"
 
     /**

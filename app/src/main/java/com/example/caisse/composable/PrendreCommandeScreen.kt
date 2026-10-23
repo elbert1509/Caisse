@@ -95,7 +95,7 @@ fun PrendreCommandeScreen(
     val products by menuViewModel.produits.collectAsState()
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
-    val shopInfos = menuViewModel.getInfos()
+    val shopInfos = menuViewModel.infos.collectAsState().value
     val context = LocalContext.current
 
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id) }

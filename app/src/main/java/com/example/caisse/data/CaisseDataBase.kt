@@ -34,7 +34,7 @@ import com.example.caisse.model.VenteDao
         EtatCaisse::class,
         MouvementStock::class
     ],
-    version = 15,
+    version = 18,
     exportSchema = true   // NF525 : traçabilité des évolutions du schéma
 )
 @TypeConverters(UUIDConverters::class)
@@ -60,7 +60,7 @@ abstract class CaisseDataBase : RoomDatabase() {
                     context.applicationContext,
                     CaisseDataBase::class.java,
                     "caisse_database"
-                ).addMigrations(*MIGRATIONS_TO_13, MIGRATION_13_14, MIGRATION_14_15)
+                ).addMigrations(*MIGRATIONS_TO_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                     .fallbackToDestructiveMigration(false)
                     .build()
                 INSTANCE = instance

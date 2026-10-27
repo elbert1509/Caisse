@@ -115,8 +115,8 @@ fun PrendreCommandeScreen(
     }
 
     val displayedProducts = remember(products, showFavoris, selectedCategoryId, favoriIds) {
-        if (showFavoris) products.filter { favoriIds.contains(it.id.toString()) }
-        else products.filter { it.categoryId == selectedCategoryId }
+        if (showFavoris) products.filter { it.isActive && favoriIds.contains(it.id.toString()) }
+        else products.filter { it.isActive && it.categoryId == selectedCategoryId }
     }
 
     LaunchedEffect(categories) {

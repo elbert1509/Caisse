@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.caisse.data.MenuViewModel
-import com.example.caisse.data.TypeEvenement
 import com.example.caisse.data.Vente
 import com.example.caisse.util.formatPrice
 import java.text.SimpleDateFormat
@@ -63,13 +62,10 @@ fun VenteScreen(
                     items(ventes, key = { it.id }) { v ->
                         VenteRow(
                             vente = v,
-                            onDelete = {
-                                toDelete = v
-                                viewModel.loggerEvenement(
-                                    type = TypeEvenement.VENTE_ANNULEE.name,
-                                    description = "Demande annulation ticket seq=${v.sequenceNumber} montant=${v.total}"
-                                )
-                            },
+                            // Pas d'entrée au journal ici : l'annulation n'est tracée (VENTE_ANNULEE)
+                            // qu'une fois confirmée, par deleteVenteWithStock. Avant, ouvrir puis
+                            // refermer la fenêtre laissait une fausse annulation dans le JET.
+                            onDelete = { toDelete = v },
                             devise = viewModel.infos.collectAsState().value?.devise ?: ""
                         )
                     }

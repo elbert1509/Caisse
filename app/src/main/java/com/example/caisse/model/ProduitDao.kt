@@ -27,6 +27,36 @@ interface ProduitDao {
     @Query("UPDATE Produit SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
     suspend fun clearDirty(id: UUID, updatedAt: Long)
 
+    // Sync : après le push, si le produit n'a pas bougé localement pendant l'envoi (même
+    // updatedAt), il prend les valeurs écrites dans le cloud et n'est plus dirty. Renvoie 0 sinon.
+    @Query("""
+        UPDATE Produit SET
+            stock = :stock, stockSynced = :stock, prix = :prix, prixSynced = :prix,
+            nom = :nom, nomSynced = :nom, categoryId = :categoryId, categoryIdSynced = :categoryId,
+            image = :image, imageSynced = :image, description = :description, descriptionSynced = :description,
+            isActive = :isActive, isActiveSynced = :isActive, isDirty = 0
+        WHERE id = :id AND updatedAt = :updatedAt
+    """)
+    suspend fun applyCloudIfUnchanged(
+        id: UUID, updatedAt: Long, stock: Int, prix: Double, nom: String, categoryId: UUID,
+        image: String?, description: String?, isActive: Boolean
+    ): Int
+
+    // Sync : produit modifié localement PENDANT le push (ex. vente) -> on garde ses valeurs et il
+    // reste dirty, mais on met à jour les références cloud. Stock ajusté en RELATIF pour que la
+    // vente reste comptée (et poussée au prochain passage, via stock − stockSynced).
+    @Query("""
+        UPDATE Produit SET
+            stock = stock + :adjust, stockSynced = :stock, prixSynced = :prix, nomSynced = :nom,
+            categoryIdSynced = :categoryId, imageSynced = :image, descriptionSynced = :description,
+            isActiveSynced = :isActive
+        WHERE id = :id
+    """)
+    suspend fun rebaseAfterPush(
+        id: UUID, adjust: Int, stock: Int, prix: Double, nom: String, categoryId: UUID,
+        image: String?, description: String?, isActive: Boolean
+    )
+
     @Query("SELECT * FROM produit WHERE isDeleted = 0")
     fun getAllProduits(): Flow<List<Produit>>
 

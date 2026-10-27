@@ -17,6 +17,17 @@ interface ClotureDao {
 """)
     suspend fun getClotureByDateAndType(dateCloture: String, type: String): Cloture?
 
+    @Query("""
+    SELECT * FROM clotures
+    WHERE deviceId = :deviceId AND dateCloture = :dateCloture AND type = :type
+    LIMIT 1
+""")
+    suspend fun getClotureForDevice(deviceId: String, dateCloture: String, type: String): Cloture?
+
+    /** Dernière clôture faite par ce pad (la plus récente, pas la plus grande date). */
+    @Query("SELECT * FROM clotures WHERE deviceId = :deviceId ORDER BY updatedAt DESC LIMIT 1")
+    suspend fun getLastClotureForDevice(deviceId: String): Cloture?
+
     @Query("SELECT * FROM clotures")
     suspend fun getAllCloturesOnce(): List<Cloture>
 

@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.caisse.data.CaisseRepository
 import com.example.caisse.data.Cloture
 import com.example.caisse.data.EtatCaisse
 import com.example.caisse.data.MenuViewModel
@@ -90,12 +91,24 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
     var isLoading by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
-    val today = LocalDate.now()
     val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
-    val ventesDuJour = remember(ventes) {
+    // Même période que la clôture qui sera générée : ventes depuis la clôture précédente,
+    // datée du jour d'ouverture de la session (et non plus « depuis minuit »).
+    val periode by produceState<CaisseRepository.PeriodeCloture?>(initialValue = null) {
+        value = try {
+            viewModel.repository.periodeClotureEnCours()
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val today = periode?.dateCloture ?: LocalDate.now()
+
+    // Ventes de CE pad seulement (voir PeriodeCloture.compte) : chaque pad fait son propre Z.
+    val ventesDuJour = remember(ventes, periode) {
+        val p = periode
         ventes.filter { vente ->
-            !vente.isDeleted && vente.toLocalDate() == today
+            if (p != null) p.compte(vente) else !vente.isDeleted && vente.toLocalDate() == today
         }
     }
 
@@ -105,7 +118,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
 
     val derniereCloture by produceState<Cloture?>(initialValue = null) {
         value = try {
-            viewModel.repository.venteDao.getLastCloture()
+            viewModel.repository.derniereClotureDuPad()
         } catch (_: Exception) {
             null
         }
@@ -274,7 +287,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                 onClick = {
                     scope.launch {
                         val refreshed = try {
-                            viewModel.repository.venteDao.getLastCloture()
+                            viewModel.repository.derniereClotureDuPad()
                         } catch (_: Exception) {
                             null
                         }

@@ -4,6 +4,7 @@ package com.example.caisse.data
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -69,6 +70,24 @@ data class Produit(
     val image: String? = null,
     val categoryId: UUID,   // 🔗 clé étrangère
     val stock: Int = 0,
+    // Stock cloud (Firestore) connu lors de la dernière synchro. stock − stockSynced = variation
+    // locale pas encore envoyée : c'est cet écart qui est poussé, pas la valeur absolue, pour ne
+    // pas écraser une modification faite ailleurs (web gérant, autre pad) pendant que ce pad
+    // était hors ligne. null = inconnu (produit créé localement) -> valeur absolue au 1er push.
+    val stockSynced: Int? = null,
+    // Prix cloud connu lors de la dernière synchro. prix == prixSynced : le prix n'a pas été
+    // modifié sur ce pad -> au push, on garde le prix du cloud (modifié peut-être sur le web).
+    // null = inconnu -> prix local poussé tel quel au 1er push.
+    val prixSynced: Double? = null,
+    // Même principe pour les autres champs modifiables depuis le web : valeur cloud lors de la
+    // dernière synchro. Un champ non modifié sur ce pad (valeur == valeur synchro) prend la valeur
+    // du cloud au push. nomSynced == null = références inconnues (tous ces champs sont posés
+    // ensemble) -> valeurs locales poussées telles quelles.
+    val nomSynced: String? = null,
+    val categoryIdSynced: UUID? = null,
+    val imageSynced: String? = null,
+    val descriptionSynced: String? = null,
+    val isActiveSynced: Boolean? = null,
     val description: String? = null,
     val isActive: Boolean = true,
     val tauxTVA: Double = 20.0,
@@ -103,6 +122,9 @@ data class Vente(
     val total: Double,
     val tableId: UUID? =  UUID.fromString("22222222-0000-2222-2222-222222222222"),
     val sequenceNumber: Long = 0,
+    // Pad qui a enregistré la vente (ANDROID_ID). Chaque pad a sa propre numérotation, sa
+    // propre chaîne de hash et son propre Z. "" = vente antérieure à ce champ (pad inconnu).
+    @ColumnInfo(defaultValue = "") val deviceId: String = "",
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
     val isDirty: Boolean = false,
@@ -325,9 +347,13 @@ data class LogTechnique(
     val description: String,
     val idVendeur: UUID?,
     val empreinte: String, // Hash pour prouver que le log n'a pas été modifié
+    // Pad qui a écrit l'événement (ANDROID_ID). "" = événement antérieur à ce champ.
+    @ColumnInfo(defaultValue = "") val deviceId: String = "",
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
-    val isDirty: Boolean = false,
+    // true par défaut : un événement créé sur ce pad doit partir vers le cloud (avec false, le
+    // journal n'était envoyé que lors d'une synchro complète). Le pull pose false explicitement.
+    val isDirty: Boolean = true,
     val isDeleted: Boolean = false
 )
 enum class TypeEvenement {
@@ -363,7 +389,8 @@ enum class TypeEvenement {
 }
 
 @Entity(tableName = "clotures",
-        indices = [Index(value = ["dateCloture", "type"], unique = true)]
+        // Une clôture par date, par type ET par pad : chaque pad fait son propre Z.
+        indices = [Index(value = ["deviceId", "dateCloture", "type"], unique = true)]
 )
 data class Cloture(
     @PrimaryKey val idCloture: UUID = UUID.randomUUID(),
@@ -374,13 +401,17 @@ data class Cloture(
     val compteurVentes: Int, // Nombre de tickets
     val grandTotalCumule: Double, // Somme ininterrompue depuis le début de l'app
     val hash: String, // Signature de la clôture
+    // Pad qui a fait la clôture (ANDROID_ID). "" = clôture antérieure à ce champ.
+    @ColumnInfo(defaultValue = "") val deviceId: String = "",
     // sync
     val updatedAt: Long = System.currentTimeMillis(),
-    val isDirty: Boolean = false,
+    // true par défaut : un Z créé sur ce pad doit partir vers le cloud (avec false, il n'était
+    // envoyé que lors d'une synchro complète). Le pull pose false explicitement.
+    val isDirty: Boolean = true,
     val isDeleted: Boolean = false
 )
 object AppConfig {
-    const val VERSION_LOGICIEL = "1.21"
+    const val VERSION_LOGICIEL = "1.24"
     const val NOM_LOGICIEL = "MaCaissePro"
     const val EDITEUR = "Ogooué Infos"
     const val NUMERO = "077488096"

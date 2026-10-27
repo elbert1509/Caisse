@@ -145,3 +145,49 @@ val MIGRATION_14_15: Migration = object : Migration(14, 15) {
         db.execSQL("ALTER TABLE ShopInfos ADD COLUMN heureFermetureAuto TEXT NOT NULL DEFAULT '05:00'")
     }
 }
+
+// Synchro du stock par écart (stock − stockSynced) au lieu de la valeur absolue, et du prix
+// seulement s'il a changé sur le pad (prix ≠ prixSynced) : un pad hors ligne n'écrase plus le
+// stock ni le prix modifiés sur le web ou un autre pad. Produits sans modification locale en
+// attente : la référence est la valeur actuelle (= cloud). Produits « dirty » : référence
+// inconnue (NULL) -> poussés une dernière fois tels quels (ancien comportement).
+val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE Produit ADD COLUMN stockSynced INTEGER")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN prixSynced REAL")
+        db.execSQL("UPDATE Produit SET stockSynced = stock, prixSynced = prix WHERE isDirty = 0")
+    }
+}
+
+// Même principe pour les autres champs modifiables depuis le web gérant (nom, catégorie, image,
+// description, actif) : un champ non modifié sur le pad prend la valeur du cloud au push.
+val MIGRATION_16_17: Migration = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE Produit ADD COLUMN nomSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN categoryIdSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN imageSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN descriptionSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN isActiveSynced INTEGER")
+        db.execSQL(
+            "UPDATE Produit SET nomSynced = nom, categoryIdSynced = categoryId, imageSynced = image, " +
+                "descriptionSynced = description, isActiveSynced = isActive WHERE isDirty = 0"
+        )
+    }
+}
+
+// Plusieurs pads sur le même compte : chaque vente, clôture et événement du journal porte le pad
+// qui l'a créé (ANDROID_ID), pour que chaque pad ait sa numérotation, sa chaîne de hash et son Z
+// sans mélanger les ventes des autres pads. Lignes existantes : "" (pad inconnu). L'unicité des
+// clôtures passe de (date, type) à (pad, date, type) : deux pads peuvent clôturer le même jour.
+val MIGRATION_17_18: Migration = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE Vente ADD COLUMN deviceId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE clotures ADD COLUMN deviceId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE logs_techniques ADD COLUMN deviceId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("DROP INDEX IF EXISTS index_clotures_dateCloture_type")
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS index_clotures_deviceId_dateCloture_type " +
+                "ON clotures (deviceId, dateCloture, type)"
+        )
+    }
+}

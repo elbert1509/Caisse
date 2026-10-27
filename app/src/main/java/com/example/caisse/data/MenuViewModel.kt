@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -209,16 +210,18 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         )
 
     fun confirmerVente(vendeurId: UUID? = null) {
+        // Panier pris ET vidé en une seule opération atomique : un deuxième appui rapide sur
+        // « Confirmer la commande » trouve un panier vide et ne crée pas une deuxième vente.
+        val cartItems = _cart.getAndUpdate { emptyList() }
+        if (cartItems.isEmpty()) return
         viewModelScope.launch {
-            val cartItems = cart.value
-            if (cartItems.isEmpty()) return@launch
-
             val venteId = UUID.randomUUID()
             val ts      = now()
+            // Total calculé sur le panier pris (totalPrice est un flux qui peut ne pas être à jour).
             val vente = Vente(
                 id        = venteId,
                 vendeurId = vendeurId,
-                total     = totalPrice.value,
+                total     = cartItems.sumOf { it.produit.prix * it.quantity },
                 date      = ts,
                 updatedAt = ts,
                 isDirty   = true
@@ -238,8 +241,15 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 )
             }
 
-            // NF525 Axe B : transaction atomique avec hash + numéro de séquence
-            val venteSignee = repository.insertVenteSecurisee(vente, lignes)
+            // NF525 Axe B : transaction atomique avec hash + numéro de séquence + stock
+            val venteSignee = try {
+                repository.insertVenteSecurisee(vente, lignes)
+            } catch (e: Exception) {
+                // Rien n'a été écrit : on rend le panier pour pouvoir réessayer.
+                _cart.value = cartItems
+                loggerEvenement(TypeEvenement.ERREUR_SYSTEME.name, "Échec d'enregistrement de la vente : ${e.message}")
+                return@launch
+            }
 
             loggerEvenement(
                 type        = TypeEvenement.VENTE_VALIDEE.name,
@@ -247,28 +257,14 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                               "total=${venteSignee.total} | articles=${cartItems.sumOf { it.quantity }} | " +
                               "hash=${venteSignee.hash}"
             )
-            decrementStocks(cartItems)
-            clearCart()
         }
     }
 
     fun deleteVenteWithStock(vente: Vente) {
         viewModelScope.launch {
-            val ts = now()
-            // 1) Requête directe (suspend, pas Flow) — évite le bug Flow.first() vide
-            val lignes = repository.getLignesForVenteOnce(vente.id)
-
-            // 2) Rétablir les stocks pour chaque ligne
-            lignes.forEach { l ->
-                val p = repository.getProduitById(l.produitId)
-                if (p != null) {
-                    repository.updateProduit(p.copy(stock = p.stock + l.quantity, updatedAt = ts, isDirty = true))
-                }
-            }
-
-            // 3) NF525 Axe A : soft-delete atomique
-            repository.softDeleteVente(vente.id)
-            repository.venteDao.softDeleteLignesForVente(vente.id, ts)
+            // NF525 Axe A : soft-delete + stock rendu dans une seule transaction. null = vente
+            // déjà annulée (double appui) : rien à refaire, le stock n'est pas rendu deux fois.
+            repository.annulerVente(vente.id) ?: return@launch
 
             loggerEvenement(
                 type        = TypeEvenement.VENTE_ANNULEE.name,
@@ -483,62 +479,77 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun getTableById(id: UUID): AppTable? {
         return tables.value.find { it.id == id }
     }
+    /**
+     * Encaissement d'une table. Articles relus en base (et non l'affichage, qui peut ne pas
+     * contenir un article ajouté entre-temps par un autre pad), sous le même verrou que les
+     * changements de quantité. La table est fermée dans ce verrou : un deuxième appui sur
+     * « Valider » la trouve fermée et ne crée pas une deuxième vente.
+     */
     fun payTable(tableId: UUID) {
         viewModelScope.launch {
-            val itemsToPay = _tableItems.value
-            if (itemsToPay.isEmpty()) return@launch
+            tableItemsMutex.withLock {
+                val table = repository.getTableById(tableId)
+                if (table == null || !table.active || table.isDeleted) return@withLock
 
-            val venteId = UUID.randomUUID()
-            val ts      = now()
-            val vente = Vente(
-                id        = venteId,
-                vendeurId = null,
-                total     = itemsToPay.sumOf { it.produit.prix * it.quantity },
-                date      = ts,
-                tableId   = tableId,
-                updatedAt = ts,
-                isDirty   = true
-            )
+                val itemsToPay = repository.getTableItems(tableId)
+                    .filter { !it.isDeleted && it.quantity > 0 }
+                    .groupBy { it.productId }
+                    .mapNotNull { (productId, rows) ->
+                        repository.getProduitById(productId)?.let { Ticket(it, rows.sumOf { r -> r.quantity }) }
+                    }
+                if (itemsToPay.isEmpty()) return@withLock
 
-            val lignes = itemsToPay.map { ticket ->
-                VenteLigne(
-                    id           = UUID.randomUUID(),
-                    venteId      = venteId,
-                    produitId    = ticket.produit.id,
-                    quantity     = ticket.quantity,
-                    prixUnitaire = ticket.produit.prix,
-                    sousTotal    = ticket.produit.prix * ticket.quantity,
-                    tauxTVA      = ticket.produit.tauxTVA,
-                    updatedAt    = ts,
-                    isDirty      = true
+                val venteId = UUID.randomUUID()
+                val ts      = now()
+                val total   = itemsToPay.sumOf { it.produit.prix * it.quantity }
+                val vente = Vente(
+                    id        = venteId,
+                    vendeurId = null,
+                    total     = total,
+                    date      = ts,
+                    tableId   = tableId,
+                    updatedAt = ts,
+                    isDirty   = true
                 )
-            }
-            // NF525 Axe B : transaction atomique
-            val venteSignee = repository.insertVenteSecurisee(vente, lignes)
 
-            loggerEvenement(
-                type        = TypeEvenement.VENTE_VALIDEE.name,
-                description = "Vente table encaissée | tableId=$tableId | seq=${venteSignee.sequenceNumber} | " +
-                              "total=${venteSignee.total} | articles=${itemsToPay.sumOf { it.quantity }} | " +
-                              "hash=${venteSignee.hash}"
-            )
-
-            val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
-            val invoice = Invoice(tableId = tableId, totalAmount = total)
-            repository.addInvoice(invoice)
-            itemsToPay.forEach { ticket ->
-                repository.addInvoiceItem(
-                    InvoiceItem(
-                        invoiceId = invoice.id,
-                        productId = ticket.produit.id,
-                        quantity = ticket.quantity
+                val lignes = itemsToPay.map { ticket ->
+                    VenteLigne(
+                        id           = UUID.randomUUID(),
+                        venteId      = venteId,
+                        produitId    = ticket.produit.id,
+                        quantity     = ticket.quantity,
+                        prixUnitaire = ticket.produit.prix,
+                        sousTotal    = ticket.produit.prix * ticket.quantity,
+                        tauxTVA      = ticket.produit.tauxTVA,
+                        updatedAt    = ts,
+                        isDirty      = true
                     )
+                }
+                // NF525 Axe B : transaction atomique (vente + lignes + stock)
+                val venteSignee = repository.insertVenteSecurisee(vente, lignes)
+
+                loggerEvenement(
+                    type        = TypeEvenement.VENTE_VALIDEE.name,
+                    description = "Vente table encaissée | tableId=$tableId | seq=${venteSignee.sequenceNumber} | " +
+                                  "total=${venteSignee.total} | articles=${itemsToPay.sumOf { it.quantity }} | " +
+                                  "hash=${venteSignee.hash}"
                 )
+
+                val invoice = Invoice(tableId = tableId, totalAmount = total)
+                repository.addInvoice(invoice)
+                itemsToPay.forEach { ticket ->
+                    repository.addInvoiceItem(
+                        InvoiceItem(
+                            invoiceId = invoice.id,
+                            productId = ticket.produit.id,
+                            quantity = ticket.quantity
+                        )
+                    )
+                }
+
+                repository.updateTable(table.copy(active = false, updatedAt = now(), isDirty = true))
+                loggerEvenement(TypeEvenement.FERMETURE_TABLE.name, "Table fermée : ${table.name} (id=$tableId)")
             }
-
-            decrementStocks(itemsToPay)
-
-            deleteTable(tableId)
             _tableItems.value = emptyList()
         }
     }
@@ -740,42 +751,6 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun loadVentesTablesHistory() {}
-    private suspend fun updateStocksForTickets(tickets: List<Ticket>) {
-        tickets.forEach { ticket ->
-            val produitActuel = repository.getProduitById(ticket.produit.id)
-            if (produitActuel != null) {
-                val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
-                if (newStock != produitActuel.stock) {
-                    repository.updateProduit(
-                        produitActuel.copy(
-                            stock = newStock,
-                            updatedAt = now(),
-                            isDirty = true
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    private suspend fun decrementStocks(tickets: List<Ticket>) {
-        tickets.forEach { ticket ->
-            val produitActuel = repository.getProduitById(ticket.produit.id)
-            if (produitActuel != null) {
-                val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
-                if (newStock != produitActuel.stock) {
-                    repository.updateProduit(
-                        produitActuel.copy(
-                            stock = newStock,
-                            updatedAt = now(),
-                            isDirty = true
-                        )
-                    )
-                }
-            }
-        }
-    }
-
     // ---- Import de catalogue client depuis Firestore ----
     // Permet d'ajouter un nouveau client (catégories + produits + vendeurs, images en URL
     // distante) sans recompiler/redéployer l'app : il suffit d'ajouter un document dans la
@@ -857,19 +832,7 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         fun provideFactory(context: Context): ViewModelProvider.Factory {
             return viewModelFactory {
                 initializer {
-                    val database = CaisseDataBase.getDatabase(context)
-                    val repository = CaisseRepository(
-                        database.categorieDao(),
-                        database.produitDao(),
-                        database.vendeurDao(),
-                        database.venteDao(),
-                        database.tableDao(),
-                        database.invoiceDao(),
-                        database.infosDao(),
-                        database.logDao(),
-                        database.clotureDao(),
-                        database.mouvementStockDao()
-                    )
+                    val repository = CaisseRepository.create(context)
                     MenuViewModel(repository)
                 }
             }

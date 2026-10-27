@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import com.example.caisse.R
 import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.LegacyIds
+import com.example.caisse.data.MouvementStock
 import com.example.caisse.data.Produit
 import com.example.caisse.data.Vente
 import com.example.caisse.data.VenteLigne
@@ -16,9 +17,15 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import java.util.Date
 import java.util.UUID
+
+// Rattrapage unique des clôtures et du journal jamais envoyés (voir pushDirtyClotures).
+private const val KEY_CLOTURES_BACKFILL = "cloturesBackfillDone"
+private const val KEY_JOURNAL_BACKFILL = "journalBackfillDone"
+private const val KEY_JOURNAL_BACKFILL_CURSOR = "journalBackfillCursor"
 
 class SyncWorker(
     appContext: Context,
@@ -52,6 +59,7 @@ class SyncWorker(
         val infosDao = dbLocal.infosDao()
         val logDao = dbLocal.logDao()
         val clotureDao = dbLocal.clotureDao()
+        val mouvementStockDao = dbLocal.mouvementStockDao()
         val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
 
         // Curseur basé sur l'horodatage SERVEUR (millis). Clé distincte de l'ancien "lastSyncAt"
@@ -110,8 +118,9 @@ class SyncWorker(
         step("push infos") { pushInfos(cloud, uid, infosDao) }
         step("push tables") { pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync) }
         step("push table_items") { pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync) }
-        step("push clotures") { pushDirtyClotures(cloud, uid, clotureDao, isInitialSync) }
-        step("push logs") { pushDirtyLogs(cloud, uid, logDao, isInitialSync) }
+        step("push clotures") { pushDirtyClotures(cloud, uid, clotureDao, isInitialSync, prefs) }
+        step("push logs") { pushDirtyLogs(cloud, uid, logDao, isInitialSync, prefs) }
+        step("push mouvements_stock") { pushDirtyMouvementsStock(cloud, uid, mouvementStockDao, isInitialSync) }
 
         // 2) PULL : récupérer ce qui a changé depuis le curseur serveur
         step("pull categories") { pullCategoriesSince(cloud, uid, sinceTs, categorieDao) }
@@ -124,6 +133,8 @@ class SyncWorker(
         step("pull infos") { pullInfos(cloud, uid, infosDao) }
         step("pull clotures") { pullCloturesSince(cloud, uid, sinceTs, clotureDao) }
         step("pull logs") { pullLogsSince(cloud, uid, sinceTs, logDao) }
+        // Après les produits : un mouvement ne s'insère que si son produit existe localement (FK).
+        step("pull mouvements_stock") { pullMouvementsStockSince(cloud, uid, sinceTs, mouvementStockDao, produitDao) }
 
         val nbProduits = produitDao.getAllProduitsOnce().size
         val nbVentes = venteDao.getAllVentesOnce().size
@@ -148,6 +159,14 @@ class SyncWorker(
             Log.w("SyncWorker", "Curseur NON avancé (une étape a échoué) -> nouvel essai au prochain run")
         }
 
+        // État du pad, lu par la version web gérant (« État des pads ») : un pad dont la date
+        // de dernière synchro ne bouge plus ne synchronise plus.
+        try {
+            reportPadStatus(cloud, uid, !hadError, nbProduits, nbVentes)
+        } catch (e: Exception) {
+            Log.e("SyncWorker", "État du pad non envoyé : ${e.javaClass.simpleName} ${e.message}")
+        }
+
         // Statut renvoyé à l'UI (spinner + toast du bouton "Synchroniser").
         val output = androidx.work.workDataOf(
             "ok" to !hadError,
@@ -155,6 +174,35 @@ class SyncWorker(
             "ventes" to nbVentes
         )
         return Result.success(output)
+    }
+
+    private suspend fun reportPadStatus(cloud: FirebaseFirestore, uid: String, ok: Boolean, nbProduits: Int, nbVentes: Int) {
+        val ctx = applicationContext
+        val pInfo = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        @Suppress("DEPRECATION")
+        val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+            pInfo.longVersionCode else pInfo.versionCode.toLong()
+        val db = CaisseDataBase.getDatabase(ctx)
+        val ventesEnAttente = db.venteDao().getAllVentesOnce().count { it.isDirty }
+        cloud.collection("users").document(uid)
+            .collection("pads").document(deviceId)
+            .set(
+                mapOf(
+                    "deviceId" to deviceId,
+                    "modele" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                    "android" to android.os.Build.VERSION.RELEASE,
+                    "versionName" to (pInfo.versionName ?: "?"),
+                    "versionCode" to versionCode,
+                    "lastSyncAt" to FieldValue.serverTimestamp(),
+                    "lastSyncLocalMillis" to System.currentTimeMillis(),
+                    "lastSyncOk" to ok,
+                    "nbProduits" to nbProduits,
+                    "nbVentes" to nbVentes,
+                    "ventesEnAttente" to ventesEnAttente,
+                    "deviceOwner" to com.example.caisse.kiosk.KioskManager.isDeviceOwner(ctx)
+                ),
+                SetOptions.merge()
+            ).await()
     }
 
     // ---------------- PUSH ----------------
@@ -204,11 +252,59 @@ class SyncWorker(
         val all = produitDao.getAllProduitsForSync()
         val list = if (isInitialSync) all.filter { !it.isDeleted || it.isDirty } else all.filter { it.isDirty }
         for (p in list) {
-            cloud.collection("users").document(uid)
+            val ref = cloud.collection("users").document(uid)
                 .collection("produits").document(p.id.toString())
-                .set(produitToMap(p.copy(isDirty = false)) + serverStamp())
-                .await()
-            produitDao.clearDirty(p.id, p.updatedAt)
+            // Transaction sur le document cloud actuel, pour qu'une modification faite sur le web
+            // (ou un autre pad) pendant que ce pad était hors ligne ne soit pas écrasée :
+            //  - stock poussé par ÉCART : stock cloud + variation locale (stock − stockSynced) ;
+            //  - prix, nom, catégorie, image, description, actif : valeur locale seulement si elle
+            //    a été modifiée sur ce pad (≠ valeur synchro), sinon on garde celle du cloud.
+            // Référence inconnue (null) ou doc absent : valeurs locales (ancien comportement).
+            // merge : les champs gérés uniquement par le web (seuil d'alerte, prix d'achat…) sont
+            // conservés.
+            val merged = cloud.runTransaction { tx ->
+                val remote = tx.get(ref)
+                val r = if (remote.exists()) remote.data else null
+                val stockBase = p.stockSynced
+                val remoteStock = (r?.get("stock") as? Number)?.toInt()
+                val stock = if (remoteStock != null && stockBase != null)
+                    // Pas de plancher à 0 : vendre 3 articles quand le cloud en compte 2 doit
+                    // donner -1 (inventaire à refaire), pas 0 avec une unité « perdue ».
+                    remoteStock + (p.stock - stockBase)
+                else
+                    p.stock
+                val remotePrix = (r?.get("prix") as? Number)?.toDouble()
+                val prix = if (remotePrix != null && p.prixSynced != null && p.prix == p.prixSynced) remotePrix else p.prix
+
+                // Champs « texte » : base connue <=> nomSynced posé (ils sont tous posés ensemble).
+                val known = r != null && p.nomSynced != null
+                fun <T> pick(local: T, base: T, key: String, read: (Any?) -> T?): T =
+                    if (known && r!!.containsKey(key) && local == base) (read(r[key]) ?: local) else local
+                val m = p.copy(
+                    stock = stock,
+                    prix = prix,
+                    nom = pick(p.nom, p.nomSynced, "nom") { it as? String } ?: p.nom,
+                    categoryId = pick(p.categoryId, p.categoryIdSynced, "categoryId") {
+                        (it as? String)?.let(::parseUuidOrNull)
+                    } ?: p.categoryId,
+                    image = if (known && r!!.containsKey("image") && p.image == p.imageSynced) r["image"] as? String else p.image,
+                    description = if (known && r!!.containsKey("description") && p.description == p.descriptionSynced) r["description"] as? String else p.description,
+                    isActive = pick(p.isActive, p.isActiveSynced, "isActive") { it as? Boolean } ?: p.isActive,
+                    isDirty = false
+                )
+                tx.set(ref, produitToMap(m) + serverStamp(), SetOptions.merge())
+                m
+            }.await()
+            val updated = produitDao.applyCloudIfUnchanged(
+                p.id, p.updatedAt, merged.stock, merged.prix, merged.nom, merged.categoryId,
+                merged.image, merged.description, merged.isActive
+            )
+            if (updated == 0) {
+                produitDao.rebaseAfterPush(
+                    p.id, merged.stock - p.stock, merged.stock, merged.prix, merged.nom, merged.categoryId,
+                    merged.image, merged.description, merged.isActive
+                )
+            }
         }
     }
 
@@ -305,14 +401,20 @@ class SyncWorker(
 
     }
 
+    // Avant la v1.24, les clôtures et les événements du journal étaient créés avec isDirty = false :
+    // ils ne partaient vers le cloud que lors d'une synchro complète. Rattrapage unique : tout ce
+    // qui est en base est renvoyé une fois (écriture idempotente, même id de document), puis
+    // seulement ce qui est marqué à envoyer.
     private suspend fun pushDirtyClotures(
         cloud: FirebaseFirestore,
         uid: String,
         clotureDao: ClotureDao,
-        isInitialSync: Boolean
+        isInitialSync: Boolean,
+        prefs: android.content.SharedPreferences
     ) {
+        val rattrapage = !prefs.getBoolean(KEY_CLOTURES_BACKFILL, false)
         val all = clotureDao.getAllCloturesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty }
+        val list = if (isInitialSync || rattrapage) all else all.filter { it.isDirty }
 
         for (c in list) {
             cloud.collection("users").document(uid)
@@ -322,28 +424,56 @@ class SyncWorker(
 
             clotureDao.markSynced(c.idCloture)
         }
+        if (rattrapage) prefs.edit().putBoolean(KEY_CLOTURES_BACKFILL, true).apply()
     }
-
 
     private suspend fun pushDirtyLogs(
         cloud: FirebaseFirestore,
         uid: String,
         logDao: LogDao,
-        isInitialSync: Boolean
+        isInitialSync: Boolean,
+        prefs: android.content.SharedPreferences
     ) {
+        val rattrapage = !prefs.getBoolean(KEY_JOURNAL_BACKFILL, false)
         val all = logDao.getAllLogsOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty }
+        // Le rattrapage peut porter sur des milliers d'événements : envoi par lots, dans l'ordre
+        // chronologique, avec reprise là où le lot précédent s'est arrêté (quota, réseau coupé).
+        val curseur = if (rattrapage) prefs.getString(KEY_JOURNAL_BACKFILL_CURSOR, "") ?: "" else ""
+        val list = (if (isInitialSync || rattrapage) all.filter { it.date >= curseur } else all.filter { it.isDirty })
+            .sortedBy { it.date }
 
-        for (log in list) {
-            cloud.collection("users").document(uid)
-                .collection("logs_techniques").document(log.id.toString())
-                .set(logToMap(log.copy(isDirty = false)) + serverStamp())
-                .await()
-
-            logDao.markSynced(log.id)
+        for (lot in list.chunked(400)) {
+            val batch = cloud.batch()
+            for (log in lot) {
+                val ref = cloud.collection("users").document(uid)
+                    .collection("logs_techniques").document(log.id.toString())
+                batch.set(ref, logToMap(log.copy(isDirty = false)) + serverStamp())
+            }
+            batch.commit().await()
+            for (log in lot) logDao.markSynced(log.id)
+            if (rattrapage) prefs.edit().putString(KEY_JOURNAL_BACKFILL_CURSOR, lot.last().date).apply()
         }
+        if (rattrapage) prefs.edit().putBoolean(KEY_JOURNAL_BACKFILL, true).apply()
     }
 
+    // Mouvements de stock manuels (ajouts/ajustements) : journal append-only, partagé entre les
+    // pads et la version web gérant pour que l'historique stock (7 jours) soit le même partout.
+    private suspend fun pushDirtyMouvementsStock(
+        cloud: FirebaseFirestore,
+        uid: String,
+        mouvementStockDao: MouvementStockDao,
+        isInitialSync: Boolean
+    ) {
+        val all = mouvementStockDao.getAllMouvementsOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
+        for (m in list) {
+            cloud.collection("users").document(uid)
+                .collection("mouvements_stock").document(m.id.toString())
+                .set(mouvementStockToMap(m) + serverStamp())
+                .await()
+            mouvementStockDao.markSynced(m.id)
+        }
+    }
 
 
     // ---------------- PULL ----------------
@@ -702,6 +832,34 @@ class SyncWorker(
         }
     }
 
+    private suspend fun pullMouvementsStockSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        sinceTs: Timestamp?,
+        mouvementStockDao: MouvementStockDao,
+        produitDao: ProduitDao
+    ) {
+        val snap = pullSnapshot(cloud, uid, "mouvements_stock", sinceTs)
+        var imported = 0
+        for (doc in snap) {
+            trackServer(doc)
+            val data = doc.data ?: continue
+            try {
+                val remote = mapToMouvementStock(data)
+                // Append-only : un mouvement déjà présent n'est jamais modifié.
+                if (mouvementStockDao.getMouvementById(remote.id) != null) continue
+                if (produitDao.getProduitById(remote.produitId) == null) {
+                    Log.w("SyncWorker", "Skip mouvement sans produit=${remote.produitId}")
+                    continue
+                }
+                mouvementStockDao.insert(remote)
+                imported++
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Mouvement stock invalide doc=${doc.id}: ${e.message}")
+            }
+        }
+        Log.w("SyncWorker", "Pull mouvements_stock : reçus=${snap.size} importés=$imported")
+    }
 
     // --------------- MAPPERS (copiés depuis repo) ---------------
 
@@ -834,6 +992,13 @@ class SyncWorker(
             image = image,               // 🔥 on met l’image nettoyée !
             categoryId = UUID.fromString(m["categoryId"] as String),
             stock = (m["stock"] as Number).toInt(),
+            stockSynced = (m["stock"] as Number).toInt(),
+            prixSynced = (m["prix"] as Number).toDouble(),
+            nomSynced = m["nom"] as String,
+            categoryIdSynced = UUID.fromString(m["categoryId"] as String),
+            imageSynced = image,
+            descriptionSynced = m["description"] as String?,
+            isActiveSynced = m["isActive"] as? Boolean ?: true,
             description = m["description"] as String?,
             isActive = m["isActive"] as? Boolean ?: true,
             updatedAt = (m["updatedAt"] as Number?)?.toLong() ?: System.currentTimeMillis(),
@@ -855,6 +1020,7 @@ class SyncWorker(
         "isDeleted" to v.isDeleted,
         "hash" to v.hash,
         "previousHash" to v.previousHash,
+        "deviceId" to v.deviceId,
     )
 
     // Ancien format cloud : vendeurId était un entier local -> converti via le même mapping
@@ -887,7 +1053,8 @@ class SyncWorker(
             isDirty = (m["isDirty"] as? Boolean) ?: false,
             isDeleted = (m["isDeleted"] as? Boolean) ?: false,
             hash = getString(m, "hash") ?: "",
-            previousHash = getString(m, "previousHash") ?: ""
+            previousHash = getString(m, "previousHash") ?: "",
+            deviceId = getString(m, "deviceId") ?: ""
         )
     }
 
@@ -949,6 +1116,7 @@ class SyncWorker(
         "compteurVentes" to c.compteurVentes,
         "grandTotalCumule" to c.grandTotalCumule,
         "hash" to c.hash,
+        "deviceId" to c.deviceId,
         "updatedAt" to c.updatedAt,
         "isDirty" to c.isDirty,
         "isDeleted" to c.isDeleted
@@ -963,6 +1131,7 @@ class SyncWorker(
         compteurVentes = (m["compteurVentes"] as? Number)?.toInt() ?: 0,
         grandTotalCumule = (m["grandTotalCumule"] as? Number)?.toDouble() ?: 0.0,
         hash = m["hash"] as? String ?: "",
+        deviceId = m["deviceId"] as? String ?: "",
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDirty = false,
         isDeleted = (m["isDeleted"] as? Boolean) ?: false
@@ -975,6 +1144,7 @@ class SyncWorker(
         "description" to log.description,
         "idVendeur" to log.idVendeur?.toString(),
         "empreinte" to log.empreinte,
+        "deviceId" to log.deviceId,
         "updatedAt" to log.updatedAt,
         "isDirty" to log.isDirty,
         "isDeleted" to log.isDeleted
@@ -995,11 +1165,37 @@ class SyncWorker(
         description = m["description"] as? String ?: "",
         idVendeur = parseUuidOrNull(m["idVendeur"] as? String),
         empreinte = empreinte,
+        deviceId = m["deviceId"] as? String ?: "",
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         isDirty = false,
         isDeleted = (m["isDeleted"] as? Boolean) ?: false
         )
     }
+
+    private val deviceId by lazy { com.example.caisse.kiosk.SilentUpdater.deviceId(applicationContext) }
+
+    private fun mouvementStockToMap(m: MouvementStock) = mapOf(
+        "id" to m.id.toString(),
+        "produitId" to m.produitId.toString(),
+        "date" to m.date,
+        "delta" to m.delta,
+        "motif" to m.motif,
+        "origine" to "pad",
+        "deviceId" to deviceId,
+        "updatedAt" to m.updatedAt,
+        "isDeleted" to m.isDeleted
+    )
+
+    private fun mapToMouvementStock(m: Map<String, Any?>) = MouvementStock(
+        id = UUID.fromString(m["id"] as String),
+        produitId = UUID.fromString(m["produitId"] as String),
+        date = getNumberAsLong(m, "date") ?: System.currentTimeMillis(),
+        delta = (m["delta"] as Number).toInt(),
+        motif = m["motif"] as? String ?: "",
+        updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
 
     private fun getString(map: Map<String, Any?>, key: String): String? =
         (map[key] as? String)?.takeIf { it.isNotBlank() }

@@ -282,7 +282,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(products.filter { it.categoryId == selecredCategoryID }) { product ->
+                        items(products.filter { it.isActive && it.categoryId == selecredCategoryID }) { product ->
                             ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
                                 menuViewModel.addProductToTable(product.id, tableUuid)
                             }
@@ -343,7 +343,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            items(products.filter { it.categoryId == selecredCategoryID }) { product ->
+                            items(products.filter { it.isActive && it.categoryId == selecredCategoryID }) { product ->
                                 ProductItemHorizontal(product = product, devise = info?.devise ?: "") {
                                     menuViewModel.addProductToTable(product.id, tableUuid)
                                 }

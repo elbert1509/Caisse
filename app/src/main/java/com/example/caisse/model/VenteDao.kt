@@ -13,6 +13,8 @@ import com.example.caisse.util.SecurityUtils
 import kotlinx.coroutines.flow.Flow
 import java.util.*
 
+const val GENESIS_HASH = "0000000000000000"
+
 @Dao
 interface VenteDao {
 
@@ -127,23 +129,68 @@ interface VenteDao {
     }
 
     /**
-     * NF525 Axe B — Transaction atomique garantissant la cohérence de la chaîne de hash
-     * et la séquence ininterrompue des tickets.
+     * NF525 Axe B — Transaction atomique : numéro de séquence, chaînage du hash, lignes ET baisse
+     * du stock. Tout est écrit ensemble ou rien (avant, un crash entre la vente et le stock
+     * laissait un stock trop haut).
+     *
+     * Chaîne PAR PAD ([Vente.deviceId]) : la vente précédente est la dernière vente de ce pad, et
+     * non la dernière vente en base, qui peut venir d'un autre pad (récupérée par la synchro) ->
+     * avant, numéros de ticket en double et chaînes mélangées entre pads.
+     * Première vente d'un pad avec ce champ : elle s'enchaîne sur la dernière vente connue (comme
+     * avant) et prend le plus grand numéro connu + 1, pour ne pas reprendre un numéro existant.
      */
     @Transaction
     suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>): Vente {
-        val lastVente = getLastVente()
-        val prevHash = lastVente?.hash ?: "0000000000000000"
-        val nextSeq  = (lastVente?.sequenceNumber ?: 0L) + 1L
+        val lastOwn = getLastVenteForDevice(vente.deviceId)
+        val prevHash: String
+        val nextSeq: Long
+        if (lastOwn != null) {
+            prevHash = lastOwn.hash
+            nextSeq = lastOwn.sequenceNumber + 1L
+        } else {
+            prevHash = getLastVente()?.hash ?: GENESIS_HASH
+            nextSeq = getMaxSequenceNumber() + 1L
+        }
 
         val venteAvecLien = vente.copy(previousHash = prevHash, sequenceNumber = nextSeq)
         val finalHash     = SecurityUtils.calculateHash(venteAvecLien, lignes)
         val venteSignee   = venteAvecLien.copy(hash = finalHash)
 
         insertVente(venteSignee)
-        for (l in lignes) insertLigne(l)
+        for (l in lignes) {
+            insertLigne(l)
+            // Stock lu en base (pas la copie du panier) et sans plancher à 0 : un stock négatif
+            // signale un inventaire à refaire, et l'écart poussé au cloud reste exact.
+            ajouterStock(l.produitId, -l.quantity, vente.updatedAt)
+        }
         return venteSignee
     }
+
+    /**
+     * Annulation atomique : vente et lignes masquées (soft delete NF525) et stock rendu, dans la
+     * même transaction. Retourne null si la vente est introuvable ou déjà annulée : une double
+     * annulation ne rend plus le stock deux fois.
+     */
+    @Transaction
+    suspend fun annulerVente(venteId: UUID, ts: Long): Vente? {
+        val vente = getVenteById(venteId)
+        if (vente == null || vente.isDeleted) return null
+        for (l in getLignesForVenteOnce(venteId)) {
+            ajouterStock(l.produitId, l.quantity, ts)
+        }
+        softDeleteVente(venteId, ts)
+        softDeleteLignesForVente(venteId, ts)
+        return vente
+    }
+
+    @Query("UPDATE Produit SET stock = stock + :delta, updatedAt = :ts, isDirty = 1 WHERE id = :produitId")
+    suspend fun ajouterStock(produitId: UUID, delta: Int, ts: Long)
+
+    @Query("SELECT * FROM Vente WHERE deviceId = :deviceId ORDER BY sequenceNumber DESC, date DESC LIMIT 1")
+    suspend fun getLastVenteForDevice(deviceId: String): Vente?
+
+    @Query("SELECT COALESCE(MAX(sequenceNumber), 0) FROM Vente")
+    suspend fun getMaxSequenceNumber(): Long
 
     /** NF525 — Vérifie la cohérence de toute la chaîne de hash. Retourne les IDs rompus. */
     // ---- REQUÊTES FIABLES POUR L'HISTORIQUE ----
@@ -161,15 +208,33 @@ interface VenteDao {
     @Query("SELECT * FROM Vente WHERE tableId IS NOT NULL AND tableId != :sentinelId AND isDeleted = 0 ORDER BY date DESC")
     fun getVentesTablesWithDetails(sentinelId: UUID): Flow<List<VenteWithDetails>>
 
+    /**
+     * NF525 — Vérifie la chaîne de hash, pad par pad. Retourne les ids des ventes rompues.
+     *  - Ventes annulées incluses : elles restent dans la chaîne (avant, elles étaient sautées
+     *    AVANT de retenir leur hash -> la vente suivante était signalée rompue à chaque annulation).
+     *  - Ventes d'un pad identifié : ordre des numéros de ticket. La première peut s'enchaîner
+     *    sur n'importe quelle vente connue (passage à la chaîne par pad).
+     *  - Ventes antérieures au champ deviceId : une seule chaîne, dans l'ordre chronologique
+     *    (c'est ainsi qu'elles étaient chaînées).
+     */
     @Transaction
     suspend fun verifierIntegriteChaineVentes(): List<UUID> {
-        val toutes = getAllVentesOnce().sortedBy { it.sequenceNumber }
+        val toutes = getAllVentesOnce()
+        val hashesConnus = toutes.map { it.hash }.toSet()
         val brisees = mutableListOf<UUID>()
-        var prevHash = "0000000000000000"
-        for (v in toutes) {
-            if (v.isDeleted) continue
-            if (v.previousHash != prevHash) brisees.add(v.id)
-            prevHash = v.hash
+        for ((deviceId, ventes) in toutes.groupBy { it.deviceId }) {
+            val ordre = if (deviceId.isEmpty()) ventes.sortedBy { it.date }
+                        else ventes.sortedWith(compareBy<Vente> { it.sequenceNumber }.thenBy { it.date })
+            var prevHash: String? = null
+            for (v in ordre) {
+                val ok = if (prevHash == null) {
+                    v.previousHash == GENESIS_HASH || (deviceId.isNotEmpty() && v.previousHash in hashesConnus)
+                } else {
+                    v.previousHash == prevHash
+                }
+                if (!ok) brisees.add(v.id)
+                prevHash = v.hash
+            }
         }
         return brisees
     }

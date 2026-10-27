@@ -6,7 +6,6 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.caisse.data.CaisseDataBase
 import com.example.caisse.data.CaisseRepository
 import java.util.Calendar
 
@@ -22,10 +21,14 @@ import java.util.Calendar
  * ouverte à 10:00 avec une fermeture réglée à 05:00 reste ouverte jusqu'au lendemain 05:00
  * (sinon elle était clôturée dans les 15 min suivant son ouverture).
  *
- * Pas de déclenchement en double : `genererClotureJournaliere()` refuse une 2e clôture pour
- * la même date (exception avalée ici), donc une fermeture manuelle plus tôt dans la journée,
- * ou une réouverture suivie d'une activité après l'heure configurée, ne provoque pas de
- * nouvelle clôture tant que le jour n'a pas changé.
+ * La clôture couvre toutes les ventes depuis la clôture précédente et porte la date
+ * d'ouverture de la session (voir `CaisseRepository.periodeClotureEnCours`) : une caisse
+ * ouverte le 23 au soir et fermée seule le 24 à 05:00 donne la clôture du 23, ventes d'après
+ * minuit comprises.
+ *
+ * Pas de déclenchement en double : la clôture ferme la session (`estCaisseOuverte` devient
+ * faux). Si la date est déjà clôturée, `genererClotureJournaliere()` lève une exception,
+ * avalée ici.
  */
 class AutoClotureWorker(
     appContext: Context,
@@ -34,19 +37,7 @@ class AutoClotureWorker(
 
     @RequiresApi(Build.VERSION_CODES.O)
     override suspend fun doWork(): Result {
-        val db = CaisseDataBase.getDatabase(applicationContext)
-        val repository = CaisseRepository(
-            db.categorieDao(),
-            db.produitDao(),
-            db.vendeurDao(),
-            db.venteDao(),
-            db.tableDao(),
-            db.invoiceDao(),
-            db.infosDao(),
-            db.logDao(),
-            db.clotureDao(),
-            db.mouvementStockDao()
-        )
+        val repository = CaisseRepository.create(applicationContext)
 
         return try {
             if (!repository.estCaisseOuverte()) return Result.success()

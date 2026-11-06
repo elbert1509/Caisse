@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.epicerie"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.1"
+        versionCode = 5
+        versionName = "1.5"
         vectorDrawables.useSupportLibrary = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -61,6 +61,10 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.material.icons.extended)
+    // Appareil photo intégré (photo produit) : pas d'appli Caméra externe à quitter en kiosk.
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.navigation.runtime.ktx)
     implementation(libs.androidx.adapters)

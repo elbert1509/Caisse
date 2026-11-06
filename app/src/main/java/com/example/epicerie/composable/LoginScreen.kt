@@ -27,6 +27,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.example.epicerie.kiosk.AdminExitDialog
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -81,10 +84,12 @@ fun LoginScreen(
                         CaisseDataBase.getDatabase(ctx).clearAllTables()
                     }
 
-                    // ♻️ réinitialiser les infos de sync
+                    // ♻️ réinitialiser les infos de sync (les deux clés de curseur : l'ancienne
+                    // "lastSyncAt" et l'actuelle "lastServerSyncAt") pour forcer une sync complète
                     prefs.edit()
                         .putString("uid", uid)
-                        .putLong("lastSyncAt", 0L) // ⚠️ force initial sync
+                        .putLong("lastSyncAt", 0L)
+                        .remove("lastServerSyncAt")
                         .apply()
                 }
 
@@ -107,11 +112,24 @@ fun LoginScreen(
 
     }
 
+    // Sortie du kiosk accessible avant connexion (WiFi à configurer, mauvais compte…).
+    var showAdminDialog by remember { mutableStateOf(false) }
+    if (showAdminDialog) {
+        AdminExitDialog(onDismiss = { showAdminDialog = false })
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                            onLongClick = { showAdminDialog = true } // appui long = accès admin (kiosk)
+                        )
+                    ) {
                         Text(
                             text = if (isSignUp) "Créer un compte" else "Connexion",
                             style = MaterialTheme.typography.titleLarge,

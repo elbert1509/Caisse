@@ -4,81 +4,220 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.epicerie.R
 import com.example.epicerie.data.CaisseDataBase
+import com.example.epicerie.data.Category
+import com.example.epicerie.data.LegacyIds
+import com.example.epicerie.data.MouvementStock
 import com.example.epicerie.data.Produit
 import com.example.epicerie.data.Recette
 import com.example.epicerie.data.Vente
 import com.example.epicerie.data.VenteLigne
 import com.example.epicerie.data.Voiture
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
+import java.util.Date
 import java.util.UUID
+
+// Rattrapage unique des clôtures et du journal jamais envoyés (voir pushDirtyClotures).
+private const val KEY_CLOTURES_BACKFILL = "cloturesBackfillDone"
+private const val KEY_JOURNAL_BACKFILL = "journalBackfillDone"
+private const val KEY_JOURNAL_BACKFILL_CURSOR = "journalBackfillCursor"
 
 class SyncWorker(
     appContext: Context,
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
 
+    // Plus grand horodatage SERVEUR (FieldValue.serverTimestamp) réellement vu pendant le PULL.
+    // Base de temps partagée par TOUS les appareils -> insensible aux décalages d'horloge locale.
+    private var maxSeenServerMillis = 0L
+    private fun trackServer(doc: DocumentSnapshot) {
+        val ms = doc.getTimestamp("serverUpdatedAt")?.toDate()?.time ?: return
+        if (ms > maxSeenServerMillis) maxSeenServerMillis = ms
+    }
+
+    // Champ d'horodatage serveur ajouté à chaque écriture (push). Sert de base au curseur de PULL.
+    private fun serverStamp(): Map<String, Any> =
+        mapOf("serverUpdatedAt" to FieldValue.serverTimestamp())
+
     override suspend fun doWork(): Result {
         val user = com.google.firebase.Firebase.auth.currentUser ?: return Result.success()
         val uid = user.uid
+        Log.w("SyncWorker", "Démarrage sync uid=$uid email=${user.email}")
 
         // DB locale
         val dbLocal = CaisseDataBase.getDatabase(applicationContext)
         val produitDao = dbLocal.produitDao()
         val venteDao = dbLocal.venteDao()
+        val venteLigneDao = dbLocal.venteDao()
         val categorieDao = dbLocal.categorieDao()
         val vendeurDao = dbLocal.vendeurDao()
         val infosDao = dbLocal.infosDao()
+        val logDao = dbLocal.logDao()
+        val clotureDao = dbLocal.clotureDao()
+        val mouvementStockDao = dbLocal.mouvementStockDao()
         val voitureDao = dbLocal.voitureDao()
         val recetteDao = dbLocal.recetteDao()
         val prefs = applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
-        val since = prefs.getLong("lastSyncAt", 0L)
-        val isInitialSync = since == 0L
 
+        // Curseur basé sur l'horodatage SERVEUR (millis). Clé distincte de l'ancien "lastSyncAt"
+        // (qui était basé sur l'horloge locale) pour forcer une migration propre.
+        val lastServerSyncMillis = prefs.getLong("lastServerSyncAt", 0L)
+
+        // Migration : la v2 introduit l'horodatage serveur ; la v3 force une nouvelle sync complète
+        // pour réparer les tablettes restées "coincées" avec des données partielles (un document
+        // produit malformé interrompait l'import avant le correctif par-document). Au premier run
+        // d'une nouvelle version de schéma, on force une sync complète (full push + full pull).
+        // v6 : migration des ids Vendeur/LogTechnique vers UUID -> full resync pour republier
+        // toutes les données sous leurs nouveaux identifiants (les anciens docs à id numérique
+        // restent lisibles grâce au mapping déterministe LegacyIds).
+        // v7 : des produits du cloud étaient rejetés (catégorie jamais envoyée par l'ancienne
+        // version, code-barre en double) alors que le curseur avançait -> jamais ré-importés.
+        // Corrigé dans insererProduitDistant ; full resync pour récupérer les produits perdus.
+        val SYNC_SCHEMA_VERSION = 7
+        val syncSchemaVersion = prefs.getInt("syncSchemaVersion", 1)
+        val needsBackfill = syncSchemaVersion < SYNC_SCHEMA_VERSION
+
+        // Garde-fou anti-incohérence : si la base locale est vide alors que le curseur est "avancé",
+        // c'est que la base Room a été vidée (réinstallation, migration destructive, clear data...)
+        // sans réinitialiser le curseur. Une sync incrémentale ne récupérerait alors RIEN.
+        val localEmpty = produitDao.getAllProduitsOnce().isEmpty() &&
+                venteDao.getAllVentesOnce().isEmpty()
+
+        // Sync complète si : premier run, base locale vide, ou migration vers l'horodatage serveur.
+        val isInitialSync = lastServerSyncMillis == 0L || localEmpty || needsBackfill
+        if (isInitialSync) {
+            Log.w("SyncWorker", "Sync complète forcée (lastServer=$lastServerSyncMillis, vide=$localEmpty, backfill=$needsBackfill)")
+        }
+
+        // En sync incrémentale, on ne récupère que les docs estampillés APRÈS le curseur serveur.
+        // whereGreaterThanOrEqualTo (et pas strict) : on ré-importe le doc à la frontière, c'est
+        // idempotent (upsert + comparaison updatedAt), au cas où plusieurs écritures partagent la
+        // même milliseconde serveur.
+        val sinceTs: Timestamp? = if (isInitialSync) null else Timestamp(Date(lastServerSyncMillis))
 
         val cloud = FirebaseFirestore.getInstance()
 
+        // Exécute une étape en isolant les erreurs : une collection qui échoue (réseau, règles
+        // Firestore, doc malformé...) ne doit pas empêcher les autres de se synchroniser.
+        var hadError = false
+        suspend fun step(name: String, block: suspend () -> Unit) {
+            try {
+                block()
+            } catch (e: Exception) {
+                hadError = true
+                Log.e("SyncWorker", "Échec étape '$name' : ${e.javaClass.simpleName} ${e.message}", e)
+            }
+        }
+
         // 1) PUSH : envoyer ce qui est dirty (Produit, Vente, VenteLigne)
-        pushDirtyProduits(cloud, uid, produitDao, isInitialSync)
-        pushDirtyCategories(cloud, uid, categorieDao, isInitialSync)
-        pushDirtyVentes(cloud, uid, venteDao)
-        pushDirtyVenteLignes(cloud, uid, venteDao,isInitialSync)
-        pushDirtyVendeurs(cloud, uid, vendeurDao)
-        pushInfos(cloud, uid, infosDao)
-        pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync)
-        pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync)
-        pushDirtyVoitures(cloud, uid, voitureDao, isInitialSync)
-        pushDirtyRecettes(cloud, uid, recetteDao, isInitialSync)
+        step("push produits") { pushDirtyProduits(cloud, uid, produitDao, isInitialSync) }
+        step("push categories") { pushDirtyCategories(cloud, uid, categorieDao, isInitialSync) }
+        step("push ventes") { pushDirtyVentes(cloud, uid, venteDao, isInitialSync) }
+        step("push venteLignes") { pushDirtyVenteLignes(cloud, uid, venteDao, isInitialSync) }
+        step("push vendeurs") { pushDirtyVendeurs(cloud, uid, vendeurDao) }
+        step("push infos") { pushInfos(cloud, uid, infosDao) }
+        step("push tables") { pushDirtyTables(cloud, uid, dbLocal.tableDao(), isInitialSync) }
+        step("push table_items") { pushDirtyTableItems(cloud, uid, dbLocal.tableDao(), isInitialSync) }
+        step("push clotures") { pushDirtyClotures(cloud, uid, clotureDao, isInitialSync, prefs) }
+        step("push logs") { pushDirtyLogs(cloud, uid, logDao, isInitialSync, prefs) }
+        step("push mouvements_stock") { pushDirtyMouvementsStock(cloud, uid, mouvementStockDao, isInitialSync) }
+        step("push voitures") { pushDirtyVoitures(cloud, uid, voitureDao, isInitialSync) }
+        step("push recettes") { pushDirtyRecettes(cloud, uid, recetteDao, isInitialSync) }
 
+        // 2) PULL : récupérer ce qui a changé depuis le curseur serveur
+        step("pull categories") { pullCategoriesSince(cloud, uid, sinceTs, categorieDao) }
+        step("pull produits") { pullProduitsSince(cloud, uid, sinceTs, produitDao) }
+        step("pull tables") { pullTablesSince(cloud, uid, sinceTs, dbLocal.tableDao()) }
+        step("pull table_items") { pullTableItemsSince(cloud, uid, sinceTs, dbLocal.tableDao(), produitDao) }
+        step("pull vendeurs") { pullVendeursSince(cloud, uid, sinceTs, vendeurDao) }
+        step("pull ventes") { pullVentesSince(cloud, uid, sinceTs, venteDao) }
+        step("pull venteLignes") { pullVenteLignesSince(cloud, uid, sinceTs, venteDao, produitDao) }
+        step("pull infos") { pullInfos(cloud, uid, infosDao) }
+        step("pull clotures") { pullCloturesSince(cloud, uid, sinceTs, clotureDao) }
+        step("pull logs") { pullLogsSince(cloud, uid, sinceTs, logDao) }
+        // Après les produits : un mouvement ne s'insère que si son produit existe localement (FK).
+        step("pull mouvements_stock") { pullMouvementsStockSince(cloud, uid, sinceTs, mouvementStockDao, produitDao) }
+        step("pull voitures") { pullVoituresSince(cloud, uid, sinceTs, voitureDao) }
+        // Après les voitures : une recette référence sa voiture.
+        step("pull recettes") { pullRecettesSince(cloud, uid, sinceTs, recetteDao) }
 
+        val nbProduits = produitDao.getAllProduitsOnce().size
+        val nbVentes = venteDao.getAllVentesOnce().size
+        Log.w("SyncWorker", "Sync terminé : produits=$nbProduits ventes=$nbVentes erreur=$hadError")
 
+        // 3) MAJ du curseur de sync — UNIQUEMENT si AUCUNE étape n'a échoué.
+        // Sinon on garde l'ancien curseur : les documents non récupérés (réseau, etc.) seront
+        // re-balayés au prochain run au lieu d'être sautés définitivement (cause de divergence
+        // entre appareils). La version de schéma n'est validée qu'après une sync complète réussie.
+        if (!hadError) {
+            val edit = prefs.edit()
+            if (maxSeenServerMillis > 0L) {
+                // Marge de recouvrement : on re-balaye les dernières minutes pour rattraper les
+                // écritures dont la visibilité serveur a pu arriver juste après notre requête
+                // (ré-import idempotent grâce aux upserts + résolution par isDirty).
+                val overlapMs = 5 * 60 * 1000L
+                edit.putLong("lastServerSyncAt", (maxSeenServerMillis - overlapMs).coerceAtLeast(0L))
+            }
+            edit.putInt("syncSchemaVersion", SYNC_SCHEMA_VERSION)
+            edit.apply()
+        } else {
+            Log.w("SyncWorker", "Curseur NON avancé (une étape a échoué) -> nouvel essai au prochain run")
+        }
 
+        // État du pad, lu par la version web gérant (« État des pads ») : un pad dont la date
+        // de dernière synchro ne bouge plus ne synchronise plus.
+        try {
+            reportPadStatus(cloud, uid, !hadError, nbProduits, nbVentes)
+        } catch (e: Exception) {
+            Log.e("SyncWorker", "État du pad non envoyé : ${e.javaClass.simpleName} ${e.message}")
+        }
 
+        // Statut renvoyé à l'UI (spinner + toast du bouton "Synchroniser").
+        val output = androidx.work.workDataOf(
+            "ok" to !hadError,
+            "produits" to nbProduits,
+            "ventes" to nbVentes
+        )
+        return Result.success(output)
+    }
 
-        // 2) PULL : récupérer ce qui a changé depuis lastSyncAt
-
-
-        pullCategoriesSince(cloud, uid, since, categorieDao, isInitialSync)
-        pullProduitsSince(cloud, uid, since, produitDao, isInitialSync)
-        pullTablesSince(cloud, uid, since, dbLocal.tableDao(), isInitialSync)
-        pullTableItemsSince(cloud, uid, since, dbLocal.tableDao(), produitDao, isInitialSync)
-        pullVendeursSince(cloud, uid, since, vendeurDao)
-        pullVentesSince(cloud, uid, since, venteDao, isInitialSync)
-        pullVenteLignesSince(cloud, uid, since, venteDao, produitDao, isInitialSync)
-        pullInfos(cloud, uid, infosDao)
-        pullVoituresSince(cloud, uid, since, voitureDao, isInitialSync)
-        pullRecettesSince(cloud, uid, since, recetteDao, isInitialSync)
-
-
-
-
-        // 3) MAJ horodatage de sync
-        prefs.edit().putLong("lastSyncAt", System.currentTimeMillis()).apply()
-
-        return Result.success()
+    private suspend fun reportPadStatus(cloud: FirebaseFirestore, uid: String, ok: Boolean, nbProduits: Int, nbVentes: Int) {
+        val ctx = applicationContext
+        val pInfo = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        @Suppress("DEPRECATION")
+        val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+            pInfo.longVersionCode else pInfo.versionCode.toLong()
+        val db = CaisseDataBase.getDatabase(ctx)
+        val ventesEnAttente = db.venteDao().getAllVentesOnce().count { it.isDirty }
+        cloud.collection("users").document(uid)
+            .collection("pads").document(deviceId)
+            .set(
+                mapOf(
+                    "deviceId" to deviceId,
+                    // Lu par la version web gérant pour adapter l'affichage (pas de tables,
+                    // code-barre…) sans réglage manuel du compte.
+                    "app" to "epicerie",
+                    "modele" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                    "android" to android.os.Build.VERSION.RELEASE,
+                    "versionName" to (pInfo.versionName ?: "?"),
+                    "versionCode" to versionCode,
+                    "lastSyncAt" to FieldValue.serverTimestamp(),
+                    "lastSyncLocalMillis" to System.currentTimeMillis(),
+                    "lastSyncOk" to ok,
+                    "nbProduits" to nbProduits,
+                    "nbVentes" to nbVentes,
+                    "ventesEnAttente" to ventesEnAttente,
+                    "deviceOwner" to com.example.epicerie.kiosk.KioskManager.isDeviceOwner(ctx)
+                ),
+                SetOptions.merge()
+            ).await()
     }
 
     // ---------------- PUSH ----------------
@@ -89,12 +228,14 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val all = tableDao.getAllTablesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
         for (t in list) {
             cloud.collection("users").document(uid)
                 .collection("tables").document(t.id.toString())
-                .set(tableToMap(t.copy(isDirty = false))).await()
-            tableDao.upsertTable(t.copy(isDirty = false))
+                .set(tableToMap(t.copy(isDirty = false)) + serverStamp()).await()
+            // Baisse conditionnelle du flag (et pas réécriture de l'objet lu) : ne pas écraser
+            // une modification locale survenue pendant le push.
+            tableDao.clearTableDirty(t.id, t.updatedAt)
         }
     }
     private suspend fun pushDirtyTableItems(
@@ -108,75 +249,133 @@ class SyncWorker(
         for (ti in list) {
             cloud.collection("users").document(uid)
                 .collection("table_items").document(ti.id.toString())
-                .set(tableItemToMap(ti.copy(isDirty = false))).await()
-            tableDao.upsertTableItem(ti.copy(isDirty = false))
+                .set(tableItemToMap(ti.copy(isDirty = false)) + serverStamp()).await()
+            tableDao.clearTableItemDirty(ti.id, ti.updatedAt)
         }
     }
     private suspend fun pushDirtyProduits(
         cloud: FirebaseFirestore,
         uid: String,
-        produitDao: ProduitDao,
+        produitDao: com.example.epicerie.model.ProduitDao,
         isInitialSync: Boolean
     ) {
-        val all = produitDao.getAllProduitsOnce() // existe déjà :contentReference[oaicite:2]{index=2}
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        // Inclure les produits soft-deletés pour propager les suppressions UNITAIRES (softDeleteProduit
+        // met isDirty=1). La suppression de MASSE ("Effacer toutes les données") ne met PAS isDirty,
+        // donc elle ne remonte pas : aucun risque de vider les autres appareils.
+        // ⚠️ Au backfill, on pousse les actifs + les dirty, mais JAMAIS un soft-delete de masse
+        // (isDeleted=1 && isDirty=0), sinon le backfill re-propagerait un wipe.
+        val all = produitDao.getAllProduitsForSync()
+        val list = if (isInitialSync) all.filter { !it.isDeleted || it.isDirty } else all.filter { it.isDirty }
         for (p in list) {
-            cloud.collection("users").document(uid)
+            val ref = cloud.collection("users").document(uid)
                 .collection("produits").document(p.id.toString())
-                .set(produitToMap(p.copy(isDirty = false)))
-                .await()
-            produitDao.updateProduit(p.copy(isDirty = false))
+            // Transaction sur le document cloud actuel, pour qu'une modification faite sur le web
+            // (ou un autre pad) pendant que ce pad était hors ligne ne soit pas écrasée :
+            //  - stock poussé par ÉCART : stock cloud + variation locale (stock − stockSynced) ;
+            //  - prix, nom, catégorie, image, description, actif : valeur locale seulement si elle
+            //    a été modifiée sur ce pad (≠ valeur synchro), sinon on garde celle du cloud.
+            // Référence inconnue (null) ou doc absent : valeurs locales (ancien comportement).
+            // merge : les champs gérés uniquement par le web (seuil d'alerte, prix d'achat…) sont
+            // conservés.
+            val merged = cloud.runTransaction { tx ->
+                val remote = tx.get(ref)
+                val r = if (remote.exists()) remote.data else null
+                val stockBase = p.stockSynced
+                val remoteStock = (r?.get("stock") as? Number)?.toInt()
+                val stock = if (remoteStock != null && stockBase != null)
+                    // Pas de plancher à 0 : vendre 3 articles quand le cloud en compte 2 doit
+                    // donner -1 (inventaire à refaire), pas 0 avec une unité « perdue ».
+                    remoteStock + (p.stock - stockBase)
+                else
+                    p.stock
+                val remotePrix = (r?.get("prix") as? Number)?.toDouble()
+                val prix = if (remotePrix != null && p.prixSynced != null && p.prix == p.prixSynced) remotePrix else p.prix
+
+                // Champs « texte » : base connue <=> nomSynced posé (ils sont tous posés ensemble).
+                val known = r != null && p.nomSynced != null
+                fun <T> pick(local: T, base: T, key: String, read: (Any?) -> T?): T =
+                    if (known && r!!.containsKey(key) && local == base) (read(r[key]) ?: local) else local
+                val m = p.copy(
+                    stock = stock,
+                    prix = prix,
+                    nom = pick(p.nom, p.nomSynced, "nom") { it as? String } ?: p.nom,
+                    categoryId = pick(p.categoryId, p.categoryIdSynced, "categoryId") {
+                        (it as? String)?.let(::parseUuidOrNull)
+                    } ?: p.categoryId,
+                    image = if (known && r!!.containsKey("image") && p.image == p.imageSynced) r["image"] as? String else p.image,
+                    description = if (known && r!!.containsKey("description") && p.description == p.descriptionSynced) r["description"] as? String else p.description,
+                    isActive = pick(p.isActive, p.isActiveSynced, "isActive") { it as? Boolean } ?: p.isActive,
+                    isDirty = false
+                )
+                tx.set(ref, produitToMap(m) + serverStamp(), SetOptions.merge())
+                m
+            }.await()
+            val updated = produitDao.applyCloudIfUnchanged(
+                p.id, p.updatedAt, merged.stock, merged.prix, merged.nom, merged.categoryId,
+                merged.image, merged.description, merged.isActive
+            )
+            if (updated == 0) {
+                produitDao.rebaseAfterPush(
+                    p.id, merged.stock - p.stock, merged.stock, merged.prix, merged.nom, merged.categoryId,
+                    merged.image, merged.description, merged.isActive
+                )
+            }
         }
     }
 
     private suspend fun pushDirtyVentes(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: VenteDao
+        venteDao: VenteDao,
+        isInitialSync: Boolean
     ) {
-        val list = venteDao.getAllVentesOnce().filter { it.isDirty && !it.isDeleted }
+        // Au backfill, pousser TOUTES les ventes (comme les venteLignes) : sinon une vente locale
+        // absente du cloud mais non-dirty laisse ses lignes orphelines côté cloud, et les autres
+        // appareils les sautent définitivement ("Skip VL sans parent").
+        val all = venteDao.getAllVentesOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
         for (v in list) {
             cloud.collection("users").document(uid)
                 .collection("ventes").document(v.id.toString())
-                .set(venteToMap(v.copy(isDirty = false)))
+                .set(venteToMap(v.copy(isDirty = false)) + serverStamp())
                 .await()
-            // insert (REPLACE) sert d'upsert local
-            venteDao.updateVente(v.copy(isDirty = false))
+            venteDao.clearVenteDirty(v.id, v.updatedAt)
         }
     }
 
     private suspend fun pushDirtyVenteLignes(
         cloud: FirebaseFirestore,
         uid: String,
-        venteDao: VenteDao,
+        venteDao: com.example.epicerie.model.VenteDao,
         isInitialSync: Boolean
     ) {
         val all = venteDao.getAllVenteLignesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
         for (vl in list) {
             cloud.collection("users").document(uid)
                 .collection("venteLignes").document(vl.id.toString())
-                .set(venteLigneToMap(vl.copy(isDirty = false)))
+                .set(venteLigneToMap(vl.copy(isDirty = false)) + serverStamp())
                 .await()
-            venteDao.updateLigne(vl.copy(isDirty = false))
+            venteDao.clearLigneDirty(vl.id, vl.updatedAt)
         }
     }
 
     private suspend fun pushDirtyCategories(
         cloud: FirebaseFirestore,
         uid: String,
-        categorieDao: CategorieDao,
+        categorieDao: com.example.epicerie.model.CategorieDao,
         isInitialSync: Boolean
     ){
-        val all = categorieDao.getAllCategoryOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty && !it.isDeleted }
+        // Comme les produits : on inclut les catégories soft-deletées pour propager les suppressions
+        // unitaires ; la suppression de masse (isDirty=0) ne remonte pas (même garde-fou au backfill).
+        val all = categorieDao.getAllCategoriesForSync()
+        val list = if (isInitialSync) all.filter { !it.isDeleted || it.isDirty } else all.filter { it.isDirty }
         for (c in list){
             cloud.collection("users").document(uid)
                 .collection("categories").document(c.id.toString())
-                .set(categorieToMap(c.copy(isDirty = false)))
+                .set(categorieToMap(c.copy(isDirty = false)) + serverStamp())
                 .await()
-            categorieDao.addCategory(c.copy(isDirty = false))
-
+            categorieDao.clearDirty(c.id, c.updatedAt)
         }
     }
 
@@ -186,33 +385,111 @@ class SyncWorker(
         uid: String,
         vendeurDao: VendeurDao
     ) {
-        val list = vendeurDao.getAllVendeursOnce().filter { it.isDirty && !it.isDeleted }
+        // inclure les vendeurs supprimés (soft-delete) pour propager la suppression aux autres appareils
+        val list = vendeurDao.getAllVendeursForSync().filter { it.isDirty }
         for (v in list) {
             cloud.collection("users").document(uid)
                 .collection("vendeurs").document(v.id.toString())
-                .set(vendeurToMap(v.copy(isDirty = false)))
+                .set(vendeurToMap(v.copy(isDirty = false)) + serverStamp())
                 .await()
-            vendeurDao.updateVendeur(v.copy(isDirty = false))
+            vendeurDao.clearDirty(v.id, v.updatedAt)
         }
     }
 
     private suspend fun  pushInfos(
         cloud: FirebaseFirestore,
         uid: String,
-        infosDao: InfosDao
+        infosDao: com.example.epicerie.model.InfosDao
     ){
-
         val infos = infosDao.getInfos()
-        if (infos != null) {
+        Log.w("SyncWorker", "Push infos : local=${infos != null} dirty=${infos?.isDirty}")
+        // Ne pousser que si une modification locale est en attente (évite d'écraser le cloud à
+        // chaque sync et de clobber une édition faite sur un autre appareil).
+        if (infos != null && infos.isDirty) {
             cloud.collection("users").document(uid)
                 .collection("infos").document("1")
-                .set(infosToMap(infos))
+                .set(infosToMap(infos) + serverStamp())
                 .await()
-            infosDao.updateInfos(infos.copy(isDirty = false))
+            infosDao.clearDirty(infos.updatedAt)
         }
 
 
     }
+
+    // Avant cette version, les clôtures et les événements du journal étaient créés avec isDirty = false :
+    // ils ne partaient vers le cloud que lors d'une synchro complète. Rattrapage unique : tout ce
+    // qui est en base est renvoyé une fois (écriture idempotente, même id de document), puis
+    // seulement ce qui est marqué à envoyer.
+    private suspend fun pushDirtyClotures(
+        cloud: FirebaseFirestore,
+        uid: String,
+        clotureDao: ClotureDao,
+        isInitialSync: Boolean,
+        prefs: android.content.SharedPreferences
+    ) {
+        val rattrapage = !prefs.getBoolean(KEY_CLOTURES_BACKFILL, false)
+        val all = clotureDao.getAllCloturesOnce()
+        val list = if (isInitialSync || rattrapage) all else all.filter { it.isDirty }
+
+        for (c in list) {
+            cloud.collection("users").document(uid)
+                .collection("clotures").document(c.idCloture.toString())
+                .set(clotureToMap(c.copy(isDirty = false)) + serverStamp())
+                .await()
+
+            clotureDao.markSynced(c.idCloture)
+        }
+        if (rattrapage) prefs.edit().putBoolean(KEY_CLOTURES_BACKFILL, true).apply()
+    }
+
+    private suspend fun pushDirtyLogs(
+        cloud: FirebaseFirestore,
+        uid: String,
+        logDao: LogDao,
+        isInitialSync: Boolean,
+        prefs: android.content.SharedPreferences
+    ) {
+        val rattrapage = !prefs.getBoolean(KEY_JOURNAL_BACKFILL, false)
+        val all = logDao.getAllLogsOnce()
+        // Le rattrapage peut porter sur des milliers d'événements : envoi par lots, dans l'ordre
+        // chronologique, avec reprise là où le lot précédent s'est arrêté (quota, réseau coupé).
+        val curseur = if (rattrapage) prefs.getString(KEY_JOURNAL_BACKFILL_CURSOR, "") ?: "" else ""
+        val list = (if (isInitialSync || rattrapage) all.filter { it.date >= curseur } else all.filter { it.isDirty })
+            .sortedBy { it.date }
+
+        for (lot in list.chunked(400)) {
+            val batch = cloud.batch()
+            for (log in lot) {
+                val ref = cloud.collection("users").document(uid)
+                    .collection("logs_techniques").document(log.id.toString())
+                batch.set(ref, logToMap(log.copy(isDirty = false)) + serverStamp())
+            }
+            batch.commit().await()
+            for (log in lot) logDao.markSynced(log.id)
+            if (rattrapage) prefs.edit().putString(KEY_JOURNAL_BACKFILL_CURSOR, lot.last().date).apply()
+        }
+        if (rattrapage) prefs.edit().putBoolean(KEY_JOURNAL_BACKFILL, true).apply()
+    }
+
+    // Mouvements de stock manuels (ajouts/ajustements) : journal append-only, partagé entre les
+    // pads et la version web gérant pour que l'historique stock (7 jours) soit le même partout.
+    private suspend fun pushDirtyMouvementsStock(
+        cloud: FirebaseFirestore,
+        uid: String,
+        mouvementStockDao: MouvementStockDao,
+        isInitialSync: Boolean
+    ) {
+        val all = mouvementStockDao.getAllMouvementsOnce()
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
+        for (m in list) {
+            cloud.collection("users").document(uid)
+                .collection("mouvements_stock").document(m.id.toString())
+                .set(mouvementStockToMap(m) + serverStamp())
+                .await()
+            mouvementStockDao.markSynced(m.id)
+        }
+    }
+
 
     private suspend fun pushDirtyVoitures(
         cloud: FirebaseFirestore,
@@ -220,17 +497,14 @@ class SyncWorker(
         voitureDao: VoitureDao,
         isInitialSync: Boolean
     ) {
+        // Tout ce qui est dirty, y compris supprimé (pour propager la suppression).
         val all = voitureDao.getAllVoituresOnce()
-        // ✅ initial: tout push
-        // ✅ normal: tout ce qui est dirty, y compris supprimé (pour propager le delete)
         val list = if (isInitialSync) all else all.filter { it.isDirty }
-
         for (v in list) {
             cloud.collection("users").document(uid)
                 .collection("voitures").document(v.id.toString())
-                .set(voitureToMap(v.copy(isDirty = false))).await()
-
-            voitureDao.updateVoiture(v.copy(isDirty = false))
+                .set(voitureToMap(v.copy(isDirty = false)) + serverStamp()).await()
+            voitureDao.clearDirty(v.id, v.updatedAt)
         }
     }
 
@@ -241,114 +515,208 @@ class SyncWorker(
         isInitialSync: Boolean
     ) {
         val all = recetteDao.getAllRecettesOnce()
-        val list = if (isInitialSync) all else all.filter { it.isDirty } // ✅ y compris isDeleted
-
+        val list = if (isInitialSync) all else all.filter { it.isDirty }
         for (r in list) {
             cloud.collection("users").document(uid)
                 .collection("recettes").document(r.id.toString())
-                .set(recetteToMap(r.copy(isDirty = false))).await()
-
-            recetteDao.updateRecette(r.copy(isDirty = false))
+                .set(recetteToMap(r.copy(isDirty = false)) + serverStamp()).await()
+            recetteDao.clearDirty(r.id, r.updatedAt)
         }
     }
 
-
     // ---------------- PULL ----------------
+    // Helper commun : sélectionne tout (sinceTs == null) ou ce qui a changé depuis le curseur
+    // serveur. Paginé (500 docs par page) pour qu'une sync initiale sur un gros historique ne
+    // charge pas toute la collection en mémoire et ne dépasse pas la limite de temps du worker.
+    private suspend fun pullSnapshot(
+        cloud: FirebaseFirestore,
+        uid: String,
+        collection: String,
+        sinceTs: Timestamp?
+    ): List<DocumentSnapshot> {
+        val base = cloud.collection("users").document(uid).collection(collection)
+        val pageSize = 500L
+        val docs = mutableListOf<DocumentSnapshot>()
+        var last: DocumentSnapshot? = null
+        while (true) {
+            var q = if (sinceTs == null)
+                base.orderBy(FieldPath.documentId()).limit(pageSize)
+            else
+                base.whereGreaterThanOrEqualTo("serverUpdatedAt", sinceTs)
+                    .orderBy("serverUpdatedAt").limit(pageSize)
+            last?.let { q = q.startAfter(it) }
+            val page = q.get().await()
+            docs += page.documents
+            if (page.size() < pageSize) break
+            last = page.documents.last()
+        }
+        return docs
+    }
+
     private suspend fun pullTablesSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        tableDao: TableDao,
-        isInitialSync: Boolean
+        sinceTs: Timestamp?,
+        tableDao: TableDao
     ) {
-        val base = cloud.collection("users").document(uid).collection("tables")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-        for (doc in snap.documents) {
-            val m = doc.data ?: continue
-            val remote = mapToTable(m)
-            val local = tableDao.getTableById(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                tableDao.upsertTable(remote.copy(isDirty = false))
+        val snap = pullSnapshot(cloud, uid, "tables", sinceTs)
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val m = doc.data ?: continue
+                val remote = mapToTable(m)
+                val local = tableDao.getTableById(remote.id)
+                if (local == null) {
+                    tableDao.upsertTable(remote.copy(isDirty = false))   // INSERT (pas de conflit)
+                } else if (!local.isDirty) {
+                    // Conflit résolu par isDirty (indépendant de l'horloge locale).
+                    // @Update et pas upsertTable (REPLACE) : éviter le CASCADE sur les table_items.
+                    tableDao.updateTable(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Table invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
             }
         }
     }
     private suspend fun pullTableItemsSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
+        sinceTs: Timestamp?,
         tableDao: TableDao,
-        produitDao: ProduitDao,
-        isInitialSync: Boolean
+        produitDao: ProduitDao
     ) {
-        val base = cloud.collection("users").document(uid).collection("table_items")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-        for (doc in snap.documents) {
-            val m = doc.data ?: continue
-            val ti = mapToTableItem(m)
+        val snap = pullSnapshot(cloud, uid, "table_items", sinceTs)
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val m = doc.data ?: continue
+                val ti = mapToTableItem(m)
 
-            // s'assurer que le produit parent existe localement
-            if (produitDao.getProduitById(ti.productId) == null) {
-                val prodDoc = cloud.collection("users").document(uid)
-                    .collection("produits").document(ti.productId.toString()).get().await()
-                if (prodDoc.exists()) {
-                    val p = mapToProduit(prodDoc.data!!)
-                    produitDao.insertProduit(p.copy(isDirty = false))
-                } else {
-                    continue
+                // Conflit résolu par isDirty : ne pas écraser une ligne de commande locale non encore
+                // poussée (ex. un article ajouté à la table dont le push a échoué).
+                val localTi = tableDao.getTableItemById(ti.id)
+                if (localTi != null && localTi.isDirty) continue
+
+                // s'assurer que le produit parent existe localement
+                if (produitDao.getProduitById(ti.productId) == null) {
+                    val prodDoc = cloud.collection("users").document(uid)
+                        .collection("produits").document(ti.productId.toString()).get().await()
+                    if (prodDoc.exists()) {
+                        insererProduitDistant(cloud, uid, mapToProduit(prodDoc.data!!), produitDao)
+                    } else {
+                        continue
+                    }
                 }
-            }
 
-            tableDao.upsertTableItem(ti.copy(isDirty = false))
+                tableDao.upsertTableItem(ti.copy(isDirty = false))
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "TableItem invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
+            }
         }
     }
     private suspend fun pullProduitsSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        produitDao: ProduitDao,
-        isInitialSync: Boolean
+        sinceTs: Timestamp?,
+        produitDao: com.example.epicerie.model.ProduitDao
     ) {
-        val query = cloud.collection("users").document(uid)
-            .collection("produits")
-
-
-        val snap = if (isInitialSync) {
-            query.get().await()               // TOUT
-        } else {
-            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-        }
-
-        for (doc in snap.documents) {
-            val data = doc.data ?: continue
-            val remote = mapToProduit(data)
-            val local = produitDao.getProduitById(remote.id)
-            if (local == null) {
-                produitDao.insertProduit(remote.copy(isDirty = false))   // INSERT
-            } else if (remote.updatedAt >= local.updatedAt) {
-                produitDao.updateProduit(remote.copy(isDirty = false))   // UPDATE (surtout pas REPLACE)
+        val snap = pullSnapshot(cloud, uid, "produits", sinceTs)
+        var imported = 0
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val data = doc.data ?: continue
+                val remote = mapToProduit(data)
+                val local = produitDao.getProduitById(remote.id)
+                if (local == null) {
+                    insererProduitDistant(cloud, uid, remote, produitDao)   // INSERT
+                } else if (!local.isDirty) {
+                    assurerCategorie(cloud, uid, remote.categoryId)
+                    // Conflit résolu par isDirty (PAS par updatedAt, qui dépend de l'horloge locale
+                    // de chaque appareil) : si aucune modif locale n'est en attente, le cloud fait foi.
+                    // @Update (jamais REPLACE) : applique aussi isDeleted=true le cas échéant -> propage
+                    // la suppression SANS supprimer physiquement la ligne (pas de CASCADE sur les enfants).
+                    produitDao.updateProduit(remote.copy(codeBarre = codeBarreLibre(remote, produitDao) ?: local.codeBarre, isDirty = false))
+                }
+                imported++
+            } catch (e: Exception) {
+                // Un document produit malformé ne doit pas interrompre l'import des autres produits.
+                Log.e("SyncWorker", "Produit invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
             }
+        }
+        Log.w("SyncWorker", "Pull produits : reçus=${snap.size} importés=$imported")
+    }
+
+    // Insertion locale d'un produit venu du cloud. Lève les deux blocages SQLite qui faisaient
+    // rejeter le produit (et, le curseur avançant quand même, le perdaient pour de bon) :
+    //  - catégorie absente (clé étrangère) : l'ancienne version de l'app ne poussait que les
+    //    catégories modifiées, des produits du cloud pointent donc vers une catégorie inexistante ;
+    //  - code-barre déjà porté par un autre produit (index UNIQUE) : insertProduit est en REPLACE,
+    //    il SUPPRIMERAIT l'autre produit. On garde alors le produit sans code-barre sur ce pad.
+    private suspend fun insererProduitDistant(
+        cloud: FirebaseFirestore,
+        uid: String,
+        remote: Produit,
+        produitDao: ProduitDao
+    ) {
+        assurerCategorie(cloud, uid, remote.categoryId)
+        produitDao.insertProduit(remote.copy(codeBarre = codeBarreLibre(remote, produitDao), isDirty = false))
+    }
+
+    /** Code-barre du produit s'il n'est porté par aucun autre produit local, sinon null. */
+    private suspend fun codeBarreLibre(p: Produit, produitDao: ProduitDao): String? {
+        val code = p.codeBarre?.takeIf { it.isNotBlank() } ?: return null
+        if (produitDao.countSameBarcode(code, p.id) == 0) return code
+        Log.w("SyncWorker", "Code-barre $code en double (produit ${p.nom}) : ignoré sur ce pad")
+        return null
+    }
+
+    /**
+     * Garantit que la catégorie existe localement : depuis le cloud si elle y est, sinon recréée
+     * sous le nom « Divers » et marquée à envoyer (répare aussi le cloud et le site gérant).
+     */
+    private suspend fun assurerCategorie(cloud: FirebaseFirestore, uid: String, categoryId: UUID) {
+        val categorieDao = CaisseDataBase.getDatabase(applicationContext).categorieDao()
+        if (categorieDao.get(categoryId) != null) return
+        val doc = cloud.collection("users").document(uid)
+            .collection("categories").document(categoryId.toString()).get().await()
+        val data = doc.data
+        if (data != null) {
+            categorieDao.addCategory(mapToCategorie(data).copy(isDirty = false))
+        } else {
+            Log.w("SyncWorker", "Catégorie $categoryId absente du cloud : recréée (« Divers »)")
+            categorieDao.addCategory(Category(id = categoryId, name = "Divers", isDirty = true))
         }
     }
 
     private suspend fun pullInfos(
         cloud: FirebaseFirestore,
         uid: String,
-        infosDao: InfosDao
+        infosDao: com.example.epicerie.model.InfosDao
     ) {
         val doc = cloud.collection("users").document(uid)
             .collection("infos").document("1")
             .get().await()
-        if (!doc.exists()) return
+        if (!doc.exists()) {
+            // Cas typique "nouvel appareil sans fiche" : le doc n'a jamais été poussé depuis
+            // l'appareil source (fiche jamais ré-enregistrée depuis le correctif isDirty).
+            Log.w("SyncWorker", "Pull infos : aucun document infos/1 dans le cloud pour ce compte")
+            return
+        }
+        trackServer(doc)
         val data = doc.data ?: return
         val remote = mapToInfos(data).copy(id = 1)  // sécurité : force id=1
         val local = infosDao.getInfos()
 
-        if (local == null ) {
+        if (local == null) {
             infosDao.insertInfos(remote)   // insert
+            Log.w("SyncWorker", "Pull infos : fiche magasin importée (${remote.name})")
+        } else if (!local.isDirty) {
+            // Conflit résolu par isDirty : ne pas écraser une édition locale en attente.
+            infosDao.updateInfos(remote)
+            Log.w("SyncWorker", "Pull infos : fiche magasin mise à jour (${remote.name})")
         } else {
-            infosDao.updateInfos(remote)   // update (écrase avec la version cloud)
+            Log.w("SyncWorker", "Pull infos : édition locale en attente, cloud ignoré")
         }
     }
 
@@ -356,59 +724,58 @@ class SyncWorker(
     private suspend fun pullCategoriesSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        categorieDao: CategorieDao,
-        isInitialSync: Boolean
+        sinceTs: Timestamp?,
+        categorieDao: com.example.epicerie.model.CategorieDao
     ){
-        val query = cloud.collection("users").document(uid)
-            .collection("categories")
-
-        val snap = if (isInitialSync) {
-            query.get().await()
-        }else{
-            query.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-        }
-
-        for (doc in snap.documents) {
-            val data = doc.data ?: continue
-            val remote = mapToCategorie(data)
-            val local = categorieDao.get(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                categorieDao.addCategory(remote.copy(isDirty = false))
+        val snap = pullSnapshot(cloud, uid, "categories", sinceTs)
+        var imported = 0
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val data = doc.data ?: continue
+                val remote = mapToCategorie(data)
+                val local = categorieDao.get(remote.id)
+                if (local == null) {
+                    // INSERT pur (pas de conflit -> pas de REPLACE -> pas de CASCADE)
+                    categorieDao.addCategory(remote.copy(isDirty = false))
+                } else if (!local.isDirty) {
+                    // Conflit résolu par isDirty (indépendant de l'horloge locale).
+                    // ⚠️ @Update (modification en place) et SURTOUT PAS addCategory (REPLACE) : un REPLACE
+                    // supprimerait la ligne catégorie et CASCADE supprimerait tous ses produits enfants.
+                    // L'@Update applique aussi isDeleted=true -> propage la suppression sans cascade.
+                    categorieDao.updateCategory(remote.copy(isDirty = false))
+                }
+                imported++
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Categorie invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
             }
-
         }
+        Log.w("SyncWorker", "Pull categories : reçus=${snap.size} importés=$imported")
     }
 
 
     private suspend fun pullVentesSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        venteDao: VenteDao,
-        isInitialSync: Boolean
+        sinceTs: Timestamp?,
+        venteDao: com.example.epicerie.model.VenteDao
     ) {
-        val base = cloud.collection("users").document(uid).collection("ventes")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-        Log.d("SyncWorker", "nombre de vente  : ${snap.size()}")
+        val snap = pullSnapshot(cloud, uid, "ventes", sinceTs)
+        Log.d("SyncWorker", "nombre de vente  : ${snap.size}")
 
-
-
-
-        for (doc in snap.documents) {
+        for (doc in snap) {
+            trackServer(doc)
             val data = doc.data ?: continue
 
             try {
                 val remote = mapToVente(data)
                 val local = venteDao.getVenteById(remote.id)
-                Log.d("SyncWorker", "remote : ${remote.total}, ${remote.id},${remote.tableId} ")
-                Log.d("SyncWorker", "local : ${local?.total}")
 
                 if (local == null) {
                     venteDao.insertVente(remote.copy(isDirty = false))   // INSERT
-                } else if (remote.updatedAt >= local.updatedAt) {
-                    venteDao.updateVente(remote.copy(isDirty = false))   // UPDATE (ajoute @Update dans VenteDao si absent)
+                } else if (!local.isDirty) {
+                    // Conflit résolu par isDirty (indépendant de l'horloge locale).
+                    venteDao.updateVente(remote.copy(isDirty = false))
                 }
 
             } catch (e: Exception) {
@@ -421,16 +788,14 @@ class SyncWorker(
     private suspend fun pullVenteLignesSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
+        sinceTs: Timestamp?,
         venteDao: VenteDao,
-        produitDao: ProduitDao,
-        isInitialSync: Boolean
+        produitDao: ProduitDao
     ) {
-        val base = cloud.collection("users").document(uid).collection("venteLignes")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
+        val snap = pullSnapshot(cloud, uid, "venteLignes", sinceTs)
 
-        for (doc in snap.documents) {
+        for (doc in snap) {
+            trackServer(doc)
             val data = doc.data ?: continue
             try {
                 val remote = mapToVenteLigne(data)
@@ -442,7 +807,6 @@ class SyncWorker(
                         .get().await()
                     if (venteDoc.exists()) {
                         val vente = mapToVente(venteDoc.data!!)
-                        // (option) s'assurer du vendeur parent si vendeurId != null (même logique qu'on a ajouté)
                         venteDao.insertVente(vente.copy(isDirty = false)) // upsert
                     } else {
                         // parent introuvable => on ne peut pas insérer cette ligne
@@ -457,18 +821,21 @@ class SyncWorker(
                         .collection("produits").document(remote.produitId.toString())
                         .get().await()
                     if (prodDoc.exists()) {
-                        val prod = mapToProduit(prodDoc.data!!)
-                        produitDao.insertProduit(prod.copy(isDirty = false)) // upsert
+                        insererProduitDistant(cloud, uid, mapToProduit(prodDoc.data!!), produitDao)
                     } else {
                         Log.w("SyncWorker", "Skip VL sans parent Produit=${remote.produitId}")
                         continue
                     }
                 }
 
-                // 3) enfin, upsert de la ligne
+                // 3) enfin, upsert de la ligne (conflit résolu par isDirty, indépendant de l'horloge).
+                // insertLigne est en ABORT : sur une ligne déjà présente (ré-import de la fenêtre
+                // de recouvrement), il faut passer par @Update sinon l'insert lève une exception.
                 val local = venteDao.getVenteLigneById(remote.id)
-                if (local == null || remote.updatedAt >= local.updatedAt) {
+                if (local == null) {
                     venteDao.insertLigne(remote.copy(isDirty = false))
+                } else if (!local.isDirty) {
+                    venteDao.updateLigne(remote.copy(isDirty = false))
                 }
             } catch (e: Exception) {
                 Log.e("SyncWorker", "VL invalide doc=${doc.id}: ${e.message}")
@@ -480,44 +847,129 @@ class SyncWorker(
     private suspend fun pullVendeursSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        vendeurDao: VendeurDao
+        sinceTs: Timestamp?,
+        vendeurDao: com.example.epicerie.model.VendeurDao
     ) {
-        val snap = cloud.collection("users").document(uid)
-            .collection("vendeurs")
-            .whereGreaterThanOrEqualTo("updatedAt", since)
-            .get().await()
+        val snap = pullSnapshot(cloud, uid, "vendeurs", sinceTs)
 
-        for (doc in snap.documents) {
-            val data = doc.data ?: continue
-            val remote = mapToVendeur(data)
-            val local = vendeurDao.getVendeurById(remote.id)
-            if (local == null || remote.updatedAt >= local.updatedAt) {
-                vendeurDao.updateVendeur(remote.copy(isDirty = false))
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val data = doc.data ?: continue
+                val remote = mapToVendeur(data)
+                val local = vendeurDao.getVendeurById(remote.id)
+                if (local == null) {
+                    vendeurDao.insertVendeur(remote.copy(isDirty = false))   // INSERT (sinon @Update = no-op sur nouvel appareil)
+                } else if (!local.isDirty) {
+                    // Conflit résolu par isDirty (indépendant de l'horloge locale).
+                    vendeurDao.updateVendeur(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Vendeur invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
             }
         }
+    }
+
+    private suspend fun pullCloturesSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        sinceTs: Timestamp?,
+        clotureDao: ClotureDao
+    ) {
+        val snap = pullSnapshot(cloud, uid, "clotures", sinceTs)
+
+        for (doc in snap) {
+            trackServer(doc)
+            val data = doc.data ?: continue
+            try {
+                val remote = mapToCloture(data)
+                val local = clotureDao.getClotureById(remote.idCloture)
+
+                // NF525 Axe A : une clôture locale n'est jamais écrasée par une version distante
+                if (local == null) {
+                    clotureDao.insertCloture(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Cloture invalide doc=${doc.id}: ${e.message}")
+            }
+        }
+    }
+
+
+    private suspend fun pullLogsSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        sinceTs: Timestamp?,
+        logDao: LogDao
+    ) {
+        val snap = pullSnapshot(cloud, uid, "logs_techniques", sinceTs)
+
+        for (doc in snap) {
+            trackServer(doc)
+            val data = doc.data ?: continue
+            try {
+                val remote = mapToLog(data)
+                val local = logDao.getLogById(remote.id)
+
+                // NF525 Axe A : un log local (JET) n'est jamais écrasé par une version distante
+                if (local == null) {
+                    logDao.insertLog(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Log invalide doc=${doc.id}: ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun pullMouvementsStockSince(
+        cloud: FirebaseFirestore,
+        uid: String,
+        sinceTs: Timestamp?,
+        mouvementStockDao: MouvementStockDao,
+        produitDao: ProduitDao
+    ) {
+        val snap = pullSnapshot(cloud, uid, "mouvements_stock", sinceTs)
+        var imported = 0
+        for (doc in snap) {
+            trackServer(doc)
+            val data = doc.data ?: continue
+            try {
+                val remote = mapToMouvementStock(data)
+                // Append-only : un mouvement déjà présent n'est jamais modifié.
+                if (mouvementStockDao.getMouvementById(remote.id) != null) continue
+                if (produitDao.getProduitById(remote.produitId) == null) {
+                    Log.w("SyncWorker", "Skip mouvement sans produit=${remote.produitId}")
+                    continue
+                }
+                mouvementStockDao.insert(remote)
+                imported++
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Mouvement stock invalide doc=${doc.id}: ${e.message}")
+            }
+        }
+        Log.w("SyncWorker", "Pull mouvements_stock : reçus=${snap.size} importés=$imported")
     }
 
     private suspend fun pullVoituresSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        voitureDao: VoitureDao,
-        isInitialSync: Boolean
+        sinceTs: Timestamp?,
+        voitureDao: VoitureDao
     ) {
-        val base = cloud.collection("users").document(uid).collection("voitures")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-
-        for (doc in snap.documents) {
-            val m = doc.data ?: continue
-            val remote = mapToVoiture(m)
-            val local = voitureDao.getVoitureById(remote.id)
-
-            if (local == null) {
-                voitureDao.insertVoiture(remote.copy(isDirty = false))
-            } else if (remote.updatedAt >= local.updatedAt) {
-                voitureDao.updateVoiture(remote.copy(isDirty = false))
+        val snap = pullSnapshot(cloud, uid, "voitures", sinceTs)
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val remote = mapToVoiture(doc.data ?: continue)
+                val local = voitureDao.getVoitureById(remote.id)
+                if (local == null) {
+                    voitureDao.insertVoiture(remote.copy(isDirty = false))
+                } else if (!local.isDirty) {
+                    // Conflit résolu par isDirty (indépendant de l'horloge locale).
+                    voitureDao.updateVoiture(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Voiture invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
             }
         }
     }
@@ -525,23 +977,22 @@ class SyncWorker(
     private suspend fun pullRecettesSince(
         cloud: FirebaseFirestore,
         uid: String,
-        since: Long,
-        recetteDao: RecetteDao,
-        isInitialSync: Boolean
+        sinceTs: Timestamp?,
+        recetteDao: RecetteDao
     ) {
-        val base = cloud.collection("users").document(uid).collection("recettes")
-        val snap = if (isInitialSync) base.get().await()
-        else base.whereGreaterThanOrEqualTo("updatedAt", since).get().await()
-
-        for (doc in snap.documents) {
-            val m = doc.data ?: continue
-            val remote = mapToRecette(m)
-            val local = recetteDao.getRecetteById(remote.id)
-
-            if (local == null) {
-                recetteDao.insertRecette(remote.copy(isDirty = false))
-            } else if (remote.updatedAt >= local.updatedAt) {
-                recetteDao.updateRecette(remote.copy(isDirty = false))
+        val snap = pullSnapshot(cloud, uid, "recettes", sinceTs)
+        for (doc in snap) {
+            trackServer(doc)
+            try {
+                val remote = mapToRecette(doc.data ?: continue)
+                val local = recetteDao.getRecetteById(remote.id)
+                if (local == null) {
+                    recetteDao.insertRecette(remote.copy(isDirty = false))
+                } else if (!local.isDirty) {
+                    recetteDao.updateRecette(remote.copy(isDirty = false))
+                }
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "Recette invalide doc=${doc.id}: ${e.javaClass.simpleName} ${e.message}")
             }
         }
     }
@@ -615,17 +1066,21 @@ class SyncWorker(
         "passwordHash" to i.passwordHash,
         "passwordSalt" to i.passwordSalt,
         "devise" to i.devise,
+        "heureFermetureAuto" to i.heureFermetureAuto,
         "updatedAt" to i.updatedAt,
         "isDeleted" to i.isDeleted
         )
 
+    // Casts tolérants : un document écrit par une ancienne version de l'app (champ manquant)
+    // ne doit pas faire échouer TOUT le pull infos — c'était une cause de fiche magasin
+    // jamais importée sur les nouveaux appareils.
     private fun mapToInfos(m: Map<String, Any?>) = com.example.epicerie.data.ShopInfos(
         id = (m["id"] as? Number)?.toInt() ?: 0,
-        name = m["name"] as String,
-        address = m["address"] as String,
-        phone = m["phone"] as String,
-        email = m["email"] as String,
-        logo = m["logo"] as? Int,
+        name = m["name"] as? String ?: "",
+        address = m["address"] as? String ?: "",
+        phone = m["phone"] as? String ?: "",
+        email = m["email"] as? String ?: "",
+        logo = (m["logo"] as? Number)?.toInt(),
         passwordHash =
             (m["passwordHash"] as? String)
                 ?: (m["password"] as? String)      // ancien format cloud
@@ -636,6 +1091,7 @@ class SyncWorker(
                 ?: "",
 
         devise = m["devise"] as? String ?: "FCFA",
+        heureFermetureAuto = m["heureFermetureAuto"] as? String ?: "05:00",
 
         // si tu as ces champs dans ShopInfos
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
@@ -659,12 +1115,10 @@ class SyncWorker(
 
 
 
-
     private fun mapToProduit(m: Map<String, Any?>): Produit {
-        // Image = URI (android.resource://... ou https://...) ; tout autre type est ignoré
-        // (compatibilité avec d'anciens documents Firestore qui stockaient un ID numérique).
         val image: String? = when (val img = m["image"]) {
-            is String -> img
+            is String -> img              // ✅ nouveau format (URI)
+            is Number -> null
             else -> null
         }
 
@@ -672,10 +1126,17 @@ class SyncWorker(
             id = UUID.fromString(m["id"] as String),
             nom = m["nom"] as String,
             prix = (m["prix"] as Number).toDouble(),
-            image = image,
+            image = image,               // 🔥 on met l’image nettoyée !
             categoryId = UUID.fromString(m["categoryId"] as String),
-            codeBarre = m["codeBarre"] as String?,
+            codeBarre = m["codeBarre"] as? String,
             stock = (m["stock"] as Number).toInt(),
+            stockSynced = (m["stock"] as Number).toInt(),
+            prixSynced = (m["prix"] as Number).toDouble(),
+            nomSynced = m["nom"] as String,
+            categoryIdSynced = UUID.fromString(m["categoryId"] as String),
+            imageSynced = image,
+            descriptionSynced = m["description"] as String?,
+            isActiveSynced = m["isActive"] as? Boolean ?: true,
             description = m["description"] as String?,
             isActive = m["isActive"] as? Boolean ?: true,
             updatedAt = (m["updatedAt"] as Number?)?.toLong() ?: System.currentTimeMillis(),
@@ -690,37 +1151,48 @@ class SyncWorker(
         "vendeurId" to v.vendeurId?.toString(),
         "total" to v.total,
         "tableId" to v.tableId?.toString(),
+        // NF525 : numéro de séquence synchronisé pour être visible sur tous les appareils
         "sequenceNumber" to v.sequenceNumber,
         "updatedAt" to v.updatedAt,
         "isDirty" to v.isDirty,
         "isDeleted" to v.isDeleted,
         "hash" to v.hash,
-        "previousHash" to v.previousHash
+        "previousHash" to v.previousHash,
+        "deviceId" to v.deviceId,
     )
+
+    // Ancien format cloud : vendeurId était un entier local -> converti via le même mapping
+    // déterministe que la migration Room (LegacyIds), pour pointer sur le bon vendeur migré.
+    private fun parseVendeurId(raw: Any?): UUID? = when (raw) {
+        is Number -> LegacyIds.vendeurUuid(raw.toInt())
+        is String -> parseUuidOrNull(raw)
+            ?: raw.toIntOrNull()?.let { LegacyIds.vendeurUuid(it) }
+        else -> null
+    }
 
     private fun mapToVente(m: Map<String, Any?>): Vente {
 
         val id = parseUuidOrNull(getString(m, "id"))
             ?: throw IllegalArgumentException("vente.id invalide")
         val date = getNumberAsLong(m, "date") ?: System.currentTimeMillis()
-        val vendeurId = parseUuidOrNull(getString(m, "vendeurId"))
+        val vendeurId = parseVendeurId(m["vendeurId"])
         val total = getNumberAsDouble(m, "total") ?: 0.0
         val updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis()
         val tableId = parseUuidOrNull(getString(m, "tableId"))
-        val sequenceNumber = getNumberAsLong(m, "sequenceNumber") ?: 0L
 
         return Vente(
             id = id,
             date = date,
             vendeurId = vendeurId,
             total = total,
+            sequenceNumber = getNumberAsLong(m, "sequenceNumber") ?: 0L,
             updatedAt = updatedAt,
             tableId = tableId,
-            sequenceNumber = sequenceNumber,
             isDirty = (m["isDirty"] as? Boolean) ?: false,
             isDeleted = (m["isDeleted"] as? Boolean) ?: false,
-            hash = (m["hash"] as? String) ?: "",
-            previousHash = (m["previousHash"] as? String) ?: ""
+            hash = getString(m, "hash") ?: "",
+            previousHash = getString(m, "previousHash") ?: "",
+            deviceId = getString(m, "deviceId") ?: ""
         )
     }
 
@@ -758,7 +1230,14 @@ class SyncWorker(
     )
 
     private fun mapToVendeur(m: Map<String, Any?>) = com.example.epicerie.data.Vendeur(
-        id = parseUuidOrNull(m["id"] as? String) ?: UUID.randomUUID(),
+        // Ancien format cloud : id numérique -> même mapping déterministe que la migration Room.
+        id = when (val raw = m["id"]) {
+            is Number -> LegacyIds.vendeurUuid(raw.toInt())
+            is String -> parseUuidOrNull(raw)
+                ?: raw.toIntOrNull()?.let { LegacyIds.vendeurUuid(it) }
+                ?: throw IllegalArgumentException("vendeur.id invalide")
+            else -> throw IllegalArgumentException("vendeur.id manquant")
+        },
         nom = m["nom"] as String,
         prenom = m["prenom"] as String,
         updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
@@ -766,6 +1245,69 @@ class SyncWorker(
         isDirty = false
     )
 
+    private fun clotureToMap(c: com.example.epicerie.data.Cloture) = mapOf(
+        "idCloture" to c.idCloture.toString(),
+        "dateCloture" to c.dateCloture,
+        "type" to c.type,
+        "chiffreAffaireBrut" to c.chiffreAffaireBrut,
+        "totalTVA" to c.totalTVA,
+        "compteurVentes" to c.compteurVentes,
+        "grandTotalCumule" to c.grandTotalCumule,
+        "hash" to c.hash,
+        "deviceId" to c.deviceId,
+        "updatedAt" to c.updatedAt,
+        "isDirty" to c.isDirty,
+        "isDeleted" to c.isDeleted
+    )
+
+    private fun mapToCloture(m: Map<String, Any?>) = com.example.epicerie.data.Cloture(
+        idCloture = UUID.fromString(m["idCloture"] as String),
+        dateCloture = m["dateCloture"] as String,
+        type = m["type"] as String,
+        chiffreAffaireBrut = (m["chiffreAffaireBrut"] as? Number)?.toDouble() ?: 0.0,
+        totalTVA = (m["totalTVA"] as? Number)?.toDouble() ?: 0.0,
+        compteurVentes = (m["compteurVentes"] as? Number)?.toInt() ?: 0,
+        grandTotalCumule = (m["grandTotalCumule"] as? Number)?.toDouble() ?: 0.0,
+        hash = m["hash"] as? String ?: "",
+        deviceId = m["deviceId"] as? String ?: "",
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
+
+    private fun logToMap(log: com.example.epicerie.data.LogTechnique) = mapOf(
+        "id" to log.id.toString(),
+        "date" to log.date,
+        "typeEvenement" to log.typeEvenement,
+        "description" to log.description,
+        "idVendeur" to log.idVendeur?.toString(),
+        "empreinte" to log.empreinte,
+        "deviceId" to log.deviceId,
+        "updatedAt" to log.updatedAt,
+        "isDirty" to log.isDirty,
+        "isDeleted" to log.isDeleted
+    )
+
+    private fun mapToLog(m: Map<String, Any?>): com.example.epicerie.data.LogTechnique {
+        val date = m["date"] as? String ?: ""
+        val type = m["typeEvenement"] as? String ?: ""
+        val empreinte = m["empreinte"] as? String ?: ""
+        // id absent ou illisible : UUID dérivé du CONTENU, identique sur tous les appareils.
+        val id = (m["id"] as? String)?.let { parseUuidOrNull(it) }
+            ?: UUID.nameUUIDFromBytes("epicerie-log|$date|$type|$empreinte".toByteArray())
+        return com.example.epicerie.data.LogTechnique(
+        id = id,
+        date = date,
+        typeEvenement = type,
+        description = m["description"] as? String ?: "",
+        idVendeur = parseUuidOrNull(m["idVendeur"] as? String),
+        empreinte = empreinte,
+        deviceId = m["deviceId"] as? String ?: "",
+        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+        )
+    }
 
     private fun voitureToMap(v: Voiture) = mapOf(
         "id" to v.id.toString(),
@@ -800,6 +1342,31 @@ class SyncWorker(
         voitureId = UUID.fromString(m["voitureId"] as String),
         amount = getNumberAsDouble(m, "amount") ?: 0.0,
         isRecette = (m["isRecette"] as? Boolean) ?: false,
+        updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis(),
+        isDirty = false,
+        isDeleted = (m["isDeleted"] as? Boolean) ?: false
+    )
+
+    private val deviceId by lazy { com.example.epicerie.kiosk.SilentUpdater.deviceId(applicationContext) }
+
+    private fun mouvementStockToMap(m: MouvementStock) = mapOf(
+        "id" to m.id.toString(),
+        "produitId" to m.produitId.toString(),
+        "date" to m.date,
+        "delta" to m.delta,
+        "motif" to m.motif,
+        "origine" to "pad",
+        "deviceId" to deviceId,
+        "updatedAt" to m.updatedAt,
+        "isDeleted" to m.isDeleted
+    )
+
+    private fun mapToMouvementStock(m: Map<String, Any?>) = MouvementStock(
+        id = UUID.fromString(m["id"] as String),
+        produitId = UUID.fromString(m["produitId"] as String),
+        date = getNumberAsLong(m, "date") ?: System.currentTimeMillis(),
+        delta = (m["delta"] as Number).toInt(),
+        motif = m["motif"] as? String ?: "",
         updatedAt = getNumberAsLong(m, "updatedAt") ?: System.currentTimeMillis(),
         isDirty = false,
         isDeleted = (m["isDeleted"] as? Boolean) ?: false

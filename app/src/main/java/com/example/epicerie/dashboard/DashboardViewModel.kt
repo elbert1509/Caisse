@@ -1,6 +1,7 @@
 package com.example.epicerie.data
 
 import android.content.Context
+import com.example.epicerie.util.formatPrice
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Paint
@@ -154,6 +155,7 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
         title: String,
         items: List<ProductReport>,
         total: Double,
+        devise: String?,
     ) {
         // 1) Créer le doc PDF (A4 portrait)
         val pdf = PdfDocument()
@@ -195,7 +197,7 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
         canvas.drawText("Généré le $dateStr", left, y, paintSub); y += 16f
 
         // Total
-        canvas.drawText("Chiffre d'affaires : € ${formatMoney(total)}", left, y, paintHeader); y += 18f
+        canvas.drawText("Chiffre d'affaires : ${formatPrice(total, devise)}", left, y, paintHeader); y += 18f
         canvas.drawLine(left, y, right, y, line); y += 14f
 
         // En-têtes de colonnes
@@ -217,7 +219,7 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
             if (y > pageInfo.pageHeight - 40) return@forEach
             canvas.drawText(r.productName, col1, y, paintText)
             canvas.drawText("${r.totalQuantity}", col2, y, paintText)
-            canvas.drawText("€ ${formatMoney(r.revenue)}", col3, y, paintText)
+            canvas.drawText(formatPrice(r.revenue, devise), col3, y, paintText)
             canvas.drawText("${r.productStock}", col4, y, paintText)
             y += 16f
         }
@@ -247,11 +249,5 @@ class DashboardViewModel(venteDao: VenteDao) : ViewModel() {
         context.startActivity(Intent.createChooser(share, "Partager le rapport PDF"))
     }
 
-    private fun formatMoney(value: Double): String {
-        return if (value % 1.0 == 0.0)
-            "%,.0f".format(Locale.FRANCE, value)
-        else
-            "%,.2f".format(Locale.FRANCE, value)
-    }
 
 }

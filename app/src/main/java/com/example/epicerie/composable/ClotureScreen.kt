@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.epicerie.data.CaisseRepository
 import com.example.epicerie.data.Cloture
 import com.example.epicerie.data.EtatCaisse
 import com.example.epicerie.data.MenuViewModel
@@ -63,8 +64,8 @@ import java.util.Locale
 @Composable
 fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
     val ventes by viewModel.ventes.collectAsState()
-    val infos = viewModel.getInfos()
-    val devise = infos?.devise ?: "€"
+    val infos = viewModel.infos.collectAsState().value
+    val devise = infos?.devise
 
     val etatCaisse by produceState<EtatCaisse?>(initialValue = null) {
         value = try {
@@ -89,12 +90,24 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
     var isLoading by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
-    val today = LocalDate.now()
     val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
-    val ventesDuJour = remember(ventes) {
+    // Même période que la clôture qui sera générée : ventes depuis la clôture précédente,
+    // datée du jour d'ouverture de la session (et non plus « depuis minuit »).
+    val periode by produceState<CaisseRepository.PeriodeCloture?>(initialValue = null) {
+        value = try {
+            viewModel.repository.periodeClotureEnCours()
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val today = periode?.dateCloture ?: LocalDate.now()
+
+    // Ventes de CE pad seulement (voir PeriodeCloture.compte) : chaque pad fait son propre Z.
+    val ventesDuJour = remember(ventes, periode) {
+        val p = periode
         ventes.filter { vente ->
-            !vente.isDeleted && vente.toLocalDate() == today
+            if (p != null) p.compte(vente) else !vente.isDeleted && vente.toLocalDate() == today
         }
     }
 
@@ -207,11 +220,11 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                         ResumeLine("Type", derniereCloture!!.type)
                         ResumeLine(
                             "CA brut",
-                            formatCurrency(derniereCloture!!.chiffreAffaireBrut, devise)
+                            formatPrice(derniereCloture!!.chiffreAffaireBrut, devise)
                         )
                         ResumeLine(
                             "TVA",
-                            formatCurrency(derniereCloture!!.totalTVA, devise)
+                            formatPrice(derniereCloture!!.totalTVA, devise)
                         )
                         ResumeLine(
                             "Compteur ventes",
@@ -219,7 +232,7 @@ fun ClotureScreen(viewModel: MenuViewModel, onBack: () -> Unit,) {
                         )
                         ResumeLine(
                             "Grand total cumulé",
-                            formatCurrency(derniereCloture!!.grandTotalCumule, devise)
+                            formatPrice(derniereCloture!!.grandTotalCumule, devise)
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -382,14 +395,6 @@ private fun ResumeLine(
     }
 }
 
-private fun formatCurrency(amount: Double, devise: String): String {
-    val formatted = NumberFormat.getNumberInstance(Locale.FRANCE).apply {
-        minimumFractionDigits = 2
-        maximumFractionDigits = 2
-    }.format(amount)
-
-    return "$formatted $devise"
-}
 
 @RequiresApi(Build.VERSION_CODES.O)
 private fun Vente.toLocalDate(): LocalDate {

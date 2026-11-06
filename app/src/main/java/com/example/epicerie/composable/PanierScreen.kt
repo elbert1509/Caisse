@@ -55,7 +55,7 @@ fun PanierScreen(
     val ctx = navController.context
 
     var paiement : Double by remember { mutableStateOf(0.0) }
-    val shopInfos = menuViewModel.getInfos()
+    val shopInfos = menuViewModel.infos.collectAsState().value
 
     // Après confirmation : on laisse l'utilisateur décider s'il imprime ou pas,
     // au lieu d'imprimer automatiquement.
@@ -75,11 +75,8 @@ fun PanierScreen(
             text = { Text("Voulez-vous imprimer le ticket ?") },
             confirmButton = {
                 TextButton(onClick = {
-                    if (bluetoothViewModel.isConnected.value) {
-                        bluetoothViewModel.printInvoice(confirmedItems, confirmedTotal, shopInfos)
-                    } else {
-                        Toast.makeText(ctx, "Imprimante non connectée", Toast.LENGTH_SHORT).show()
-                    }
+                    // Se reconnecte tout seul à la dernière imprimante si besoin (BluetoothViewModel).
+                    bluetoothViewModel.printInvoice(confirmedItems, confirmedTotal, shopInfos)
                     showPrintPrompt = false
                     finishAndGoHome()
                 }) { Text("Imprimer") }
@@ -175,10 +172,12 @@ fun PanierScreen(
                 onClick = {
                     // On capture panier/total avant confirmerVente(), qui vide le panier
                     // (de façon asynchrone) une fois la vente enregistrée.
-                    confirmedItems = cart
-                    confirmedTotal = totalPrice
-                    menuViewModel.confirmerVente()
-                    showPrintPrompt = true
+                    if (cart.isNotEmpty()) {
+                        confirmedItems = cart
+                        confirmedTotal = totalPrice
+                        menuViewModel.confirmerVente()
+                        showPrintPrompt = true
+                    }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

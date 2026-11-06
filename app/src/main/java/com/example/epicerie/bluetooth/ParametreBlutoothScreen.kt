@@ -98,7 +98,7 @@ private fun safeRun(action: () -> Unit) {
 fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavController,authVm: AuthViewModel, menuViewModel: MenuViewModel) {
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
-    val info  = menuViewModel.getInfos()
+    val info  = menuViewModel.infos.collectAsState().value
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -338,7 +338,19 @@ fun ParametreBluetooothScreen(viewModel: BluetoothViewModel, navController: NavC
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         ActionButton(Icons.Filled.Sync, stringResource(R.string.text_synch)) {
-                            authVm.enqueueSync(context = context, tag = "sync")
+                            if (!AuthViewModel.isNetworkAvailable(context)) {
+                                // Sans réseau la synchro attendrait indéfiniment : on prévient plutôt.
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Pas de connexion Internet : la synchronisation se fera au retour du réseau.",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                authVm.requestSyncNow(context)
+                                android.widget.Toast.makeText(
+                                    context, "Synchronisation lancée", android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
                         ActionButton(Icons.Filled.Info, "Infos") {
                             navController.navigate("infos")

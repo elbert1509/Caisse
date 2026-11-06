@@ -93,7 +93,7 @@ fun HomeScreen(
     val config = LocalConfiguration.current
     val orientation = config.orientation
     val screenWidthDp = config.screenWidthDp
-    val name = menuViewModel.getInfos()?.name
+    val name = menuViewModel.infos.collectAsState().value?.name
     val caisseOuverte by menuViewModel.caisseOuverte.collectAsState(initial = false)
 
     // Récupération des tuiles avec les textes issus de strings.xml

@@ -1,7 +1,9 @@
 package com.example.epicerie.composable
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.PointOfSale
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -37,8 +40,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,18 +59,26 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.epicerie.data.MenuViewModel
 import com.example.epicerie.data.ShopInfos
+import com.example.epicerie.kiosk.MiseAJourDialog
 
-// Déverrouillage persistant tant qu'on ne quitte pas explicitement l'écran Gestion
-// (bouton "Retour"), même en naviguant entre les sous-écrans (Produits, Stock, ...).
+// Déverrouillage persistant tant que Gestion reste dans la pile de navigation (sous-écrans
+// Produits, Stock, ...). Dès qu'on en sort, quel que soit le chemin (flèche, touche Retour,
+// navigation), AppNavigation appelle verrouillerGestion().
 private val gestionUnlockedState = mutableStateOf(false)
+
+fun verrouillerGestion() {
+    gestionUnlockedState.value = false
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
     val context = LocalContext.current
     var unlocked by gestionUnlockedState
-    val infos = viewModel.getInfos()
-
+    val infos = viewModel.infos.collectAsState().value
+    var secretClickCount by remember { mutableIntStateOf(0) }
+    var showMiseAJour by remember { mutableStateOf(false) }
+    if (showMiseAJour) MiseAJourDialog(onDismiss = { showMiseAJour = false })
 
     Scaffold(
         topBar = {
@@ -117,7 +130,23 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
                         Text(
                             "Accès autorisé",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            // Déclencheur discret (comme la caisse) : 7 appuis affichent « Donnée ».
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                if (viewModel.isAdminMode) return@clickable
+                                secretClickCount++
+                                when (secretClickCount) {
+                                    5 -> Toast.makeText(context, "Plus que 2 clics pour afficher les données", Toast.LENGTH_SHORT).show()
+                                    7 -> {
+                                        viewModel.unlockAdmin()
+                                        secretClickCount = 0
+                                        Toast.makeText(context, "Affichage des données", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
                         )
                         Text(
                             "Choisissez une section à gérer.",
@@ -135,18 +164,21 @@ fun GestionScreen(navController: NavController, viewModel: MenuViewModel){
                     screenWidthDp >= 900 -> 4
                     else -> 2
                 }
-                val tiles = remember {
-                    listOf(
+                val tiles = remember(viewModel.isAdminMode) {
+                    listOfNotNull(
                         GestionTile("Inventaire", Icons.Default.Liquor) { navController.navigate("inventaire") },
                         GestionTile("Produits", Icons.Default.Inventory) { navController.navigate("produit") },
                         GestionTile("Catégories", Icons.Default.Category) { navController.navigate("categorie") },
-                        GestionTile("Donnée", Icons.Default.DataExploration) { navController.navigate("donnee") },
+                        if (viewModel.isAdminMode) {
+                            GestionTile("Donnée", Icons.Default.DataExploration) { navController.navigate("donnee") }
+                        } else null,
                         GestionTile("Stock", Icons.Default.Warehouse) { navController.navigate("stock?showRevenue=true") },
                         GestionTile("Dashboard", Icons.Default.Warehouse) { navController.navigate("Dashboard") },
                         GestionTile("Vente", Icons.Default.PointOfSale) { navController.navigate("vente") },
                         GestionTile("infos", Icons.Default.Info) { navController.navigate("infos") },
                         GestionTile("Clôture", Icons.Default.PointOfSale) { navController.navigate("cloture") },
                         GestionTile("Journal (JET)", Icons.Default.DataExploration) { navController.navigate("log") },
+                        GestionTile("Mise à jour", Icons.Default.SystemUpdate) { showMiseAJour = true },
 
                     )
                 }

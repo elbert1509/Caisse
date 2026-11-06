@@ -61,7 +61,7 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
     val revToday    by dashboardViewModel.salesToday.collectAsState()
     val revWeek     by dashboardViewModel.salesThisWeek.collectAsState()
     val revMonth    by dashboardViewModel.salesThisMonth.collectAsState()
-    val devise = viewModel.getInfos()
+    val devise = viewModel.infos.collectAsState().value
 
 
 
@@ -98,7 +98,7 @@ fun RapportData(navController: NavController, viewModel: MenuViewModel, dashboar
                         1 -> Triple("Rapport Hebdomadaire", weekList, revWeek)
                         else -> Triple("Rapport Mensuel", monthList, revMonth)
                     }
-                    dashboardViewModel.exportRapportPdf(navController.context, title, items, total)
+                    dashboardViewModel.exportRapportPdf(navController.context, title, items, total, devise?.devise)
                 }
             )
         },

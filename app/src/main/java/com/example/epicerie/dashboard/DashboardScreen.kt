@@ -2,6 +2,12 @@ package com.example.epicerie.composable
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.epicerie.kiosk.AdminExitDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -17,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.epicerie.data.DashboardViewModel
+import com.example.epicerie.util.formatPrice
 import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.charts.PieChart
@@ -37,7 +44,7 @@ import androidx.core.graphics.toColorInt
 /* ------------------------------- Screen root ------------------------------- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel) {
+fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel, devise: String?) {
     val weeklySales     by viewModel.weeklySales.collectAsState()
     val monthlySales    by viewModel.monthlySales.collectAsState()
     val salesByCategory by viewModel.salesByCategory.collectAsState()
@@ -48,13 +55,25 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
 
     Log.d("DashboardScreen", "salesByCategory: ${salesByCategory.size}")
 
+    var showAdminDialog by remember { mutableStateOf(false) }
+    if (showAdminDialog) {
+        AdminExitDialog(onDismiss = { showAdminDialog = false })
+    }
+
 
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                            onLongClick = { showAdminDialog = true } // appui long = accès admin (kiosk)
+                        )
+                    ) {
                         Text("Tableau de bord", style = MaterialTheme.typography.titleLarge, color = Slate900)
                         Text("Aperçu des ventes", style = MaterialTheme.typography.bodySmall, color = Slate500)
                     }
@@ -73,7 +92,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
         ) {
             /* --- KPI Row (Today / Week / Month) --- */
             item {
-                KpiRow(today = salesToday, week = salesThisWeek, month = salesThisMonth, navController = navController)
+                KpiRow(today = salesToday, week = salesThisWeek, month = salesThisMonth, devise = devise, navController = navController)
             }
 
             /* --- Weekly line (cubic + dégradé + labels jours) --- */
@@ -117,7 +136,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
                                     setDrawFilled(true)
                                     valueFormatter = object : com.github.mikephil.charting.formatter.ValueFormatter() {
                                         override fun getPointLabel(entry: Entry?): String =
-                                            if (entry != null && entry.y > 0f) "${entry.y.toInt()} €" else ""
+                                            if (entry != null && entry.y > 0f) formatPrice(entry.y.toDouble(), devise) else ""
                                     }
                                     val grad = android.graphics.drawable.GradientDrawable(
                                         android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
@@ -336,7 +355,7 @@ fun DashboardScreen(navController: NavController, viewModel: DashboardViewModel)
 /* ------------------------------ Components ------------------------------ */
 
 @Composable
-private fun KpiRow(today: Double, week: Double, month: Double,navController: NavController) {
+private fun KpiRow(today: Double, week: Double, month: Double, devise: String?, navController: NavController) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -344,6 +363,7 @@ private fun KpiRow(today: Double, week: Double, month: Double,navController: Nav
         KpiCard(
             title = "Aujourd'hui",
             amount = today,
+            devise = devise,
             gradient = Brush.linearGradient(listOf(MintStart, MintEnd)),
             modifier = Modifier.weight(1f),
             onClick = { navController.navigate("rapport/0") }
@@ -352,6 +372,7 @@ private fun KpiRow(today: Double, week: Double, month: Double,navController: Nav
         KpiCard(
             title = "Cette semaine",
             amount = week,
+            devise = devise,
             gradient = Brush.linearGradient(listOf(Indigo, Color(0xFF2563EB))),
             modifier = Modifier.weight(1f),
             onClick = { navController.navigate("rapport/1") }
@@ -359,6 +380,7 @@ private fun KpiRow(today: Double, week: Double, month: Double,navController: Nav
         KpiCard(
             title = "Ce mois",
             amount = month,
+            devise = devise,
             gradient = Brush.linearGradient(listOf(Slate700, Slate900)),
             modifier = Modifier.weight(1f),
             onClick = { navController.navigate("rapport/2") }
@@ -370,6 +392,7 @@ private fun KpiRow(today: Double, week: Double, month: Double,navController: Nav
 private fun KpiCard(
     title: String,
     amount: Double,
+    devise: String?,
     gradient: Brush,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
@@ -391,7 +414,7 @@ private fun KpiCard(
                 Text(title, style = MaterialTheme.typography.labelMedium, color = Slate500)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "€ ${amount.formatMoney()}",
+                    text = formatPrice(amount, devise),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = Slate900
                 )
@@ -410,11 +433,6 @@ private fun KpiCard(
 
 /* ------------------------------ Utils ------------------------------ */
 
-private fun Double.formatMoney(): String {
-    val v = this
-    return if (v % 1.0 == 0.0) "%,.0f".format(java.util.Locale.FRANCE, v)
-    else "%,.2f".format(java.util.Locale.FRANCE, v)
-}
 @Composable
 private fun EmptyState(title: String, subtitle: String) {
     Column(

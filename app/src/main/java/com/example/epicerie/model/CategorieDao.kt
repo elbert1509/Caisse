@@ -29,6 +29,15 @@ interface CategorieDao {
     @Query("SELECT * FROM category")
     suspend fun getAllCategoryOnce(): List<Category> // one-shot pour le Worker
 
+    // Sync : TOUTES les catégories y compris supprimées (soft-delete), pour propager la suppression
+    @Query("SELECT * FROM category")
+    suspend fun getAllCategoriesForSync(): List<Category>
+
+    // Sync : ne baisse le flag dirty QUE si la ligne n'a pas été modifiée depuis sa lecture
+    // (sinon une modification faite pendant le push serait perdue sans jamais être poussée).
+    @Query("UPDATE category SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearDirty(id: UUID, updatedAt: Long)
+
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun get(id: UUID): Category?
 

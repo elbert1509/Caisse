@@ -1,5 +1,8 @@
 package com.example.epicerie.data
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import android.content.Context
 import android.os.Build
 import android.util.Log
@@ -18,11 +21,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
@@ -87,6 +92,9 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         viewModelScope.launch {
             val newProduit = Produit(nom = name, prix = price, categoryId = categoryId,stock = stock ,codeBarre = barcode,image = photo).copy(updatedAt = now(), isDirty = true)
             repository.insertProduit(newProduit)
+            if (stock != 0) {
+                repository.enregistrerMouvementStock(newProduit.id, stock, "Stock initial")
+            }
         }
     }
 
@@ -131,14 +139,26 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                 Log.e("Produit", "Le stock ne peut pas être nul")
                 return@launch
             }
+            val ancien = repository.getProduitById(produit.id)
             repository.updateProduit(
                 produit.copy(
                     updatedAt = now(),
                     isDirty = true
                 )
             )
+            val delta = produit.stock - (ancien?.stock ?: produit.stock)
+            if (delta != 0) {
+                repository.enregistrerMouvementStock(
+                    produit.id, delta,
+                    if (delta > 0) "Ajout manuel" else "Ajustement manuel"
+                )
+            }
         }
     }
+
+    /** Détail stock (Gestion > Stock > produit) : Stock/Ajout/Vente/Reste sur les 7 derniers jours. */
+    suspend fun getDetailStockProduit(produitId: UUID): List<CaisseRepository.JourStockDetail> =
+        repository.getDetailStockProduit(produitId)
     fun deleteProduit(produit: Produit) {
         viewModelScope.launch {
             repository.softDeleteProduit(produit.id)
@@ -147,14 +167,16 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
     // Infos
 
-    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String,initialPassword: String="1234") {
+    fun addInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String,initialPassword: String="1234", heureFermetureAuto: String = "05:00") {
         val salt = PasswordHasher.generateSalt()
         val hash = PasswordHasher.hash(initialPassword, salt)
         viewModelScope.launch {
-            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo, passwordHash = hash, passwordSalt = salt, devise = devise))
+            // isDirty = true : sans ce flag, la fiche magasin n'est jamais poussée vers le cloud
+            // (pushInfos n'envoie que le dirty) -> les autres pads ne la reçoivent pas.
+            repository.insertInfos(ShopInfos(1,name, address, phone, email, logo, passwordHash = hash, passwordSalt = salt, devise = devise, heureFermetureAuto = heureFermetureAuto, updatedAt = now(), isDirty = true))
         }
     }
-    fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String) {
+    fun updateInfos(name: String, address: String, phone: String, email: String, logo: Int? = null,devise : String, heureFermetureAuto: String? = null) {
         viewModelScope.launch {
             val existing = repository.getInfos()
                 ?: return@launch // ou alors créer par défaut
@@ -166,17 +188,27 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
                     phone = phone,
                     email = email,
                     logo = logo,
-                    devise = devise
+                    devise = devise,
+                    heureFermetureAuto = heureFermetureAuto ?: existing.heureFermetureAuto,
+                    updatedAt = now(),
+                    isDirty = true
                 )
             )
         }
     }
 
-   fun getInfos(): ShopInfos? {
-        return runBlocking {
-            repository.getInfos()
-        }
-    }
+    /**
+     * Fiche magasin en mémoire, tenue à jour par Room. Dans un écran Compose, lire
+     * `infos.collectAsState().value` pour être recomposé quand elle change.
+     */
+    val infos: StateFlow<ShopInfos?> = repository.observeInfos()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Dernière fiche magasin connue, sans bloquer le thread appelant. */
+    fun getInfos(): ShopInfos? = infos.value
+
+    /** Fiche magasin en continu : émet dès que la sync l'importe (cas du nouvel appareil). */
+    fun observeInfos() = repository.observeInfos()
 
     fun supdatePassword(passwordHash: String, passwordSalt: String) {
         viewModelScope.launch {
@@ -247,19 +279,6 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         }
     }
 
-    fun addVente(vente: Vente, lignes: List<VenteLigne>) {
-        viewModelScope.launch {
-            val v = vente.copy(updatedAt = now(), isDirty = true)
-            val ls = lignes.map { it.copy(updatedAt = now(), isDirty = true) }
-            repository.insertVenteWithLignes(v, ls)
-
-            val tickets = ls.mapNotNull { l ->
-                repository.getProduitById(l.produitId)?.let { p -> Ticket(p, l.quantity) }
-            }
-            decrementStocks(tickets)
-        }
-    }
-
     fun deleteVente(vente: Vente) {
         viewModelScope.launch {
             repository.softDeleteVente(vente.id)
@@ -269,74 +288,65 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
 
 
     fun confirmerVente(vendeurId: UUID? = null) {
+        // Panier pris ET vidé en une seule opération atomique : un deuxième appui rapide sur
+        // « Confirmer la commande » trouve un panier vide et ne crée pas une deuxième vente.
+        val cartItems = _cart.getAndUpdate { emptyList() }
+        if (cartItems.isEmpty()) return
         viewModelScope.launch {
-            val cartItems = cart.value
-            if (cartItems.isEmpty()) return@launch
-
             val venteId = UUID.randomUUID()
+            val ts      = now()
+            // Total calculé sur le panier pris (totalPrice est un flux qui peut ne pas être à jour).
             val vente = Vente(
-                id = venteId,
+                id        = venteId,
                 vendeurId = vendeurId,
-                total = totalPrice.value,
-                date = now()
-            ).copy(updatedAt = now(), isDirty = true)
+                total     = cartItems.sumOf { it.produit.prix * it.quantity },
+                date      = ts,
+                updatedAt = ts,
+                isDirty   = true
+            )
 
             val lignes = cartItems.map { ticket ->
                 VenteLigne(
-                    id = UUID.randomUUID(),
-                    venteId = venteId,
-                    produitId = ticket.produit.id,
-                    quantity = ticket.quantity,
+                    id           = UUID.randomUUID(),
+                    venteId      = venteId,
+                    produitId    = ticket.produit.id,
+                    quantity     = ticket.quantity,
                     prixUnitaire = ticket.produit.prix,
-                    sousTotal = ticket.produit.prix * ticket.quantity
-                ).copy(updatedAt = now(), isDirty = true)
+                    sousTotal    = ticket.produit.prix * ticket.quantity,
+                    updatedAt    = ts,
+                    isDirty      = true
+                )
             }
 
-            // ❌ plus de repository.insertVente(vente) ici
-            repository.insertVenteWithLignes(vente, lignes) // ✅ une seule transaction
+            // NF525 Axe B : transaction atomique avec hash + numéro de séquence + stock
+            val venteSignee = try {
+                repository.insertVenteSecurisee(vente, lignes)
+            } catch (e: Exception) {
+                // Rien n'a été écrit : on rend le panier pour pouvoir réessayer.
+                _cart.value = cartItems
+                loggerEvenement(TypeEvenement.ERREUR_SYSTEME.name, "Échec d'enregistrement de la vente : ${e.message}")
+                return@launch
+            }
 
-            decrementStocks(cartItems)
-            clearCart()
+            loggerEvenement(
+                type        = TypeEvenement.VENTE_VALIDEE.name,
+                description = "Vente validée | seq=${venteSignee.sequenceNumber} | " +
+                              "total=${venteSignee.total} | articles=${cartItems.sumOf { it.quantity }} | " +
+                              "hash=${venteSignee.hash}"
+            )
         }
     }
 
     fun deleteVenteWithStock(vente: Vente) {
         viewModelScope.launch {
-            // 1) Récupérer les lignes de la vente
-            val lignes = repository.getLignesForVente(vente.id).first()
+            // NF525 Axe A : soft-delete + stock rendu dans une seule transaction. null = vente
+            // déjà annulée (double appui) : rien à refaire, le stock n'est pas rendu deux fois.
+            repository.annulerVente(vente.id) ?: return@launch
 
-            // 2) Rétablir les stocks (on ajoute les quantités vendues)
-            lignes.forEach { l ->
-                val p = repository.getProduitById(l.produitId)
-                if (p != null) {
-                    repository.updateProduit(
-                        p.copy(
-                            stock = (p.stock + l.quantity),
-                            updatedAt = now(),
-                            isDirty = true
-                        )
-                    )
-                }
-            }
-
-            // 3) Marquer la vente + ses lignes en "supprimé" (soft delete) et "dirty" pour synchro
-            repository.updateVente(
-                vente.copy(
-                    isDeleted = true,
-                    isDirty = true,
-                    updatedAt = now()
-                )
+            loggerEvenement(
+                type        = TypeEvenement.VENTE_ANNULEE.name,
+                description = "Vente annulée | seq=${vente.sequenceNumber} | hash=${vente.hash} | montant=${vente.total}"
             )
-
-            lignes.forEach { l ->
-                // on marque la ligne supprimée + dirty pour push
-                val updated = l.copy(isDeleted = true, isDirty = true, updatedAt = now())
-                // accès direct au DAO exposé par le repo pour faire un @Update
-                repository.venteDao.updateLigne(updated)
-            }
-
-            // (Option) si tu veux vraiment purger localement, tu pourrais deleteVente + deleteLigne,
-            // mais ça ne pousserait pas l'info au cloud. Le soft delete permet à SyncWorker d'envoyer isDeleted.
         }
     }
 
@@ -436,9 +446,10 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun loadTableItems(tableId: UUID) {
         viewModelScope.launch {
             val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
-            val tickets = items.mapNotNull { item ->
-                repository.getProduitById(item.productId)?.let { product ->
-                    Ticket(product, item.quantity)
+            // Une seule ligne par produit, même si d'anciens doublons existent en base.
+            val tickets = items.groupBy { it.productId }.mapNotNull { (productId, rows) ->
+                repository.getProduitById(productId)?.let { product ->
+                    Ticket(product, rows.sumOf { it.quantity })
                 }
             }
             _tableItems.value = tickets
@@ -447,6 +458,31 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun clearTableItems() {
         _tableItems.value = emptyList()
     }
+    /**
+     * Suppression d'une table par l'utilisateur. Si des articles n'ont pas été encaissés, la
+     * facture est annulée : on la trace dans le JET avant de fermer la table.
+     */
+    fun annulerTable(tableId: UUID) {
+        viewModelScope.launch {
+            val items = repository.getTableItems(tableId).filter { !it.isDeleted && it.quantity > 0 }
+            if (items.isNotEmpty()) {
+                val lignes = items.groupBy { it.productId }.map { (productId, rows) ->
+                    val produit = repository.getProduitById(productId)
+                    val quantite = rows.sumOf { it.quantity }
+                    Triple(produit?.nom ?: productId.toString(), quantite, (produit?.prix ?: 0.0) * quantite)
+                }
+                val tableName = repository.getTableById(tableId)?.name ?: tableId.toString()
+                loggerEvenement(
+                    type = TypeEvenement.ANNULATION_FACTURE.name,
+                    description = "Table $tableName supprimée sans encaissement : " +
+                        lignes.joinToString(", ") { "${it.second}x ${it.first}" } +
+                        " | total=${lignes.sumOf { it.third }}"
+                )
+            }
+            deleteTable(tableId)
+        }
+    }
+
     fun deleteTable(tableId: UUID) {
         viewModelScope.launch {
             val table = _tables.value.find { it.id == tableId }
@@ -458,44 +494,55 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
-    fun addProductToTable(productId: UUID, tableId: UUID) {
+    // Sérialise les modifications de quantité : deux appuis rapides ne doivent ni se perdre
+    // ni créer deux lignes pour le même produit.
+    private val tableItemsMutex = Mutex()
+
+    fun addProductToTable(productId: UUID, tableId: UUID) =
+        changeTableItemQuantity(productId, tableId, +1)
+
+    /**
+     * Ajoute [delta] à la quantité d'un produit sur une table, à partir de la base (et non de
+     * l'affichage). Une ligne retombée à 0 est marquée supprimée (soft-delete) ; si le produit
+     * est rajouté ensuite, la ligne est réactivée. Les doublons hérités sont fusionnés.
+     */
+    fun changeTableItemQuantity(productId: UUID, tableId: UUID, delta: Int) {
         viewModelScope.launch {
-            val existingItem = repository.getTableItems(tableId).find { it.productId == productId }
-            if (existingItem != null) {
-                repository.updateProductInTable(
-                    existingItem.copy(quantity = existingItem.quantity + 1, updatedAt = now(), isDirty = true)
-                )
-            } else {
-                repository.addProductToTable(
-                    TableItem(tableId = tableId, productId = productId, quantity = 1).copy(updatedAt = now(), isDirty = true)
-                )
-            }
-            loadTableItems(tableId)
-        }
-    }
-
-
-
-    fun updateTableItemQuantity(productId: UUID, tableId: UUID, newQuantity: Int) {
-        viewModelScope.launch {
-            if (newQuantity > 0) {
-                val item = repository.getTableItems(tableId).find { it.productId == productId }
-                item?.let {
-                    repository.updateProductInTable(it.copy(quantity = newQuantity, updatedAt = now(), isDirty = true))
-                }
-            } else {
-                val item = repository.getTableItems(tableId).find { it.productId == productId }
-                item?.let {
-                    repository.updateProductInTable(
-                        it.copy(
-                            quantity = 0,
-                            updatedAt = now(),
-                            isDirty = true,
-                            isDeleted = true
+            tableItemsMutex.withLock {
+                val rows = repository.getTableItems(tableId).filter { it.productId == productId }
+                val active = rows.filter { !it.isDeleted && it.quantity > 0 }
+                val newQuantity = (active.sumOf { it.quantity } + delta).coerceAtLeast(0)
+                val ts = now()
+                val keep = active.firstOrNull() ?: rows.firstOrNull()
+                if (keep == null) {
+                    if (newQuantity > 0) {
+                        repository.addProductToTable(
+                            TableItem(tableId = tableId, productId = productId, quantity = newQuantity)
+                                .copy(updatedAt = ts, isDirty = true)
                         )
+                    }
+                } else {
+                    repository.updateProductInTable(
+                        keep.copy(quantity = newQuantity, isDeleted = newQuantity == 0, updatedAt = ts, isDirty = true)
+                    )
+                    active.filter { it.id != keep.id }.forEach { duplicate ->
+                        repository.updateProductInTable(
+                            duplicate.copy(quantity = 0, isDeleted = true, updatedAt = ts, isDirty = true)
+                        )
+                    }
+                }
+                val oldQuantity = active.sumOf { it.quantity }
+                if (newQuantity < oldQuantity) {
+                    val produit = repository.getProduitById(productId)
+                    val tableName = repository.getTableById(tableId)?.name ?: tableId.toString()
+                    val retire = oldQuantity - newQuantity
+                    loggerEvenement(
+                        type = TypeEvenement.ANNULATION_ARTICLE.name,
+                        description = "Table $tableName : ${produit?.nom ?: productId} x$oldQuantity -> x$newQuantity" +
+                            (if (newQuantity == 0) " (retiré de la facture)" else "") +
+                            " | montant retiré=${(produit?.prix ?: 0.0) * retire}"
                     )
                 }
-               // repository.deleteProductFromTable(tableId, productId)
             }
             loadTableItems(tableId)
         }
@@ -504,48 +551,77 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
     fun getTableById(id: UUID): AppTable? {
         return _tables.value.find { it.id == id }
     }
+    /**
+     * Encaissement d'une table. Articles relus en base (et non l'affichage, qui peut ne pas
+     * contenir un article ajouté entre-temps par un autre pad), sous le même verrou que les
+     * changements de quantité. La table est fermée dans ce verrou : un deuxième appui sur
+     * « Valider » la trouve fermée et ne crée pas une deuxième vente.
+     */
     fun payTable(tableId: UUID) {
         viewModelScope.launch {
-            val itemsToPay = _tableItems.value
-            if (itemsToPay.isEmpty()) return@launch
+            tableItemsMutex.withLock {
+                val table = repository.getTableById(tableId)
+                if (table == null || !table.active || table.isDeleted) return@withLock
 
-            val venteId = UUID.randomUUID()
-            val vente = Vente(
-                id = venteId,
-                vendeurId = null,
-                total = itemsToPay.sumOf { it.produit.prix * it.quantity },
-                date = now(),
-                tableId = tableId
-            ).copy(updatedAt = now(), isDirty = true)
+                val itemsToPay = repository.getTableItems(tableId)
+                    .filter { !it.isDeleted && it.quantity > 0 }
+                    .groupBy { it.productId }
+                    .mapNotNull { (productId, rows) ->
+                        repository.getProduitById(productId)?.let { Ticket(it, rows.sumOf { r -> r.quantity }) }
+                    }
+                if (itemsToPay.isEmpty()) return@withLock
 
-            val lignes = itemsToPay.map { ticket ->
-                VenteLigne(
-                    id = UUID.randomUUID(),
-                    venteId = venteId,
-                    produitId = ticket.produit.id,
-                    quantity = ticket.quantity,
-                    prixUnitaire = ticket.produit.prix,
-                    sousTotal = ticket.produit.prix * ticket.quantity
-                ).copy(updatedAt = now(), isDirty = true)
-            }
-            repository.insertVenteWithLignes(vente, lignes)
-
-            val total = itemsToPay.sumOf { it.produit.prix * it.quantity }
-            val invoice = Invoice(tableId = tableId, totalAmount = total)
-            repository.addInvoice(invoice)
-            itemsToPay.forEach { ticket ->
-                repository.addInvoiceItem(
-                    InvoiceItem(
-                        invoiceId = invoice.id,
-                        productId = ticket.produit.id,
-                        quantity = ticket.quantity
-                    )
+                val venteId = UUID.randomUUID()
+                val ts      = now()
+                val total   = itemsToPay.sumOf { it.produit.prix * it.quantity }
+                val vente = Vente(
+                    id        = venteId,
+                    vendeurId = null,
+                    total     = total,
+                    date      = ts,
+                    tableId   = tableId,
+                    updatedAt = ts,
+                    isDirty   = true
                 )
+
+                val lignes = itemsToPay.map { ticket ->
+                    VenteLigne(
+                        id           = UUID.randomUUID(),
+                        venteId      = venteId,
+                        produitId    = ticket.produit.id,
+                        quantity     = ticket.quantity,
+                        prixUnitaire = ticket.produit.prix,
+                        sousTotal    = ticket.produit.prix * ticket.quantity,
+                        updatedAt    = ts,
+                        isDirty      = true
+                    )
+                }
+                // NF525 Axe B : transaction atomique (vente + lignes + stock)
+                val venteSignee = repository.insertVenteSecurisee(vente, lignes)
+
+                loggerEvenement(
+                    type        = TypeEvenement.VENTE_VALIDEE.name,
+                    description = "Vente table encaissée | tableId=$tableId | seq=${venteSignee.sequenceNumber} | " +
+                                  "total=${venteSignee.total} | articles=${itemsToPay.sumOf { it.quantity }} | " +
+                                  "hash=${venteSignee.hash}"
+                )
+
+                val invoice = Invoice(tableId = tableId, totalAmount = total)
+                repository.addInvoice(invoice)
+                itemsToPay.forEach { ticket ->
+                    repository.addInvoiceItem(
+                        InvoiceItem(
+                            invoiceId = invoice.id,
+                            productId = ticket.produit.id,
+                            quantity = ticket.quantity
+                        )
+                    )
+                }
+
+                repository.updateTable(table.copy(active = false, updatedAt = now(), isDirty = true))
+                loggerEvenement(TypeEvenement.FERMETURE_TABLE.name, "Table fermée : ${table.name} (id=$tableId)")
             }
-
-            decrementStocks(itemsToPay)
-
-            deleteTable(tableId)
+            loadTables()
             _tableItems.value = emptyList()
         }
     }
@@ -625,42 +701,6 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
             }
         }
     }
-    private suspend fun updateStocksForTickets(tickets: List<Ticket>) {
-        tickets.forEach { ticket ->
-            val produitActuel = repository.getProduitById(ticket.produit.id)
-            if (produitActuel != null) {
-                val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
-                if (newStock != produitActuel.stock) {
-                    repository.updateProduit(
-                        produitActuel.copy(
-                            stock = newStock,
-                            updatedAt = now(),
-                            isDirty = true
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    private suspend fun decrementStocks(tickets: List<Ticket>) {
-        tickets.forEach { ticket ->
-            val produitActuel = repository.getProduitById(ticket.produit.id)
-            if (produitActuel != null) {
-                val newStock = (produitActuel.stock - ticket.quantity).coerceAtLeast(0)
-                if (newStock != produitActuel.stock) {
-                    repository.updateProduit(
-                        produitActuel.copy(
-                            stock = newStock,
-                            updatedAt = now(),
-                            isDirty = true
-                        )
-                    )
-                }
-            }
-        }
-    }
-
     // ---- Import de catalogue client depuis Firestore ----
     // Permet d'ajouter un nouveau client (catégories + produits + vendeurs, images en URL
     // distante) sans recompiler/redéployer l'app : il suffit d'ajouter un document dans la
@@ -741,24 +781,20 @@ class MenuViewModel( val repository: CaisseRepository) : ViewModel() {
         return CatalogueImportResult(categories, produits, vendeurs)
     }
 
+    // Tuile « Donnée » de Gestion masquée par défaut (comme dans la caisse) : 7 appuis sur
+    // « Accès autorisé » l'affichent jusqu'au redémarrage de l'app.
+    var isAdminMode by mutableStateOf(false)
+        private set
+
+    fun unlockAdmin() {
+        isAdminMode = true
+    }
+
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory {
             return viewModelFactory {
                 initializer {
-                    val database = CaisseDataBase.getDatabase(context)
-                    val repository = CaisseRepository(
-                        database.categorieDao(),
-                        database.produitDao(),
-                        database.vendeurDao(),
-                        database.venteDao(),
-                        database.tableDao(),
-                        database.invoiceDao(),
-                        database.infosDao(),
-                        database.voitureDao(),
-                        database.recetteDao(),
-                        database.logDao(),
-                        database.clotureDao()
-                    )
+                    val repository = CaisseRepository.create(context)
                     MenuViewModel(repository)
                 }
             }

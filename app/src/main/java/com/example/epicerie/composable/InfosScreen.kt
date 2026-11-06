@@ -47,6 +47,7 @@ fun InfosScreen(
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var devise by remember { mutableStateOf("") }
+    var heureFermetureAuto by remember { mutableStateOf("05:00") }
     var expanded by remember { mutableStateOf(false) }
     val listDevise = listOf("FCFA", "€", "£", "US$")
     var showChangePassword by remember { mutableStateOf(false) }
@@ -54,8 +55,9 @@ fun InfosScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        // getInfos() renvoie ShopInfos? (synchronement via runBlocking côté VM)
-        val info = withContext(Dispatchers.IO) { viewModel.getInfos() }
+        // Lecture directe en base : la fiche en mémoire (viewModel.infos) peut ne pas être encore
+        // chargée à l'ouverture de l'écran, ce qui ferait croire à une fiche absente.
+        val info = withContext(Dispatchers.IO) { viewModel.repository.getInfos() }
         existing = info
         if (info != null) {
             // Mode lecture par défaut si déjà présent
@@ -65,13 +67,15 @@ fun InfosScreen(
             phone = info.phone
             email = info.email
             devise = info.devise
+            heureFermetureAuto = info.heureFermetureAuto
         } else {
             // Pas d’infos -> mode édition
             isEdit = true
         }
     }
 
-    val canSave = name.isNotBlank() && email.isNotBlank()
+    val heureValide = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(heureFermetureAuto)
+    val canSave = name.isNotBlank() && email.isNotBlank() && heureValide
 
     Scaffold(
         topBar = {
@@ -108,7 +112,8 @@ fun InfosScreen(
                                         phone = phone.trim(),
                                         email = email.trim(),
                                         logo = null,
-                                        devise = devise
+                                        devise = devise,
+                                        heureFermetureAuto = heureFermetureAuto
                                     )
                                 } else {
                                     viewModel.updateInfos(
@@ -117,7 +122,8 @@ fun InfosScreen(
                                         phone = phone.trim(),
                                         email = email.trim(),
                                         logo = null,
-                                        devise = devise
+                                        devise = devise,
+                                        heureFermetureAuto = heureFermetureAuto
                                     )
                                 }
                                 navController.popBackStack()
@@ -240,6 +246,23 @@ fun InfosScreen(
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = heureFermetureAuto,
+                                onValueChange = { heureFermetureAuto = it },
+                                label = { Text("Fermeture automatique (HH:mm)") },
+                                supportingText = {
+                                    Text(
+                                        if (heureValide) "La caisse se clôture seule si elle est encore ouverte à cette heure."
+                                        else "Format attendu : HH:mm (ex. 05:00)",
+                                        color = if (heureValide) Slate500 else MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                isError = !heureValide,
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             Spacer(Modifier.height(18.dp))
                             OutlinedButton(onClick = { showChangePassword = true }) {
                                 Text("Changer le mot de passe")
@@ -261,7 +284,8 @@ fun InfosScreen(
                                                     phone = phone.trim(),
                                                     email = email.trim(),
                                                     logo = null,
-                                                    devise = devise
+                                                    devise = devise,
+                                                    heureFermetureAuto = heureFermetureAuto
                                                 )
                                             } else {
                                                 viewModel.updateInfos(
@@ -270,7 +294,8 @@ fun InfosScreen(
                                                     phone = phone.trim(),
                                                     email = email.trim(),
                                                     logo = null,
-                                                    devise = devise
+                                                    devise = devise,
+                                                    heureFermetureAuto = heureFermetureAuto
                                                 )
                                             }
                                             navController.popBackStack()
@@ -291,7 +316,8 @@ fun InfosScreen(
                             if (!canSave) {
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = "Le nom et l’email sont obligatoires.",
+                                    text = if (heureValide) "Le nom et l’email sont obligatoires."
+                                           else "L’heure de fermeture automatique doit être au format HH:mm.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Slate700
                                 )
@@ -306,6 +332,7 @@ fun InfosScreen(
                             ReadOnlyRow("Téléphone", existing!!.phone)
                             ReadOnlyRow("Email", existing!!.email)
                             ReadOnlyRow("devise", existing!!.devise)
+                            ReadOnlyRow("Fermeture automatique", existing!!.heureFermetureAuto)
 
                             Spacer(Modifier.height(16.dp))
                             Row(

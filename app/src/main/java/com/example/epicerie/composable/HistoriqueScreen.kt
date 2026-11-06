@@ -90,9 +90,9 @@ fun HistoriqueScreen(
                         VenteCard(
                             venteDetails,
                             title = "Ventes",
-                            devise = menuViewModel.getInfos()?.devise ?: "",
+                            devise = menuViewModel.infos.collectAsState().value?.devise ?: "",
                             bluetoothViewModel = bluetoothViewModel,
-                            shopInfos = menuViewModel.getInfos()
+                            shopInfos = menuViewModel.infos.collectAsState().value
                         )
                     }
                 }
@@ -126,16 +126,13 @@ fun VenteCard(
             ) {
                 Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 IconButton(onClick = {
-                    if (bluetoothViewModel.isConnected.value) {
-                        bluetoothViewModel.printInvoice(
-                            tableItems = venteDetails.lignes,
-                            total = venteDetails.vente.total,
-                            infos = shopInfos,
-                            invoiceId = venteDetails.vente.id
-                        )
-                    } else {
-                        Toast.makeText(context, "Imprimante non connectée", Toast.LENGTH_SHORT).show()
-                    }
+                    // Se reconnecte tout seul à la dernière imprimante si besoin (BluetoothViewModel).
+                    bluetoothViewModel.printInvoice(
+                        tableItems = venteDetails.lignes,
+                        total = venteDetails.vente.total,
+                        infos = shopInfos,
+                        invoiceId = venteDetails.vente.id
+                    )
                 }) {
                     Icon(Icons.Filled.Print, contentDescription = "Imprimer le ticket")
                 }

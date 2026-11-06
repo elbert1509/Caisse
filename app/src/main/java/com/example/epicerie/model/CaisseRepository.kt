@@ -4,9 +4,11 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import com.example.epicerie.model.CategorieDao
 import com.example.epicerie.model.ClotureDao
+import com.example.epicerie.model.GENESIS_HASH
 import com.example.epicerie.model.InfosDao
 import com.example.epicerie.model.InvoiceDao
 import com.example.epicerie.model.LogDao
+import com.example.epicerie.model.MouvementStockDao
 import com.example.epicerie.model.ProduitDao
 import com.example.epicerie.model.RecetteDao
 import com.example.epicerie.model.TableDao
@@ -32,8 +34,24 @@ class CaisseRepository(
     private val voitureDao: VoitureDao,
     private val recetteDao: RecetteDao,
     private val logDao: LogDao,
-    private val clotureDao: ClotureDao
+    private val clotureDao: ClotureDao,
+    private val mouvementStockDao: MouvementStockDao,
+    /** ANDROID_ID de ce pad : posé sur ses ventes, ses clôtures et ses événements du journal. */
+    val deviceId: String
 ) {
+    companion object {
+        /** Repository hors ViewModel (workers, journal des crashs). */
+        fun create(context: android.content.Context): CaisseRepository {
+            val db = CaisseDataBase.getDatabase(context)
+            return CaisseRepository(
+                db.categorieDao(), db.produitDao(), db.vendeurDao(), db.venteDao(), db.tableDao(),
+                db.invoiceDao(), db.infosDao(), db.voitureDao(), db.recetteDao(), db.logDao(),
+                db.clotureDao(), db.mouvementStockDao(),
+                com.example.epicerie.kiosk.SilentUpdater.deviceId(context)
+            )
+        }
+    }
+
     // ----- CATEGORIES -----
     fun getAllCategories(): Flow<List<Category>> = categorieDao.getAllCategory()
     suspend fun addCategory(category: Category) = categorieDao.addCategory(category)
@@ -59,6 +77,69 @@ class CaisseRepository(
     suspend fun getProduitByBarcode(barcode: String): Produit? = produitDao.getProduitByBarcode(barcode)
     suspend fun countSameBarcode(barcode: String, excludeId: UUID): Int = produitDao.countSameBarcode(barcode, excludeId)
 
+    // ----- DÉTAIL STOCK (Gestion > Stock > produit) -----
+    suspend fun enregistrerMouvementStock(produitId: UUID, delta: Int, motif: String) {
+        if (delta == 0) return
+        mouvementStockDao.insert(
+            MouvementStock(produitId = produitId, delta = delta, motif = motif, isDirty = true)
+        )
+    }
+
+    data class JourStockDetail(
+        val dateDebutJour: Long,
+        val stockDebut: Int,
+        val ajout: Int,
+        val vente: Int,
+        val ajustementNegatif: Int,
+        val reste: Int
+    )
+
+    /**
+     * Reconstitue Stock/Ajout/Vente/Reste pour les [nbJours] derniers jours (index 0 = aujourd'hui).
+     * Les ventes sont recalculées depuis VenteLigne/Vente (toujours exactes). Les ajouts/ajustements
+     * manuels viennent du journal `mouvements_stock`. On part du stock LIVE du produit (= "Reste"
+     * du jour en cours) et on remonte le temps jour par jour : Reste(j-1) = Stock(j).
+     */
+    suspend fun getDetailStockProduit(produitId: UUID, nbJours: Int = 7): List<JourStockDetail> {
+        val produit = produitDao.getProduitById(produitId) ?: return emptyList()
+        val cal = java.util.Calendar.getInstance()
+        var resteCourant = produit.stock
+        val jours = mutableListOf<JourStockDetail>()
+
+        for (i in 0 until nbJours) {
+            cal.timeInMillis = System.currentTimeMillis()
+            cal.add(java.util.Calendar.DAY_OF_YEAR, -i)
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            val startOfDay = cal.timeInMillis
+            val endOfDay = startOfDay + 24L * 60 * 60 * 1000
+
+            val vente = venteDao.getQuantiteVendue(produitId, startOfDay, endOfDay)
+            val mouvements = mouvementStockDao.getMouvementsForPeriod(produitId, startOfDay, endOfDay)
+            val ajout = mouvements.filter { it.delta > 0 }.sumOf { it.delta }
+            val ajustementNegatif = mouvements.filter { it.delta < 0 }.sumOf { -it.delta }
+
+            val reste = resteCourant
+            // Reste = StockDébut + Ajout - Vente - Ajustement  ⇒  StockDébut = Reste - Ajout + Vente + Ajustement
+            val stockDebut = reste - ajout + vente + ajustementNegatif
+
+            jours.add(
+                JourStockDetail(
+                    dateDebutJour = startOfDay,
+                    stockDebut = stockDebut,
+                    ajout = ajout,
+                    vente = vente,
+                    ajustementNegatif = ajustementNegatif,
+                    reste = reste
+                )
+            )
+            resteCourant = stockDebut // chaînage : le "Reste" d'hier = le "Stock" d'aujourd'hui
+        }
+        return jours
+    }
+
 
 
 
@@ -83,8 +164,13 @@ class CaisseRepository(
         venteDao.insertVenteWithLignes(vente, lignes)
 
     // NF525 Axe B : insertion atomique avec hash et séquence — retourne la vente signée
+    // Le stock est baissé dans la même transaction.
     suspend fun insertVenteSecurisee(vente: Vente, lignes: List<VenteLigne>): Vente =
-        venteDao.insertVenteSecurisee(vente, lignes)
+        venteDao.insertVenteSecurisee(vente.copy(deviceId = deviceId), lignes)
+
+    /** Annulation atomique (vente + lignes + stock rendu). null si déjà annulée ou introuvable. */
+    suspend fun annulerVente(venteId: UUID): Vente? =
+        venteDao.annulerVente(venteId, System.currentTimeMillis())
 
     /** NF525 Axe B — Vérifie l'intégrité de toute la chaîne de hash des ventes. */
     suspend fun verifierIntegriteChaineVentes(): List<UUID> =
@@ -124,6 +210,7 @@ class CaisseRepository(
     suspend fun insertInfos(infos: ShopInfos) = infosDao.insertInfos(infos)
     suspend fun updateInfos(infos: ShopInfos) = infosDao.updateInfos(infos)
     suspend fun getInfos(): ShopInfos? = infosDao.getInfos()
+    fun observeInfos(): Flow<ShopInfos?> = infosDao.observeInfos()
     suspend fun updatePassword(passwordHash: String, passwordSalt: String) = infosDao.updatePassword(passwordHash, passwordSalt)
 
     // ----- VOITURE -----
@@ -162,7 +249,9 @@ class CaisseRepository(
             typeEvenement = type,
             description   = description,
             idVendeur     = vendeurId,
-            empreinte     = empreinte
+            empreinte     = empreinte,
+            deviceId      = deviceId,
+            isDirty       = true
         )
         logDao.insertLog(log)
     }
@@ -171,24 +260,75 @@ class CaisseRepository(
 
     suspend fun getAllLogsOnce(): List<LogTechnique> = logDao.getAllLogsOnce()
 
+    /**
+     * Dernière clôture de la chaîne de ce pad. Tant que ce pad n'a fait aucune clôture avec le
+     * champ deviceId, sa chaîne continue sur la dernière clôture antérieure à ce champ.
+     * Les clôtures des autres pads ne comptent pas : chaque pad a son Z, son grand total et sa
+     * chaîne de hash (avant, un pad pouvait s'enchaîner sur la clôture d'un autre).
+     */
+    suspend fun derniereClotureDuPad(): Cloture? =
+        clotureDao.getLastClotureForDevice(deviceId) ?: clotureDao.getLastClotureForDevice("")
+
+    /**
+     * Période couverte par la prochaine clôture journalière de ce pad.
+     *  - [debut] : heure de la clôture précédente de ce pad (sinon ouverture de la session, sinon
+     *    minuit) -> chaque vente appartient à exactement une clôture, même si la caisse reste
+     *    ouverte après minuit.
+     *  - [dateCloture] : journée d'exploitation = date d'ouverture de la session (une session
+     *    ouverte le 23 et clôturée le 24 à 05:00 est la clôture du 23). Si ce pad a déjà la
+     *    clôture de cette date (deuxième session le même jour), la date du jour.
+     *  - Ventes comptées : celles de ce pad seulement (avant, le Z comptait aussi les ventes des
+     *    autres pads -> CA compté deux fois). Ventes antérieures au champ deviceId (pad inconnu) :
+     *    comptées une seule fois, dans le premier Z de ce pad après la mise à jour.
+     */
+    data class PeriodeCloture(
+        val debut: Long,
+        val dateCloture: LocalDate,
+        val deviceId: String,
+        val inclureAnciennes: Boolean
+    ) {
+        fun compte(v: Vente): Boolean =
+            !v.isDeleted && v.date >= debut &&
+                (v.deviceId == deviceId || (inclureAnciennes && v.deviceId.isEmpty()))
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    suspend fun periodeClotureEnCours(): PeriodeCloture {
+        val zone = java.time.ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val now = System.currentTimeMillis()
+        val ouverture = venteDao.getEtatCaisse()?.dateOuverture
+            ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+
+        val debut = derniereClotureDuPad()?.updatedAt?.takeIf { it in 1..now }
+            ?: ouverture?.atZone(zone)?.toInstant()?.toEpochMilli()?.takeIf { it <= now }
+            ?: today.atStartOfDay(zone).toInstant().toEpochMilli()
+
+        var date = ouverture?.toLocalDate()?.takeIf { !it.isAfter(today) } ?: today
+        if (date != today && clotureDao.getClotureForDevice(deviceId, date.toString(), "JOURNALIERE") != null) {
+            date = today
+        }
+        val premierZ = clotureDao.getLastClotureForDevice(deviceId) == null
+        return PeriodeCloture(debut, date, deviceId, inclureAnciennes = premierZ)
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun genererClotureJournaliere(): Cloture {
-        val dateAujourdhui = LocalDate.now().toString()
-        val today = LocalDate.now()
-        val zone  = java.time.ZoneId.systemDefault()
+        val periode = periodeClotureEnCours()
+        val dateCloture = periode.dateCloture.toString()
 
-        val startOfDay = today.atStartOfDay(zone).toInstant().toEpochMilli()
-        val endOfDay   = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-
-        val clotureExistante = clotureDao.getClotureByDateAndType(
-            dateCloture = dateAujourdhui,
+        val clotureExistante = clotureDao.getClotureForDevice(
+            deviceId    = deviceId,
+            dateCloture = dateCloture,
             type        = "JOURNALIERE"
         )
         if (clotureExistante != null) {
-            throw IllegalStateException("La clôture journalière du $dateAujourdhui existe déjà.")
+            throw IllegalStateException("La clôture journalière du $dateCloture existe déjà.")
         }
 
-        val ventesDuJour = venteDao.getVentesByPeriod(startOfDay, endOfDay)
+        // Ventes de ce pad depuis sa clôture précédente, jusqu'à maintenant (inclus).
+        val ventesDuJour = venteDao.getVentesByPeriod(periode.debut, System.currentTimeMillis() + 1)
+            .filter(periode::compte)
         val totalJour    = ventesDuJour.sumOf { it.total }
 
         // NF525 : calcul de TVA à partir du taux réel stocké dans chaque ligne
@@ -199,18 +339,20 @@ class CaisseRepository(
             l.sousTotal * l.tauxTVA / (100.0 + l.tauxTVA)
         }
 
-        val derniereCloture   = clotureDao.getLastCloture()
+        val derniereCloture   = derniereClotureDuPad()
         val nouveauGrandTotal = (derniereCloture?.grandTotalCumule ?: 0.0) + totalJour
-        val previousHash      = derniereCloture?.hash ?: "0000000000000000"
+        val previousHash      = derniereCloture?.hash ?: GENESIS_HASH
 
         val clotureTemp = Cloture(
-            dateCloture        = dateAujourdhui,
+            dateCloture        = dateCloture,
             type               = "JOURNALIERE",
             chiffreAffaireBrut = totalJour,
             totalTVA           = totalTVA,
             compteurVentes     = ventesDuJour.size,
             grandTotalCumule   = nouveauGrandTotal,
-            hash               = ""
+            hash               = "",
+            deviceId           = deviceId,
+            isDirty            = true
         )
 
         val finalHash = calculateClotureHash(clotureTemp, previousHash)
@@ -224,8 +366,9 @@ class CaisseRepository(
     suspend fun ouvrirCaisse(vendeurId: UUID) {
         // NF525 : vérifier que la caisse de la veille a bien été clôturée
         val hier = LocalDate.now().minusDays(1).toString()
-        val clotureHier     = clotureDao.getClotureByDateAndType(hier, "JOURNALIERE")
-        val derniereCloture = clotureDao.getLastCloture()
+        val clotureHier     = clotureDao.getClotureForDevice(deviceId, hier, "JOURNALIERE")
+            ?: clotureDao.getClotureForDevice("", hier, "JOURNALIERE")
+        val derniereCloture = derniereClotureDuPad()
 
         if (derniereCloture != null && clotureHier == null) {
             loggerEvenement(
@@ -262,7 +405,8 @@ class CaisseRepository(
         return venteDao.observeEtatCaisse().map { it?.isOuverte ?: false }
     }
 
-    suspend fun getLastCloture(): Cloture? = clotureDao.getLastCloture()
+    /** Dernière clôture de CE pad (voir [derniereClotureDuPad]). */
+    suspend fun getLastCloture(): Cloture? = derniereClotureDuPad()
 
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun executerClotureGlobale(): Cloture {

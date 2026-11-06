@@ -188,7 +188,7 @@ fun InventaireScreen(navController: NavController, viewModel: MenuViewModel) {
                                 ) // persiste via VM
                             }
                         },
-                        devise = viewModel.getInfos()?.devise ?: ""
+                        devise = viewModel.infos.collectAsState().value?.devise ?: ""
                     )
                 }
 

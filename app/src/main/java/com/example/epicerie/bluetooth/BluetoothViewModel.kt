@@ -21,6 +21,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import android.widget.Toast
+import java.io.IOException
 import java.io.OutputStream
 import java.util.UUID
 import com.example.epicerie.data.Ticket
@@ -37,6 +42,8 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private val bluetoothAdapter  : BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket : BluetoothSocket? = null
     private var outputStream : OutputStream? = null
+    // Une seule connexion / impression à la fois (démarrage, bouton Connecter, tickets).
+    private val imprimanteMutex = Mutex()
 
 
     private val _pairedDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
@@ -85,36 +92,95 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun connecToDevice(device: BluetoothDevice, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {   // 🚀 tourne sur un thread background
-            Log.d("BluetoothViewModel", " Logfg Connected to device: ${device.name}")
-            try {
-                val uuid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val hasPermission = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-                    val sppUuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
-                    Log.d("BluetoothViewModel", " device uuids : ${device.uuids} hasPermission : $hasPermission")
-                    if (hasPermission) device.uuids?.firstOrNull()?.uuid else null
-                } else {
-                    Log.d("BluetoothViewModel", " Logfg Connected to device: ${device.name} with ${device.address}")
-                    device.uuids?.firstOrNull()?.uuid
-                } ?: UUID.fromString("00001101-0000-1000-8000-00805f9b34fb") // UUID SPP
+            imprimanteMutex.withLock { connecterSync(device, context) }
+        }
+    }
 
-                socket = device.createRfcommSocketToServiceRecord( UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"))
-                bluetoothAdapter?.cancelDiscovery()
-                socket?.connect()   // ✅ safe car exécuté en I/O thread
-                outputStream = socket?.outputStream
+    // Ouvre le socket RFCOMM (appel bloquant, thread I/O). Renvoie true si connecté.
+    private fun connecterSync(device: BluetoothDevice, context: Context): Boolean {
+        closeFailedSocket()
+        Log.d("BluetoothViewModel", " Logfg Connected to device: ${device.name}")
+        return try {
+            val uuid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED
+                val sppUuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
+                Log.d("BluetoothViewModel", " device uuids : ${device.uuids} hasPermission : $hasPermission")
+                if (hasPermission) device.uuids?.firstOrNull()?.uuid else null
+            } else {
+                Log.d("BluetoothViewModel", " Logfg Connected to device: ${device.name} with ${device.address}")
+                device.uuids?.firstOrNull()?.uuid
+            } ?: UUID.fromString("00001101-0000-1000-8000-00805f9b34fb") // UUID SPP
 
-                _isConnected.value = true
-                btPrefs.edit().putString(KEY_LAST_DEVICE_ADDRESS, device.address).apply()
-            } catch (e: SecurityException) {
-                e.printStackTrace()
-                closeFailedSocket()
-                _isConnected.value = false
-            } catch (e: Exception) {
-                e.printStackTrace()
-                closeFailedSocket()
-                _isConnected.value = false
+            socket = device.createRfcommSocketToServiceRecord( UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"))
+            bluetoothAdapter?.cancelDiscovery()
+            socket?.connect()   // ✅ safe car exécuté en I/O thread
+            outputStream = socket?.outputStream
+
+            _isConnected.value = true
+            btPrefs.edit().putString(KEY_LAST_DEVICE_ADDRESS, device.address).apply()
+            true
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+            closeFailedSocket()
+            _isConnected.value = false
+            false
+        } catch (e: Exception) {
+            e.printStackTrace()
+            closeFailedSocket()
+            _isConnected.value = false
+            false
+        }
+    }
+
+    // Reconnexion à l'impression : si l'imprimante était éteinte au lancement (ou s'est
+    // déconnectée depuis), on retente avec la dernière imprimante utilisée avant d'imprimer.
+    private fun reconnecterSync(): Boolean {
+        val ctx = getApplication<Application>()
+        val savedAddress = btPrefs.getString(KEY_LAST_DEVICE_ADDRESS, null) ?: return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return false
+        return try {
+            val device = bluetoothAdapter?.bondedDevices?.firstOrNull { it.address == savedAddress }
+            device != null && connecterSync(device, ctx)
+        } catch (e: SecurityException) {
+            Log.e("BluetoothViewModel", "Permission manquante pour la reconnexion", e)
+            false
+        }
+    }
+
+    /**
+     * Envoie un travail à l'imprimante : se (re)connecte si besoin, et si l'envoi échoue
+     * (imprimante éteinte puis rallumée → socket mort), referme, reconnecte et réessaie une fois.
+     */
+    private fun imprimer(envoi: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = imprimanteMutex.withLock {
+                var reussi = false
+                for (tentative in 1..2) {
+                    if (outputStream == null && !reconnecterSync()) break
+                    try {
+                        envoi()
+                        reussi = true
+                        break
+                    } catch (e: IOException) {
+                        Log.w("BluetoothViewModel", "Envoi impossible (tentative $tentative)", e)
+                        closeFailedSocket()
+                        _isConnected.value = false
+                    }
+                }
+                reussi
+            }
+            if (!ok) withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    getApplication(),
+                    "Imprimante injoignable : vérifiez qu'elle est allumée",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -145,10 +211,12 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun printText(text: String) {
-        viewModelScope.launch(Dispatchers.IO) {   // 🔄 en background
+        imprimer {
             try {
                 outputStream?.write(text.toByteArray())
                 outputStream?.flush()
+            } catch (e: IOException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -160,7 +228,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val CP850: Charset = Charset.forName("CP850")
     fun printInvoice(tableItems: List<Ticket>, total: Double, infos: ShopInfos?, invoiceId: UUID? = null) {
-        viewModelScope.launch(Dispatchers.IO) {
+        imprimer {
             try {
                 // 1) Reset + taille normale. ⚠️ GS ! 0x01 mettait le texte en double-hauteur
                 // (bit0 = hauteur x2) malgré le commentaire "taille normale" — ça consommait
@@ -189,10 +257,9 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 // Nom du produit sur sa propre ligne (jamais tronqué au milieu d'un mot comme
                 // avec l'ancien format 4-colonnes), puis qté x prix / total aligné à droite.
                 tableItems.forEach { ticket ->
-                    val price = String.format(Locale.FRANCE, "%.2f", ticket.produit.prix)
-                    val lineTotal = String.format(
-                        Locale.FRANCE, "%.2f", ticket.produit.prix * ticket.quantity
-                    )
+                    // Même format que l'écran (FCFA sans décimales, € avec 2), sans la devise.
+                    val price = formatPrice(ticket.produit.prix, infos?.devise).removeSuffix(infos?.devise ?: "").trimEnd()
+                    val lineTotal = formatPrice(ticket.produit.prix * ticket.quantity, infos?.devise).removeSuffix(infos?.devise ?: "").trimEnd()
                     sb.append(
                         formatItemLine55(
                             article = ticket.produit.nom,
@@ -210,10 +277,13 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 sb.append("\r\n\r\n") // juste assez d'avance papier pour déchirer le ticket
 
                 // IMPORTANT: encoder le texte avec la même code page
-                val text = StripAccents(sb.toString())
+                // "€" n'existe pas en ASCII (sortirait en "?") : imprimé "EUR", comme sur la caisse.
+                val text = StripAccents(sb.toString().replace("€", "EUR"))
                 outputStream?.write(text.toByteArray(Charsets.US_ASCII))
                 outputStream?.flush()
 
+            } catch (e: IOException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -223,7 +293,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
 
     fun testPrint(context: Context, menuViewModel: MenuViewModel) {
-        viewModelScope.launch(Dispatchers.IO) {
+        imprimer {
             try {
                 // 🔹 Nom de l’imprimante connectée
                 val printerName = socket?.remoteDevice?.name ?: "Imprimante inconnue"
@@ -253,6 +323,8 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 outputStream?.write(sb.toString().toByteArray(Charsets.UTF_8))
                 outputStream?.flush()
 
+            } catch (e: IOException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
             }

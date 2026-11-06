@@ -10,6 +10,7 @@ import com.example.epicerie.model.ClotureDao
 import com.example.epicerie.model.InfosDao
 import com.example.epicerie.model.InvoiceDao
 import com.example.epicerie.model.LogDao
+import com.example.epicerie.model.MouvementStockDao
 import com.example.epicerie.model.ProduitDao
 import com.example.epicerie.model.RecetteDao
 import com.example.epicerie.model.TableDao
@@ -33,9 +34,10 @@ import com.example.epicerie.model.VoitureDao
         Recette::class,
         LogTechnique::class,
         Cloture::class,
-        EtatCaisse::class
+        EtatCaisse::class,
+        MouvementStock::class
                ],
-    version = 11,
+    version = 12,
     // NF525 préconise exportSchema=true pour la traçabilité, mais Room 2.8.1 a un bug connu
     // d'incompatibilité kotlinx-serialization avec ce projet (KSP plante en désérialisant le
     // schéma JSON — AbstractMethodError sur FieldBundle$$serializer, indépendant du code ici).
@@ -59,6 +61,7 @@ abstract class CaisseDataBase : RoomDatabase() {
     abstract fun recetteDao(): RecetteDao
     abstract fun logDao(): LogDao
     abstract fun clotureDao(): ClotureDao
+    abstract fun mouvementStockDao(): MouvementStockDao
 
 
 

@@ -60,7 +60,7 @@ fun VenteScreen(
                         VenteRow(
                             vente = v,
                             onDelete = { toDelete = v },
-                            devise = viewModel.getInfos()?.devise ?: ""
+                            devise = viewModel.infos.collectAsState().value?.devise ?: ""
                         )
                     }
                 }

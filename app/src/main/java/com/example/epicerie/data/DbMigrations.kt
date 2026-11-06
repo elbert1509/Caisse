@@ -162,4 +162,55 @@ val MIGRATION_10_11: Migration = object : Migration(10, 11) {
     }
 }
 
-val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_10_11)
+/**
+ * Reprise des améliorations de la caisse (branche v3) :
+ *  - `mouvements_stock` : journal des ajouts/ajustements manuels (écran Détail stock, synchro
+ *    avec la version web gérant) ;
+ *  - `ShopInfos.heureFermetureAuto` : fermeture automatique de caisse configurable ;
+ *  - `Produit.*Synced` : synchro du stock par écart et des autres champs seulement s'ils ont
+ *    changé sur le pad (un pad hors ligne n'écrase plus le web). Produits sans modification en
+ *    attente : la référence est la valeur actuelle (= cloud) ; produits « dirty » : NULL ->
+ *    poussés une dernière fois tels quels ;
+ *  - `deviceId` sur Vente, clotures et logs_techniques : numérotation, chaîne de hash et Z par
+ *    pad. L'unicité des clôtures passe de (date, type) à (pad, date, type).
+ */
+val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `mouvements_stock` (" +
+                "`id` TEXT NOT NULL, `produitId` TEXT NOT NULL, `date` INTEGER NOT NULL, " +
+                "`delta` INTEGER NOT NULL, `motif` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                "`isDirty` INTEGER NOT NULL, `isDeleted` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`id`), " +
+                "FOREIGN KEY(`produitId`) REFERENCES `Produit`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_mouvements_stock_produitId` ON `mouvements_stock` (`produitId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_mouvements_stock_date` ON `mouvements_stock` (`date`)")
+
+        db.execSQL("ALTER TABLE ShopInfos ADD COLUMN heureFermetureAuto TEXT NOT NULL DEFAULT '05:00'")
+
+        db.execSQL("ALTER TABLE Produit ADD COLUMN stockSynced INTEGER")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN prixSynced REAL")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN nomSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN categoryIdSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN imageSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN descriptionSynced TEXT")
+        db.execSQL("ALTER TABLE Produit ADD COLUMN isActiveSynced INTEGER")
+        db.execSQL(
+            "UPDATE Produit SET stockSynced = stock, prixSynced = prix, nomSynced = nom, " +
+                "categoryIdSynced = categoryId, imageSynced = image, descriptionSynced = description, " +
+                "isActiveSynced = isActive WHERE isDirty = 0"
+        )
+
+        db.execSQL("ALTER TABLE Vente ADD COLUMN deviceId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE clotures ADD COLUMN deviceId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE logs_techniques ADD COLUMN deviceId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("DROP INDEX IF EXISTS index_clotures_dateCloture_type")
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS index_clotures_deviceId_dateCloture_type " +
+                "ON clotures (deviceId, dateCloture, type)"
+        )
+    }
+}
+
+val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_10_11, MIGRATION_11_12)

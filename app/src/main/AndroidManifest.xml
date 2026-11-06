@@ -15,6 +15,8 @@
 
     <!-- Mise à jour silencieuse (Device Owner) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Démarrage automatique de la caisse au boot du pad (mode kiosk) -->
@@ -77,6 +79,16 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- VPN local « trou noir » : seule l'épicerie garde le réseau (VPN permanent Device Owner) -->
+        <service
+            android:name=".kiosk.BlockingVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

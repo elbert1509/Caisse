@@ -44,7 +44,7 @@ fun RechercheScreen(
 ) {
     var query by remember { mutableStateOf("") }
     val produits by viewModel.produits.collectAsState()
-    val devise = viewModel.getInfos()?.devise ?: "FCFA"
+    val devise = viewModel.infos.collectAsState().value?.devise ?: "FCFA"
 // Ajout pour mettre le focus automatiquement sur le champ de recherche
     val focusRequester = remember { FocusRequester() }
 

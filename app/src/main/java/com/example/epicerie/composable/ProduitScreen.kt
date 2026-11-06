@@ -1,9 +1,12 @@
 package com.example.epicerie.composable
 
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,33 +76,10 @@ fun ProductScreen(
 
     val context = LocalContext.current
 
-    // Image choisie (formulaire d'ajout) : URI galerie persistée (lisible après redémarrage de l'app).
+    // Photo du formulaire d'ajout / de la boîte de modification : appareil photo ou galerie,
+    // recadrée en carré et copiée dans le stockage de l'app (voir PhotoProduit.kt).
     var addImage by remember { mutableStateOf<String?>(null) }
-    val addImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            addImage = uri.toString()
-        }
-    }
-
-    // Image choisie (boîte de modification).
     var editImage by remember { mutableStateOf<String?>(null) }
-    val editImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            editImage = uri.toString()
-        }
-    }
 
     var productText by remember { mutableStateOf(TextFieldValue("")) }
 
@@ -126,13 +106,11 @@ fun ProductScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            // Add Product Form
+        // Paysage / grand écran : formulaire à gauche (défilant), liste à droite sur toute la
+        // hauteur. Portrait : formulaire au-dessus de la liste, comme avant.
+        val config = LocalConfiguration.current
+        val paysage = config.screenWidthDp > config.screenHeightDp && config.screenWidthDp >= 600
+        val formulaire: @Composable ColumnScope.() -> Unit = {
             OutlinedTextField(
                 value = productText,
                 onValueChange = { productText = it },
@@ -141,40 +119,40 @@ fun ProductScreen(
             )
             Spacer(Modifier.height(8.dp))
 
-            // AJOUT DU CHAMP CODE BARRE POUR LA CRÉATION
-            OutlinedTextField(
-                value = newBarcode,
-                onValueChange = { newBarcode = it },
-                label = { Text("Nouveau Code-barres (Optionnel)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true, // Important pour le scanner
-                trailingIcon = {
-                    // Petit bouton pour effacer si erreur de scan
-                    if (newBarcode.text.isNotEmpty()) {
-                        IconButton(onClick = { newBarcode = TextFieldValue("") }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Clear")
+            // Code-barres et prix côte à côte : le formulaire prend moins de hauteur.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = newBarcode,
+                    onValueChange = { newBarcode = it },
+                    label = { Text("Code-barres (optionnel)") },
+                    modifier = Modifier.weight(1.4f),
+                    singleLine = true, // Important pour le scanner
+                    trailingIcon = {
+                        // Petit bouton pour effacer si erreur de scan
+                        if (newBarcode.text.isNotEmpty()) {
+                            IconButton(onClick = { newBarcode = TextFieldValue("") }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Clear")
+                            }
                         }
                     }
-                }
-            )
+                )
 
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = newPrice,
-                onValueChange = { newPrice = it },
-                label = { Text("Prix") },
-                modifier = Modifier.fillMaxWidth()
-            )
+                OutlinedTextField(
+                    value = newPrice,
+                    onValueChange = { newPrice = it },
+                    label = { Text("Prix") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             Spacer(Modifier.height(8.dp))
             CategoryDropdown(
                 categories = categories,
                 selectedCategory = selectedCategory,
                 onCategorySelected = { selectedCategory = it }
             )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = { addImagePickerLauncher.launch(arrayOf("image/*")) }) {
-                Text(if (addImage == null) "Choisir une photo" else "Changer la photo")
-            }
+            Spacer(Modifier.height(8.dp))
+            PhotoProduitBoutons(aDejaUnePhoto = addImage != null) { addImage = it }
             addImage?.let { img ->
                 Spacer(Modifier.height(8.dp))
                 AsyncImage(
@@ -183,7 +161,7 @@ fun ProductScreen(
                     modifier = Modifier.size(90.dp)
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
                     val name = productText.text.trim()
@@ -204,10 +182,8 @@ fun ProductScreen(
             ) {
                 Text("Ajouter")
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Product List
+        }
+        val liste: @Composable () -> Unit = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxSize()
@@ -225,9 +201,38 @@ fun ProductScreen(
                             editImage = product.image
                         },
                         onDelete = { viewModel.deleteProduit(product) },
-                        devise = viewModel.getInfos()?.devise ?: ""
+                        devise = viewModel.infos.collectAsState().value?.devise ?: ""
                     )
                 }
+            }
+        }
+        if (paysage) {
+            Row(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .width(360.dp)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState()),
+                    content = formulaire
+                )
+                Box(Modifier.weight(1f)) { liste() }
+            }
+        } else {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                formulaire()
+                Spacer(Modifier.height(12.dp))
+                liste()
             }
         }
 
@@ -237,7 +242,7 @@ fun ProductScreen(
                 onDismissRequest = { },
                 title = { Text("Modifier le produit") },
                 text = {
-                    Column {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
                         OutlinedTextField(
                             value = renameText,
                             onValueChange = { renameText = it },
@@ -266,9 +271,7 @@ fun ProductScreen(
                             onCategorySelected = { renameCategory = it }
                         )
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = { editImagePickerLauncher.launch(arrayOf("image/*")) }) {
-                            Text(if (editImage == null) "Ajouter une photo" else "Changer la photo")
-                        }
+                        PhotoProduitBoutons(aDejaUnePhoto = editImage != null) { editImage = it }
                         editImage?.let { img ->
                             Spacer(Modifier.height(8.dp))
                             AsyncImage(

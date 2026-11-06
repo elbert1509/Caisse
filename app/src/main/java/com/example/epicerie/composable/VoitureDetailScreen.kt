@@ -87,7 +87,7 @@ fun VoitureDetailScreen(
     var selectedVoiture by remember { mutableStateOf<Voiture?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var recetteToDelete by remember { mutableStateOf<Recette?>(null) }
-    val devise = menuViewModel.getInfos()?.devise ?: "F"
+    val devise = menuViewModel.infos.collectAsState().value?.devise ?: "F"
 
 
     Scaffold(

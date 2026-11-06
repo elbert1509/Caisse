@@ -1,10 +1,14 @@
 package com.example.epicerie.composable
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,6 +39,21 @@ fun AppNavigation() {
     )
     val authViewModel = remember { AuthViewModel() }
     val isSignedIn = remember { FirebaseAuth.getInstance().currentUser != null }
+
+    // Gestion redemande le mot de passe dès qu'elle n'est plus dans la pile
+    // (la touche Retour du système ne passait pas par la flèche qui verrouillait).
+    DisposableEffect(navController) {
+        val listener = NavController.OnDestinationChangedListener { controller, _, _ ->
+            val gestionDansLaPile = try {
+                controller.getBackStackEntry("gestion"); true
+            } catch (_: IllegalArgumentException) {
+                false
+            }
+            if (!gestionDansLaPile) verrouillerGestion()
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
 
 
     NavHost(navController,
@@ -90,7 +109,10 @@ fun AppNavigation() {
         composable("historique") { HistoriqueScreen(navController = navController, menuViewModel = menuViewModel, bluetoothViewModel = bluetoothViewModel) }
         composable("donnee") { Donnee( menuViewModel = menuViewModel) }
         composable("bluetooth") { ParametreBluetooothScreen(navController = navController, viewModel = bluetoothViewModel, authVm = authViewModel,menuViewModel = menuViewModel) }
-        composable("dashboard") { DashboardScreen(navController = navController, viewModel = dashboardViewModel) }
+        composable("dashboard") {
+            val infos by menuViewModel.infos.collectAsState()
+            DashboardScreen(navController = navController, viewModel = dashboardViewModel, devise = infos?.devise)
+        }
         composable(
             route = "stock?showRevenue={showRevenue}",
             arguments = listOf(
@@ -102,6 +124,17 @@ fun AppNavigation() {
         ) { backStackEntry ->
             val showRevenue = backStackEntry.arguments?.getBoolean("showRevenue") ?: true
             StockScreen(navController = navController, viewModel = menuViewModel, showRevenue = showRevenue)
+        }
+        composable(
+            route = "stock_detail/{produitId}",
+            arguments = listOf(navArgument("produitId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val produitId = backStackEntry.arguments?.getString("produitId")?.let {
+                java.util.UUID.fromString(it)
+            }
+            if (produitId != null) {
+                StockDetailScreen(navController = navController, viewModel = menuViewModel, produitId = produitId)
+            }
         }
         composable("inventaire") { InventaireScreen(navController = navController, viewModel = menuViewModel) }
         composable("rapport") { RapportData(navController = navController, viewModel = menuViewModel, dashboardViewModel = dashboardViewModel)}

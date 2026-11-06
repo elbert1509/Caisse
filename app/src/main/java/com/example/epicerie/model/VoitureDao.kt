@@ -38,5 +38,10 @@ interface VoitureDao {
     @Query("SELECT * FROM Voiture")
     suspend fun getAllVoituresOnce(): List<Voiture>
 
+    // Sync : ne baisse le flag dirty QUE si la ligne n'a pas été modifiée depuis sa lecture
+    // (sinon une modification faite pendant le push serait perdue sans jamais être poussée).
+    @Query("UPDATE Voiture SET isDirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearDirty(id: UUID, updatedAt: Long)
+
 
 }

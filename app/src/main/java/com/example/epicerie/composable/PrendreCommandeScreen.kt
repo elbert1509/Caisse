@@ -94,7 +94,7 @@ fun PrendreCommandeScreen(
     val products by menuViewModel.produits.collectAsState()
     val cart by menuViewModel.cart.collectAsState()
     val totalPrice by menuViewModel.totalPrice.collectAsState()
-    val shopInfos = menuViewModel.getInfos()
+    val shopInfos = menuViewModel.infos.collectAsState().value
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     var scanBuffer by remember { mutableStateOf("") } // Stocke les chiffres scannés
@@ -128,8 +128,9 @@ fun PrendreCommandeScreen(
         ).show()
     }
     val displayedProducts = remember(products, showFavoris, selectedCategoryId, favoriIds) {
-        if (showFavoris) products.filter { favoriIds.contains(it.id.toString()) }
-        else products.filter { it.categoryId == selectedCategoryId }
+        // Produits désactivés (ex. depuis la version web gérant) ou supprimés : pas en vente.
+        if (showFavoris) products.filter { it.isActive && !it.isDeleted && favoriIds.contains(it.id.toString()) }
+        else products.filter { it.isActive && !it.isDeleted && it.categoryId == selectedCategoryId }
     }
 
     Scaffold(

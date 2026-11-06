@@ -62,7 +62,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
     val table = tables.find { it.id == tableUuid }
     val categories by menuViewModel.categories.collectAsState()
     val products by menuViewModel.produits.collectAsState()
-    val info = menuViewModel.getInfos()
+    val info = menuViewModel.infos.collectAsState().value
     var selecredCategoryID by remember { mutableStateOf(categories.firstOrNull()?.id) }
 
     LaunchedEffect(categories) {
@@ -152,7 +152,7 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(products.filter { it.categoryId == selecredCategoryID }) { product ->
+                    items(products.filter { it.isActive && !it.isDeleted && it.categoryId == selecredCategoryID }) { product ->
                         ProductItemHorizontal(product = product,devise = info?.devise ?: "") {
                             menuViewModel.addProductToTable(product.id, tableUuid)
                         }
@@ -182,18 +182,10 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         TableItemRow(
                             ticket = ticket,
                             onIncrease = {
-                                menuViewModel.updateTableItemQuantity(
-                                ticket.produit.id,
-                                tableUuid,
-                                ticket.quantity + 1
-                                ) },
+                                menuViewModel.changeTableItemQuantity(ticket.produit.id, tableUuid, +1)
+                            },
                             onDecrease = {
-                                menuViewModel.updateTableItemQuantity(
-                                    ticket.produit.id,
-                                    tableUuid,
-                                    ticket.quantity - 1
-
-                                )
+                                menuViewModel.changeTableItemQuantity(ticket.produit.id, tableUuid, -1)
                             }
                         )
 
@@ -243,22 +235,9 @@ fun TableDetailsScreen (navController: NavController, menuViewModel: MenuViewMod
                         modifier = Modifier.weight(1f),
                         onClick = {
 
-                            if (!bluetoothViewModel.isConnected.value) {
-                                Toast.makeText(
-                                    navController.context,
-                                    "Pas de device connecté",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }else{
-                                bluetoothViewModel.printInvoice(tableItems, totaltable,info)
-                                Toast.makeText(
-                                    navController.context,
-                                    "Ticket imprimé",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                navController.popBackStack() // revenir en arrière après validation
-                            }
+                            // Se reconnecte tout seul à la dernière imprimante si besoin (BluetoothViewModel).
+                            bluetoothViewModel.printInvoice(tableItems, totaltable,info)
+                            navController.popBackStack() // revenir en arrière après validation
 
 
                         },
@@ -297,11 +276,15 @@ fun TableItemRow(
             text = "${ticket.produit.nom} (x${ticket.quantity})",
             modifier = Modifier.weight(1f)
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDecrease, modifier = Modifier.size(24.dp)) {
+        // Cibles tactiles de 48 dp, espacées, pour éviter les appuis ratés ou sur le mauvais bouton.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            IconButton(onClick = onDecrease, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Default.Remove, "Diminuer")
             }
-            IconButton(onClick = onIncrease, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = onIncrease, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Default.Add, "Augmenter")
             }
         }
